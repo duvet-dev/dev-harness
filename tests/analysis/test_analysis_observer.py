@@ -5,11 +5,31 @@ Tests analyse() and analyse_async() functions.
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 
 from harness.analysis.base import ScanResult
+
+# ── Helper: a mock AssessmentReport that avoids real LLM calls ──────────────
+
+
+def _mock_assessment_report() -> MagicMock:
+    """Return a minimal AssessmentReport-like mock.
+
+    Matches what analyse()/analyse_async() need from
+    ``assess(path, deep=True).to_dict()``: a dict with
+    ``{"assessment": ..., "report": str}``.
+    """
+    r = MagicMock()
+    r.to_dict.return_value = {
+        "assessment": {"path": "/mock", "score": "good", "metrics": {}},
+        "report": "# Mock Assessment\n\nThis is a stubbed report.",
+    }
+    return r
+
+
+# ── Tests for analyse() (sync) ─────────────────────────────────────────────
 
 
 class TestAnalyse:
@@ -32,14 +52,19 @@ class TestAnalyse:
         assert result["deep"] is False
 
     def test_deep_analysis(self, tmp_path):
-        """Deep analysis runs additional scans."""
+        """Deep analysis runs additional scans (LLM assessment mocked)."""
         from harness.analysis.observer import analyse
         (tmp_path / "src" / "module.py").parent.mkdir(parents=True)
         (tmp_path / "src" / "module.py").write_text("x=1\n")
         (tmp_path / "tests" / "test_module.py").parent.mkdir(parents=True)
         (tmp_path / "tests" / "test_module.py").write_text("def test_x(): pass\n")
 
-        result = analyse(tmp_path, deep=True)
+        with patch(
+            "harness.analysis.assessment.assess",
+            return_value=_mock_assessment_report(),
+        ):
+            result = analyse(tmp_path, deep=True)
+
         assert result["status"] == "ok"
         assert "arch-conformance" in result["scans"]
         assert "coverage" in result["scans"]
@@ -50,10 +75,16 @@ class TestAnalyse:
         from harness.analysis.observer import analyse
         (tmp_path / "hello.py").write_text("x=1\n")
 
-        result = analyse(tmp_path, deep=True)
+        with patch(
+            "harness.analysis.assessment.assess",
+            side_effect=RuntimeError("API unavailable"),
+        ):
+            result = analyse(tmp_path, deep=True)
+
         assert result["status"] == "ok"
-        # LLM assessment may fail gracefully — check report has content
+        # Graceful degradation: fallback text appears in report
         assert result["report"] != ""
+        assert "Assessment agents unavailable" in result["report"]
 
     def test_report_file_written(self, tmp_path):
         """Report is written to disk when report_file is provided."""
@@ -91,6 +122,9 @@ class TestAnalyse:
 from harness.analysis.observer import analyse
 
 
+# ── Tests for analyse_async() ──────────────────────────────────────────────
+
+
 class TestAnalyseAsync:
     """Tests for analyse_async()."""
 
@@ -114,14 +148,19 @@ class TestAnalyseAsync:
 
     @pytest.mark.asyncio
     async def test_deep_async_analysis(self, tmp_path):
-        """Deep async analysis runs additional scans."""
+        """Deep async analysis runs additional scans (LLM assessment mocked)."""
         from harness.analysis.observer import analyse_async
         (tmp_path / "src" / "module.py").parent.mkdir(parents=True)
         (tmp_path / "src" / "module.py").write_text("x=1\n")
         (tmp_path / "tests" / "test_module.py").parent.mkdir(parents=True)
         (tmp_path / "tests" / "test_module.py").write_text("def test_x(): pass\n")
 
-        result = await analyse_async(tmp_path, deep=True)
+        with patch(
+            "harness.analysis.assessment.assess",
+            return_value=_mock_assessment_report(),
+        ):
+            result = await analyse_async(tmp_path, deep=True)
+
         assert result["status"] == "ok"
         assert "arch-conformance" in result["scans"]
 

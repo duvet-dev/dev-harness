@@ -31,7 +31,19 @@ from harness.session.client import (
     SessionClient,
     resolve_provider,
 )
+from harness.session.loop import (
+    PHASES,
+    _format_consult_result,
+    _write_phase_artifact,
+)
 from harness.session.commands import CommandResult
+from harness.engagement.checkpoint import (
+    CHECKPOINT_EXPIRY_HOURS,
+    CheckpointManager,
+)
+from harness.engagement.feedback import FeedbackManager, FeedbackPacket
+from harness.engagement.phase_state import PhaseState as PS
+from harness.engagement.phase_state import PhaseStateManager
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +51,94 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared session state
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Mode-specific effect executors
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def execute_session_effects(
+    result: CommandResult,
+    session: "InteractiveSession",
+) -> None:
+    """Execute session-mode-specific IO effects.
+
+    Called after common effects for session-specific behaviour:
+    phase transitions, checkpoints, consult tracking, etc.
+    """
+    # advance_phase handler
+    if result.advance_phase:
+        phase_def_name = session.phase_def.get("name", "")
+        phase_def_title = session.phase_def.get("title", "")
+        click.echo(f"  + Phase '{phase_def_title}' completed.")
+        if result.approved:
+            click.echo("  Approved.")
+        return  # phase_done flag set externally in the calling code
+
+    # switch_to_phase with checkpoint
+    if result.switch_to_phase and result.phase_jump_allowed:
+        target = result.switch_to_phase
+        match = next(
+            (p for p in PHASES if p["name"] == target), None
+        )
+        if match:
+            ckm = CheckpointManager(session.root, session.engagement_slug)
+            ckpt = ckm.create(
+                phase_name=session.phase_def.get("name", ""),
+                context=f"Navigating from {session.phase_def.get('name', '')} to {target}",
+            )
+            click.echo(f"\n\U0001f4dd Checkpoint saved ({ckpt.checkpoint_id})")
+            psm = PhaseStateManager(session.root, session.engagement_slug)
+            psm.transition(session.phase_def.get("name", ""), PS.PAUSED)
+            psm.ensure_phase(target)
+            psm.transition(target, PS.ACTIVE)
+            click.echo(f"\U0001f504 Navigating to phase: {target}")
+            if session.transcript:
+                session.transcript.ended_at = datetime.now(
+                    timezone.utc
+                ).isoformat()
+                session.transcript.save(session.root)
+            click.echo(
+                f"Session saved. Run 'harness session --phase {target}' to continue."
+            )
+        return
+
+    # consult_result handling
+    if result.consult_result:
+        consult_res = result.consult_result
+        click.echo()
+        click.echo(_format_consult_result(consult_res))
+        if (
+            consult_res.status == "matched"
+            and consult_res.mode == "blocking"
+        ):
+            pname = session.phase_def.get("name", "")
+            blocking_consults = getattr(session, "_blocking_consults", {})
+            if pname not in blocking_consults:
+                blocking_consults[pname] = []
+            blocking_consults[pname].append(consult_res)
+            click.echo(
+                f"  \u26a0\ufe0f Blocking consult #{len(blocking_consults[pname])}"
+                " \u2014 resolve with /consult-resolve"
+            )
+
+    # consult_resolved — already handled in command router
+    if result.consult_resolved:
+        if result.display_lines:
+            click.echo(result.display_lines[-1])
+
+
+def execute_chat_effects(
+    result: CommandResult,
+    session: "InteractiveSession",
+) -> None:
+    """Chat-mode specific IO effects.
+
+    Currently minimal — most chat effects are covered by common effects.
+    """
+    pass
 
 
 class InteractiveSession:

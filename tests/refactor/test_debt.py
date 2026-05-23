@@ -141,9 +141,16 @@ class TestDebtDetector:
         assert detector._import_looks_infra("os") is False
         assert detector._import_looks_infra("datetime") is False
 
-    @pytest.mark.skip(reason="violations depend on project structure")
     def test_detect_missing_adapters(self, tmp_path):
-        pass
+        src = tmp_path / "src"
+        src.mkdir()
+        service = src / "service.py"
+        service.write_text("import requests\n")
+        detector = DebtDetector()
+        violations = detector._detect_missing_adapters(
+            [service], src
+        )
+        assert len(violations) == 0  # no adapters to detect in this simple case
 
     def test_is_adapter_file(self, tmp_path):
         detector = DebtDetector()

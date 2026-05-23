@@ -379,7 +379,6 @@ class TestContextLoader:
         )
         assert loader is not None
 
-    @pytest.mark.xfail(reason="needs proper context loader test")
     def test_load_bundle_tier_1_generates_inventory(self, tmp_path):
         (tmp_path / "file.py").write_text("x = 1")
         loader = ContextLoader(
@@ -387,11 +386,9 @@ class TestContextLoader:
             repo_root=tmp_path,
         )
         bundle = loader.load_bundle(tier=1)
-        # bundle is empty for bad tier
-        assert bundle == ""
+        assert "--- Engagement File Inventory ---" in bundle
         assert "file.py" in bundle
 
-    @pytest.mark.xfail(reason="needs proper context loader test")
     def test_load_bundle_tier_2_adds_summaries(self, tmp_path):
         (tmp_path / "readme.md").write_text("# Project Title")
         loader = ContextLoader(
@@ -399,11 +396,10 @@ class TestContextLoader:
             repo_root=tmp_path,
         )
         bundle = loader.load_bundle(tier=2)
-        assert "File Summaries" in bundle
-        # bundle is empty for bad tier
-        assert bundle == ""
+        assert "--- Engagement File Inventory ---" in bundle
+        assert "--- File Summaries ---" in bundle
+        assert "readme.md" in bundle
 
-    @pytest.mark.xfail(reason="needs proper context loader test")
     def test_load_bundle_tier_3_adds_snippets(self, tmp_path):
         (tmp_path / "hello.txt").write_text("Hello world!")
         loader = ContextLoader(
@@ -411,10 +407,10 @@ class TestContextLoader:
             repo_root=tmp_path,
         )
         bundle = loader.load_bundle(tier=3)
-        assert "Content Snippets" in bundle
-        assert "File Summaries" in bundle
-        # bundle is empty for bad tier
-        assert bundle == ""
+        assert "--- Engagement File Inventory ---" in bundle
+        assert "--- File Summaries ---" in bundle
+        assert "--- Content Snippets ---" in bundle
+        assert "hello.txt" in bundle
 
     def test_cache_written_on_first_load(self, tmp_path):
         loader = ContextLoader(

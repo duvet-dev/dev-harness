@@ -141,10 +141,9 @@ class TestStopWorker:
         mock_loop.call_soon_threadsafe = MagicMock()
 
         mock_worker = MagicMock()
-        # shutdown is a coroutine; mock it as async function
-        async def mock_shutdown():
-            pass
-        mock_worker.shutdown = mock_shutdown
+        # shutdown is a coroutine in production, but run_coroutine_threadsafe
+        # is mocked so a sync Mock suffices here
+        mock_worker.shutdown = MagicMock()
 
         mock_thread = MagicMock(spec=threading.Thread)
         mock_thread.is_alive.return_value = True
@@ -287,7 +286,7 @@ class TestInternalFunctions:
 
         with patch("harness.state.temporal_worker.asyncio.new_event_loop") as mock_new, \
              patch("harness.state.temporal_worker.asyncio.set_event_loop"), \
-             patch("harness.state.temporal_worker._run_worker_async") as mock_run:
+             patch("harness.state.temporal_worker._run_worker_async", new_callable=MagicMock) as mock_run:
 
             mock_new.return_value = mock_loop
 
@@ -300,15 +299,39 @@ class TestInternalFunctions:
             mock_loop.close.assert_called_once()
 
     def test_run_worker_loop_handles_exception(self):
-        """When _run_worker_async raises, it should be logged."""
-        mock_loop = MagicMock()
-        mock_loop.run_until_complete.side_effect = RuntimeError("Boom")
+        """When _run_worker_async raises, it should be logged.
 
-        with patch("harness.state.temporal_worker.asyncio.new_event_loop") as mock_new, \
+        We mock ``new_event_loop`` to return a simple loop that raises
+        when ``run_until_complete`` is called, so real event loops with
+        their internal sockets are never created.
+        """
+        import asyncio as asyncio_mod
+
+        class CloseableMockLoop:
+            """A minimal async event loop stand-in that just raises."""
+            def __init__(self):
+                self._closed = False
+
+            def set_debug(self, *a):
+                pass
+
+            def run_until_complete(self, coro):
+                # Properly close the coroutine to avoid GC warnings
+                coro.close()
+                raise RuntimeError("Boom")
+
+            def close(self):
+                self._closed = True
+
+            def is_closed(self):
+                return self._closed
+
+        mock_loop = CloseableMockLoop()
+
+        with patch.object(asyncio_mod, "new_event_loop", return_value=mock_loop), \
+             patch("harness.state.temporal_worker.asyncio.new_event_loop", return_value=mock_loop), \
              patch("harness.state.temporal_worker.asyncio.set_event_loop"), \
              patch("harness.state.temporal_worker.logger") as mock_logger:
-
-            mock_new.return_value = mock_loop
 
             from harness.state.temporal_worker import _run_worker_loop
             _run_worker_loop()
@@ -316,4 +339,4 @@ class TestInternalFunctions:
             mock_logger.exception.assert_called_once_with(
                 "Temporal worker crashed"
             )
-            mock_loop.close.assert_called_once()
+            assert mock_loop._closed is True

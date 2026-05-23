@@ -16,6 +16,21 @@ from harness.session.client import (
 )
 
 
+class AsyncIteratorMock:
+    """Helper to mock an async iterator."""
+    def __init__(self, items):
+        self._items = iter(items)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._items)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
 class TestChatMessage:
     def test_fields(self):
         msg = ChatMessage(role="user", content="hello", timestamp="now")
@@ -157,23 +172,47 @@ class TestInteractiveClient:
         client = InteractiveClient(api_key="k", model="provider/model")
         assert client.model == "model"
 
-    @pytest.mark.xfail(reason="sub-agent generated, needs proper httpx async mock")
-    def test_stream_handles_non_200(self):
-        client = InteractiveClient(api_key="bad-key", base_url="https://invalid.example.com")
+    @pytest.mark.asyncio
+    async def test_stream_handles_non_200(self):
+        """Mock httpx.AsyncClient since InteractiveClient has no _client attr.
 
-        async def run():
+        We avoid putting AsyncMock return values through ``async with``
+        because Python 3.9's ``__aenter__`` on an AsyncMock with a custom
+        ``return_value`` will return that value directly (not a coroutine),
+        and then ``await non_awaitable`` raises ``TypeError``.
+        """
+
+        class FakeResponse:
+            """Mimics httpx.Response (aread + status_code)."""
+            status_code = 401
+
+            async def aread(self):
+                return b"Unauthorized"
+
+        class FakeStreamCM:
+            """Async context manager for ``async with client.stream(...) as resp``."""
+            async def __aenter__(self):
+                return FakeResponse()
+
+            async def __aexit__(self, *args):
+                pass
+
+        mock_stream_cm = FakeStreamCM()
+
+        # Inner httpx client returned by ``async with httpx.AsyncClient(...) as client``
+        mock_inner_client = MagicMock()
+        mock_inner_client.stream = MagicMock(return_value=mock_stream_cm)
+
+        # httpx.AsyncClient constructor mock: __aenter__ returns mock_inner_client
+        mock_http_instance = AsyncMock()
+        mock_http_instance.__aenter__.return_value = mock_inner_client
+
+        with patch("httpx.AsyncClient", return_value=mock_http_instance):
+            client = InteractiveClient(api_key="bad-key", base_url="https://invalid.example.com")
             chunks = []
             async for chunk in client.stream("test"):
                 chunks.append(chunk)
-            return chunks
-
-        import asyncio
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            chunks = asyncio.run(run())
-            # Should get an error message
-            assert any("Error" in c for c in chunks)
+            assert any("401" in c and "Unauthorized" in c for c in chunks)
 
     def test_init_strips_model_prefix(self):
         client = InteractiveClient(api_key="k", model="anthropic/claude-3")

@@ -119,6 +119,10 @@ class TestReadSessionType:
 
 
 class TestPromptAlternative:
-    @pytest.mark.skip(reason="_prompt_alternative uses input(), can't mock in non-interactive test")
     def test_selects_first_alternative(self):
-        pass
+        from harness.session.types import _prompt_alternative, SessionType
+        # Mock 'input' to return the first option
+        with patch("builtins.input", return_value="1"):
+            result = _prompt_alternative(SessionType.REFACTORING)
+        # Entering "1" selects the first remaining alternative (GREENFIELD)
+        assert result == SessionType.GREENFIELD

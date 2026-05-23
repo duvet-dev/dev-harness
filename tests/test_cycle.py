@@ -45,7 +45,7 @@ from harness.agents.cycle import (
     planning_cycle_definition,
     review_cycle_definition,
     self_test_cycle_definition,
-    testing_cycle_definition,
+    testing_cycle_definition as _testing_cycle_def,
     wave_cycle_definition,
     _format_artifacts_for_context,
 )
@@ -169,7 +169,7 @@ class TestBuiltinDefinitions:
         assert d.final_artifact == "requirements.md"
 
     def test_testing_cycle_definition(self):
-        d = testing_cycle_definition()
+        d = _testing_cycle_def()
         assert d.name == CYCLE_TESTING
         assert len(d.steps) == 4
         assert d.steps[1].agent == "requirements-conformance-reviewer"

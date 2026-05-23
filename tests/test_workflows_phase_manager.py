@@ -7,8 +7,40 @@ static methods and simulating the run method with mocked Temporal calls.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+class AwaitableResult:
+    """A non-coroutine awaitable wrapper for sync values.
+
+    When ``AsyncMock._execute_mock_call`` returns this as a side_effect
+    result, the outer ``await`` in ``outputs = await mock_exec(...)``
+    yields this object, NOT a coroutine. The result is that ``outputs``
+    is an ``AwaitableResult`` instance (not the inner value), but the
+    value is accessible via ``await outputs`` or ``outputs.value``.
+
+    Unlike plain coroutines (``_async_val``), an ``AwaitableResult``
+    never triggers ``RuntimeWarning: coroutine ... was never awaited``
+    when garbage collected, because it is NOT a coroutine object.
+    """
+
+    def __init__(self, value):
+        self._v = value
+
+    @property
+    def value(self):
+        return self._v
+
+    def __await__(self):
+        yield
+        return self._v
+
+    def __repr__(self):
+        return f"<AwaitableResult {self._v!r}>"
+
 
 from harness.workflows.phases.phase_manager import (
     PhaseManager,
@@ -111,19 +143,6 @@ class TestPhaseManagerFilterAgents:
         result = PhaseManager._filter_agents(agents, feedback, True)
         assert len(result) == 2
 
-    def test_no_reexecution_refs_returns_empty(self):
-        agents = [{"target_directory": "other/", "task_id": "other"}]
-        feedback = [
-            FeedbackItem(
-                finding="Issue",
-                severity="blocker",
-                artifact_ref="unrelated/area.py",
-            ),
-        ]
-        result = PhaseManager._filter_agents(agents, feedback, True)
-        # No agent ref matches the blocker artifact_ref
-        assert len(result) > 0  # fallback to original agents when all filtered
-
     def test_fallback_when_filtered_empty(self):
         """When filter matches nothing, _filter_agents returns agents unchanged."""
         agents = [{"target_directory": "xyz/", "task_id": "xyz"}]
@@ -135,7 +154,6 @@ class TestPhaseManagerFilterAgents:
             ),
         ]
         result = PhaseManager._filter_agents(agents, feedback, True)
-        # filter produces empty list, fallback returns original agents
         assert result == agents
 
     def test_agent_ref_is_task_id(self):
@@ -227,10 +245,53 @@ class TestPhaseManagerBuildFeedbackContextLines:
 
 
 class TestPhaseManagerRun:
-    """Tests for the PhaseManager.run method with mocked Temporal calls."""
+    """Tests for the PhaseManager.run method with mocked Temporal calls.
+
+    We replace ``asyncio.gather`` with a fake that awaits all coroutine
+    arguments (consuming mock coroutines to prevent unawaited-coroutine
+    warnings), then returns predetermined results.
+
+    Side effect items for ``workflow.execute_activity``:
+    - Agent-future items: plain dicts (the gather consumes the
+      ``_execute_mock_call`` coroutine but doesn't care about the result).
+    - Actually-``await``-ed items (collect_outputs, aggregate, etc.):
+      ``AwaitableResult`` wrappers. These are NOT coroutine objects,
+      so they never trigger the ``was never awaited`` GC warning.
+    """
+
+    @staticmethod
+    def _make_gather(*gather_results):
+        """Return an async gather-compatible function.
+
+        Awaits each argument (consuming mock coroutines), catches
+        exceptions, returns *gather_results* as-is.
+        """
+        async def gather(*args, **kwargs):
+            results = []
+            for arg in args:
+                try:
+                    if asyncio.iscoroutine(arg):
+                        r = await arg
+                        results.append(r)
+                    elif hasattr(arg, '__await__'):
+                        r = await arg
+                        results.append(r)
+                    else:
+                        results.append(arg)
+                except BaseException as e:
+                    results.append(e)
+            return list(gather_results)
+        return gather
 
     @pytest.mark.asyncio
     async def test_run_parallel_execution(self):
+        gather_fn = self._make_gather(
+            {"engagement_id": "eng-1", "task_id": "task-0", "status": "completed",
+             "output_files": ["out/file1.txt"]},
+            {"engagement_id": "eng-1", "task_id": "task-1", "status": "completed",
+             "output_files": ["out/file2.txt"]},
+        )
+
         with patch(
             "harness.workflows.phases.phase_manager.workflow.execute_activity"
         ) as mock_exec, \
@@ -238,35 +299,17 @@ class TestPhaseManagerRun:
             "harness.workflows.phases.phase_manager.workflow.logger"
         ) as mock_logger, \
              patch(
-            "harness.workflows.phases.phase_manager.asyncio"
-        ) as mock_asyncio:
+            "harness.workflows.phases.phase_manager.asyncio.gather", gather_fn
+        ):
 
-            # Simulate agent results
-            async def fake_gather(*args, **kwargs):
-                return [
-                    {
-                        "engagement_id": "eng-1",
-                        "task_id": "task-0",
-                        "status": "completed",
-                        "output_files": ["out/file1.txt"],
-                    },
-                    {
-                        "engagement_id": "eng-1",
-                        "task_id": "task-1",
-                        "status": "completed",
-                        "output_files": ["out/file2.txt"],
-                    },
-                ]
-
-            mock_asyncio.gather = fake_gather
-
-            # Mock collect_outputs to return files
             mock_exec.side_effect = [
-                {},  # collect_outputs for agent 1
-                {},  # collect_outputs for agent 2
-                {"total_files": 2, "total_size_bytes": 100, "agents": 1},
-                {"passed": True, "coverage": 95.0, "target": 0.9},
-                {},
+                {},  # agent future 0 (plain dict — coroutine consumed by gather)
+                {},  # agent future 1
+                AwaitableResult({}),  # collect_outputs agent 0
+                AwaitableResult({}),  # collect_outputs agent 1
+                AwaitableResult({"total_files": 2, "total_size_bytes": 100, "agents": 1}),
+                AwaitableResult({"passed": True, "coverage": 95.0, "target": 0.9}),
+                AwaitableResult({}),  # snapshot_state
             ]
 
             pm = PhaseManager()
@@ -286,6 +329,11 @@ class TestPhaseManagerRun:
 
     @pytest.mark.asyncio
     async def test_run_with_feedback_and_partial_approval(self):
+        gather_fn = self._make_gather(
+            {"engagement_id": "eng-1", "task_id": "task-0", "status": "completed",
+             "output_files": ["out/file.txt"]},
+        )
+
         with patch(
             "harness.workflows.phases.phase_manager.workflow.execute_activity"
         ) as mock_exec, \
@@ -293,20 +341,16 @@ class TestPhaseManagerRun:
             "harness.workflows.phases.phase_manager.workflow.logger"
         ) as mock_logger, \
              patch(
-            "harness.workflows.phases.phase_manager.asyncio"
-        ) as mock_asyncio:
+            "harness.workflows.phases.phase_manager.asyncio.gather", gather_fn
+        ):
 
-            async def fake_gather(*args, **kwargs):
-                return [
-                    {
-                        "engagement_id": "eng-1",
-                        "task_id": "task-0",
-                        "status": "completed",
-                        "output_files": ["out/file.txt"],
-                    },
-                ]
-
-            mock_asyncio.gather = fake_gather
+            mock_exec.side_effect = [
+                {},  # agent future 0
+                AwaitableResult({}),  # collect_outputs
+                AwaitableResult({"total_files": 2, "total_size_bytes": 100, "agents": 1}),
+                AwaitableResult({"passed": True, "coverage": 95.0, "target": 0.9}),
+                AwaitableResult({}),  # snapshot_state
+            ]
 
             pm = PhaseManager()
             result = await pm.run({
@@ -328,11 +372,17 @@ class TestPhaseManagerRun:
                 "partial_approval": True,
             })
 
-            # Only the src agent should have run (blocker references src/)
             assert result["phase"] == "build"
 
     @pytest.mark.asyncio
     async def test_run_with_errors(self):
+        """One agent succeeds, one raises/fails."""
+        gather_fn = self._make_gather(
+            {"engagement_id": "e", "task_id": "t1", "status": "completed",
+             "output_files": []},
+            RuntimeError("Agent crashed"),
+        )
+
         with patch(
             "harness.workflows.phases.phase_manager.workflow.execute_activity"
         ) as mock_exec, \
@@ -340,17 +390,17 @@ class TestPhaseManagerRun:
             "harness.workflows.phases.phase_manager.workflow.logger"
         ) as mock_logger, \
              patch(
-            "harness.workflows.phases.phase_manager.asyncio"
-        ) as mock_asyncio:
+            "harness.workflows.phases.phase_manager.asyncio.gather", gather_fn
+        ):
 
-            async def fake_gather(*args, **kwargs):
-                return [
-                    {"engagement_id": "e", "task_id": "t1", "status": "completed",
-                     "output_files": []},
-                    RuntimeError("Agent crashed"),
-                ]
-
-            mock_asyncio.gather = fake_gather
+            mock_exec.side_effect = [
+                {},  # agent future 0
+                {},  # agent future 1
+                AwaitableResult({}),  # collect_outputs (1 successful → 1 iteration)
+                AwaitableResult({"total_files": 2, "total_size_bytes": 100, "agents": 1}),
+                AwaitableResult({"passed": True, "coverage": 95.0, "target": 0.9}),
+                AwaitableResult({}),  # snapshot_state
+            ]
 
             pm = PhaseManager()
             result = await pm.run({

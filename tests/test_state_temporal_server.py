@@ -64,7 +64,8 @@ class TestEnsureTemporalServer:
 
     def test_handles_oserror_on_connect(self):
         """Handle OSError (not just ConnectionRefusedError) gracefully."""
-        with patch("socket.socket") as mock_socket_cls:
+        with patch("socket.socket") as mock_socket_cls, \
+             patch("subprocess.Popen") as mock_popen:
 
             mock_sock = MagicMock()
             mock_socket_cls.return_value = mock_sock
@@ -107,7 +108,8 @@ class TestEnsureTemporalServer:
 
     def test_socket_closed_after_check(self):
         """Socket should always be closed after connection attempt."""
-        with patch("socket.socket") as mock_socket_cls:
+        with patch("socket.socket") as mock_socket_cls, \
+             patch("subprocess.Popen") as mock_popen:
 
             mock_sock = MagicMock()
             mock_socket_cls.return_value = mock_sock

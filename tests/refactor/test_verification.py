@@ -14,6 +14,9 @@ from harness.refactor.verification import (
     VerificationRunner,
 )
 
+# Prevent pytest from trying to collect this imported class
+TestSuiteResult.__test__ = False
+
 
 class TestBoundaryTestCheck:
     def test_defaults(self):

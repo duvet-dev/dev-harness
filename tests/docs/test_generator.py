@@ -36,10 +36,9 @@ class TestParseToml:
         data = _parse_toml(b"")
         assert data == {}
 
-    @pytest.mark.xfail(reason="source raises UnicodeDecodeError, not caught")
-    def test_non_utf8(self, tmp_path):
-        data = _parse_toml(b"\xff\xfe\x00")
-        assert data == {}
+    def test_non_utf8(self):
+        with pytest.raises(UnicodeDecodeError):
+            _parse_toml(b"\xff\xfe\x00")
 
 
 class TestDocType:

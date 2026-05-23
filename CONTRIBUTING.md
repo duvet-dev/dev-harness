@@ -16,17 +16,20 @@
 git clone https://github.com/your-org/dev-harness.git
 cd dev-harness
 
-# Quick install (includes dev dependencies + auto-downloads Temporal)
+# Quick install (creates .venv, installs deps, downloads Temporal)
 make install
 
-# Or manually:
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+# Add to PATH for convenience
+export PATH=".venv/bin:$PATH"
 
 # Verify
-harness --help
+.venv/bin/harness --help
+# or after PATH: harness --help
 ```
+
+`make install` creates a Python virtual environment in `.venv/`,
+upgrades pip inside it, then installs the package and all dev
+dependencies (pytest, ruff, build, temporalio, etc.).
 
 ### Configure LLM providers (optional, for real agent work)
 
@@ -89,15 +92,18 @@ dev-harness/
 
 | Target | What it does |
 |---|---|
-| `make install` | `pip install -e ".[dev]"` + download Temporal |
+| `make install` | Create .venv, install deps, download Temporal |
 | `make test` | Run full suite: `pytest tests/ -W error::RuntimeWarning` |
 | `make ci` | Full CI pipeline: lint → test → coverage (≥70%) |
 | `make test-coverage` | Tests + coverage report + HTML |
 | `make test-e2e` | On-demand end-to-end tests |
 | `make test-verbose` | Tests with verbose output + top 10 slowest |
 | `make lint` | Run ruff linter (src/harness/ + tests/) |
+| `make version` | Show current version (e.g. 0.1.0.003) |
+| `make version-full` | Show version, build number, and build date |
+| `make version-bump` | Increment build number |
 | `make check-types` | Run mypy (if installed) |
-| `make build` | Build Python wheel in `dist/` |
+| `make build` | Bump build + build Python wheel in `dist/` |
 | `make build-exe` | Single-file executable (requires PyInstaller) |
 | `make download-temporal` | Download Temporal CLI for current platform |
 | `make clean` | Remove build artifacts, coverage/ |
@@ -311,13 +317,43 @@ refactor/agent-runner
 
 ---
 
+## Versioning
+
+Builds use semantic versioning with a monotonically incrementing
+build number: **`X.Y.Z.BBB`** (e.g. `0.1.0.003`).
+
+- `__version__` comes from `pyproject.toml` (`X.Y.Z`)
+- `__build__` is read from `BUILD_NUMBER` (local file, gitignored)
+- `__build_date__` is an ISO-8601 timestamp of the build
+
+```bash
+make version          # 0.1.0.003
+make version-full     # Full details (version, build, date)
+make version-bump     # Increment build number manually
+```
+
+`make build` and `make build-exe` automatically run `version-bump`
+before packaging, so every wheel/executable has a unique build
+number and timestamp embedded.
+
+The version is accessible at runtime:
+```bash
+.venv/bin/harness --version        # 0.1.0.003
+.venv/bin/harness --version-full   # Full build info
+```
+
+In development (no build run), the version shows `0.1.0.000` with
+an empty date.
+
+---
+
 ## Build system
 
 ### Building the package
 
 ```bash
-make clean       # Remove old artifacts
-make build       # Build wheel → dist/dev_harness-*.whl
+make clean       # Remove old artifacts, reset build counter
+make build       # Bump build + build wheel → dist/dev_harness-*.whl
 ```
 
 ### Building a single executable (alpha)

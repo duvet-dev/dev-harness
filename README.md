@@ -27,31 +27,34 @@ to plan, implement, test, and review code through structured, gated workflows.
 ## Quick Start
 
 ```bash
-# 1. Install with dev dependencies + auto-download Temporal CLI
+# 1. Install (creates .venv, installs deps, downloads Temporal CLI)
 make install
 
 # 2. Verify
-harness --help
+.venv/bin/harness --help
 
 # 3. Initialise a project
 cd my-project
-harness init
+.venv/bin/harness init
 
 # 4. Set your LLM API key
 export DEEPSEEK_API_KEY="sk-..."
 
 # 5. Create an engagement and run a session
-harness engagement create "Add user authentication"
-harness session
+.venv/bin/harness engagement create "Add user authentication"
+.venv/bin/harness session
 ```
+
+> Add `.venv/bin` to your `PATH` for convenience:
+> `export PATH=".venv/bin:$PATH"`
 
 ### Without a project — observer mode
 
 Analyse any repo instantly, no setup needed:
 
 ```bash
-harness observe /path/to/repo          # fast scan (15+ checks)
-harness assess /path/to/repo           # full deep analysis with LLM
+.venv/bin/harness observe /path/to/repo    # fast scan (15+ checks)
+.venv/bin/harness assess /path/to/repo     # full deep analysis
 ```
 
 ---
@@ -64,15 +67,20 @@ harness assess /path/to/repo           # full deep analysis with LLM
 git clone https://github.com/your-org/dev-harness.git
 cd dev-harness
 
-# Install with dev dependencies — auto-downloads Temporal dev server binary
+# Install (creates .venv, installs dev deps, downloads Temporal)
 make install
 
-# Or install manually:
-pip install -e ".[dev]"
+# Add to PATH for convenience
+export PATH=".venv/bin:$PATH"
 ```
 
-The Temporal CLI dev server binary is auto-downloaded on first use if
-not already in PATH. To download it explicitly:
+`make install`:
+- Creates a Python virtual environment in `.venv/`
+- Upgrades pip inside it
+- Installs dev-harness in editable mode with dev dependencies (pytest, ruff, etc.)
+- Downloads the Temporal CLI dev server binary (if not already in PATH)
+
+To download the Temporal binary explicitly:
 
 ```bash
 make download-temporal
@@ -222,17 +230,20 @@ for per-command options.
 
 | Target | Description |
 |---|---|
-| `make install` | Install package with dev deps + download Temporal |
+| `make install` | Create .venv, install deps, download Temporal |
 | `make test` | Run full test suite (1826 tests, ~10s) |
 | `make ci` | Full CI: lint → tests → coverage (≥70%) |
-| `make test-coverage` | Tests + coverage report + HTML |
+| `make test-coverage` | Tests + coverage report + HTML in coverage/ |
 | `make coverage-html` | Generate coverage HTML report |
 | `make lint` | Run ruff linter |
-| `make test-e2e` | End-to-end tests (on-demand) |
-| `make build` | Build Python wheel |
-| `make build-exe` | Single executable (alpha) |
+| `make version` | Show current version (e.g. 0.1.0.003) |
+| `make version-full` | Show version, build number, and build date |
+| `make version-bump` | Increment build number (run automatically by build) |
+| `make test-e2e` | End-to-end tests (on-demand, live services) |
+| `make build` | Bump build number + build Python wheel |
+| `make build-exe` | Single executable binary (alpha) |
 | `make download-temporal` | Download Temporal CLI binary |
-| `make clean` | Remove build artifacts |
+| `make clean` | Remove build artifacts, reset build counter |
 | `make publish` | Build and publish to registry |
 
 ---

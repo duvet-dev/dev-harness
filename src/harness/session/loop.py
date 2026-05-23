@@ -742,6 +742,7 @@ def _print_help() -> None:
         )
     click.echo("  /new         -- start fresh conversation")
     _print_consult_help()
+    click.echo("  /version     -- show version info")
     click.echo("  /exit        -- exit session")
     click.echo()
     click.echo("Line editing: use Alt+Left/Right to jump words, Home/End for line ends")

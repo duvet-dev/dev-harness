@@ -54,6 +54,7 @@ class TestMatch:
         match_type: How the test references the AC (e.g. "direct", "marker",
             "description", "none").
     """
+    __test__ = False  # not a pytest test class
     test_path: str
     test_name: str
     line: int = 0
@@ -87,6 +88,7 @@ class TestWithoutTracking:
         test_name: Name of the test function/method.
         line: Line number.
     """
+    __test__ = False  # not a pytest test class
     test_path: str
     test_name: str
     line: int = 0
@@ -246,6 +248,7 @@ class TestScanner:
 
     Falls back to Python-specific patterns when no language is detected.
     """
+    __test__ = False  # not a pytest test class
 
     def __init__(
         self,

@@ -72,7 +72,7 @@ version:
 
 .PHONY: version-full
 version-full:
-	@$(PYTHON) -c "exec(open('$(VERSION_FILE)').read()); print(f'dev-harness v{__version__}.{__build__:03d}'); print(f'build:   {__build__:03d}'); print(f'date:    {__build_date__ if __build_date__ else \"unknown\"}')"
+	@$(PYTHON) -c "exec(open('$(VERSION_FILE)').read()); print(f'dev-harness v{__version__}.{__build__:03d}'); print(f'build:   {__build__:03d}'); c = __commit__ if __commit__ else 'unknown'; print(f'commit:  {c}'); print(f'date:    {__build_date__ if __build_date__ else \"unknown\"}')"
 
 .PHONY: version-bump
 version-bump:

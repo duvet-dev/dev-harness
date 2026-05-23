@@ -170,7 +170,7 @@ WORKFLOWS_EPILOG = """
 )
 
 
-from harness._version import __version__, __build__, __build_date__
+from harness._version import __version__, __build__, __build_date__, __commit__
 
 
 def _print_version(ctx, param, value):
@@ -186,8 +186,10 @@ def _print_version_full(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
     date_str = __build_date__ if __build_date__ else "unknown"
+    commit_str = __commit__ if __commit__ else "unknown"
     click.echo(f"dev-harness v{__version__}.{__build__:03d}")
     click.echo(f"build:   {__build__:03d}")
+    click.echo(f"commit:  {commit_str}")
     click.echo(f"date:    {date_str}")
     ctx.exit()
 

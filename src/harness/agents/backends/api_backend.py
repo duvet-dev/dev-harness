@@ -244,6 +244,13 @@ class ApiBackend(AbstractBackend):
                 "role": "assistant",
                 "content": assistant_msg.get("content") or None,
             }
+
+            # Preserve reasoning_content for models that use thinking mode
+            # (e.g. DeepSeek V4 Pro) — the API requires it to be passed back
+            reasoning = assistant_msg.get("reasoning_content")
+            if reasoning is not None:
+                assistant_msg_for_history["reasoning_content"] = reasoning
+
             if tool_calls:
                 # Convert tool_calls to serializable format
                 serialized_calls = []

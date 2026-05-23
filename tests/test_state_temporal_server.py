@@ -42,7 +42,8 @@ class TestEnsureTemporalServer:
             assert result is True
             mock_popen.assert_called_once()
             args, kwargs = mock_popen.call_args
-            assert "temporal" in args[0]
+            # args[0] may be a full path (e.g. /usr/local/bin/temporal)
+            assert args[0][0].endswith("temporal") or "temporal" in args[0][0]
             assert "server" in args[0]
             assert "start-dev" in args[0]
 

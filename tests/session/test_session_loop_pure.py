@@ -17,6 +17,7 @@ from harness.session.loop import (
     _format_jump_marker,
     _check_for_phase_jump_from_content,
     MAX_PHASE_JUMPS_PER_PHASE,
+    DOMAIN_LANGUAGE_PREAMBLE,
 )
 
 
@@ -233,3 +234,123 @@ class TestCheckForPhaseJumpFromContent:
             "PHASE_JUMP:design\nPHASE_JUMP:implement"
         )
         assert result == "design"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# _build_system_prompt (effects injected as data parameters)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBuildSystemPrompt:
+    """Tests for _build_system_prompt() — prompt construction logic.
+
+    All IO dependencies (engagement context, fleet data, patterns) are
+    injected as pre-loaded strings. This tests the pure assembly logic
+    without needing a real filesystem.
+    """
+
+    def make_phase(self, prompt: str = "You are a test agent.", fleets=None):
+        phase = {"name": "test", "prompt": prompt, "fleets": fleets or []}
+        return phase
+
+    def test_basic_prompt_with_phase(self):
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase()
+        result = _build_system_prompt(phase)
+        assert "You are a test agent." in result
+        assert DOMAIN_LANGUAGE_PREAMBLE in result
+
+    def test_with_engagement_context(self):
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase()
+        result = _build_system_prompt(
+            phase,
+            engagement_context="src/main.py (3KB, modified)\nsrc/utils.py (1KB)",
+        )
+        assert "CURRENT ENGAGEMENT FILES" in result
+        assert "src/main.py" in result
+
+    def test_with_prior_artifacts(self):
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase()
+        result = _build_system_prompt(
+            phase,
+            context="Design doc:\n- Component A\n- Component B",
+        )
+        assert "PRIOR ARTIFACTS" in result
+        assert "Component A" in result
+
+    def test_with_conversation_history(self):
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase()
+        result = _build_system_prompt(
+            phase,
+            conversation="User asked about the architecture.",
+        )
+        assert "CONVERSATION HISTORY" in result
+        assert "architecture" in result
+
+    def test_with_fleet_section(self):
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase(fleets=["architecture"])
+        result = _build_system_prompt(
+            phase,
+            fleet_section="## Architecture Fleet\nFollow the onion architecture.",
+        )
+        assert "Architecture Fleet" in result
+        assert "onion architecture" in result
+
+    def test_with_patterns_section(self):
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase(fleets=["testing"])
+        result = _build_system_prompt(
+            phase,
+            patterns_section="## Testing Patterns\nArrange-Act-Assert",
+        )
+        assert "Testing Patterns" in result
+        assert "Arrange-Act-Assert" in result
+
+    def test_injection_order(self):
+        """Verify the parts appear in the correct order."""
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase()
+        result = _build_system_prompt(
+            phase,
+            engagement_context="[ENGAGEMENT_CONTEXT]",
+            fleet_section="[FLEET]",
+            patterns_section="[PATTERNS]",
+            context="[ARTIFACTS]",
+            conversation="[CONVERSATION]",
+        )
+
+        # Find positions of each section
+        pos_preamble = result.find(DOMAIN_LANGUAGE_PREAMBLE)
+        pos_context = result.find("[ENGAGEMENT_CONTEXT]")
+        pos_prompt = result.find("You are a test agent.")
+        pos_fleet = result.find("[FLEET]")
+        pos_patterns = result.find("[PATTERNS]")
+        pos_artifacts = result.find("[ARTIFACTS]")
+        pos_conversation = result.find("[CONVERSATION]")
+
+        assert pos_preamble < pos_context, "preamble before context"
+        assert pos_context < pos_prompt, "context before phase prompt"
+        assert pos_prompt < pos_fleet or pos_fleet == -1, "prompt before fleet"
+        assert pos_fleet < pos_patterns or pos_patterns == -1 or pos_fleet == -1, "fleet before patterns"
+        assert pos_artifacts > pos_patterns, "artifacts after everything"
+        assert pos_conversation > pos_artifacts, "conversation last"
+
+    def test_empty_engagement_context_omitted(self):
+        """Empty/injected context should not add the current-files section."""
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase()
+        result = _build_system_prompt(phase, engagement_context="")
+        assert "CURRENT ENGAGEMENT FILES" not in result
+
+    def test_without_any_injected_data(self):
+        """Without injecting anything, the function should not attempt IO."""
+        from harness.session.loop import _build_system_prompt
+        phase = self.make_phase()
+        result = _build_system_prompt(phase)
+        assert "You are a test agent." in result
+        assert "CURRENT ENGAGEMENT FILES" not in result
+        assert "PRIOR ARTIFACTS" not in result

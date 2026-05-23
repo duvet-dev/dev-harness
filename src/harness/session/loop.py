@@ -570,6 +570,9 @@ def _build_system_prompt(
     engagement_slug: str = "",
     context: str = "",
     conversation: str = "",
+    engagement_context: str | None = None,
+    fleet_section: str | None = None,
+    patterns_section: str | None = None,
 ) -> str:
     """Build the system prompt for an agent in a given phase.
 
@@ -589,14 +592,29 @@ def _build_system_prompt(
         5. Injected patterns (if pattern files exist)
         6. Prior artifacts from previous phases
         7. Conversation history
+
+    Args:
+        phase: Phase definition dict with ``prompt`` and optional ``fleets``.
+        root: Project root for loading fleet/pattern/context data.
+        engagement_slug: Current engagement slug for context loading.
+        context: Prior artifacts from previous phases.
+        conversation: Conversation history from prior phases.
+        engagement_context: Pre-loaded engagement context string.
+            If ``None`` and ``root`` + ``engagement_slug`` are provided,
+            loads from disk via ``_load_engagement_context``.
+        fleet_section: Pre-formatted fleet guidelines section.
+            If ``None`` and ``root`` is provided, loads from disk.
+        patterns_section: Pre-formatted patterns section.
+            If ``None`` and ``root`` is provided, loads from disk.
     """
     parts = [DOMAIN_LANGUAGE_PREAMBLE, phase["prompt"]]
 
     # Fleet guidelines + patterns injection (between phase prompt and prior artifacts)
-    fleet_section = ""
-    patterns_section = ""
+    resolved_fleet = fleet_section
+    resolved_patterns = patterns_section
     fleet_names: list[str] = phase.get("fleets", [])
-    if root is not None and fleet_names:
+
+    if resolved_fleet is None and root is not None and fleet_names:
         from harness.agents.context_builder import (
             get_fleet_system_prompt_section_for_phase,
         )
@@ -604,7 +622,9 @@ def _build_system_prompt(
         from harness.agents.pattern import PatternLoader
 
         registry = FleetRegistry(root)
-        fleet_section = get_fleet_system_prompt_section_for_phase(fleet_names, registry)
+        resolved_fleet = get_fleet_system_prompt_section_for_phase(
+            fleet_names, registry
+        )
 
         # Load patterns from all fleets in this phase
         loader = PatternLoader(root)
@@ -613,27 +633,29 @@ def _build_system_prompt(
             if patterns:
                 section = loader.format_patterns_section(patterns)
                 if section:
-                    if patterns_section:
-                        patterns_section += "\n\n---\n\n" + section
+                    if resolved_patterns:
+                        resolved_patterns += "\n\n---\n\n" + section
                     else:
-                        patterns_section = section
+                        resolved_patterns = section
 
-    if fleet_section:
-        parts.append(fleet_section)
-    if patterns_section:
-        parts.append(patterns_section)
+    if resolved_fleet:
+        parts.append(resolved_fleet)
+    if resolved_patterns:
+        parts.append(resolved_patterns)
 
     # Prepend engagement context bundle (file awareness for the agent)
-    if root is not None and engagement_slug:
-        engagement_context = _load_engagement_context(root, engagement_slug)
-        if engagement_context:
-            parts.insert(
-                1,
-                f"CURRENT ENGAGEMENT FILES:\n{engagement_context}\n"
-                "These files exist in your engagement. Read them before writing "
-                "to avoid duplication. Use the RepoTool (available via function "
-                "calling) to read and write files in this engagement.",
-            )
+    resolved_context = engagement_context
+    if resolved_context is None and root is not None and engagement_slug:
+        resolved_context = _load_engagement_context(root, engagement_slug)
+
+    if resolved_context:
+        parts.insert(
+            1,
+            f"CURRENT ENGAGEMENT FILES:\n{resolved_context}\n"
+            "These files exist in your engagement. Read them before writing "
+            "to avoid duplication. Use the RepoTool (available via function "
+            "calling) to read and write files in this engagement.",
+        )
 
     if context:
         parts.append(f"\nPRIOR ARTIFACTS (from previous phases):\n{context}")

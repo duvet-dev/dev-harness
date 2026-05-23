@@ -727,7 +727,7 @@ def list_agents():
 
     click.echo(f"\n  {'Role':<30} {'Tags':<40} {'Fleet':<20}")
     click.echo(f"  {'-'*28}  {'-'*38}  {'-'*18}")
-    for spec in AGENTS.values():
+    for spec in AGENTS:
         role = spec.role
         tags = ", ".join(getattr(spec, 'tags', []) or [])
         fleet = fleet_map.get(role, "-")

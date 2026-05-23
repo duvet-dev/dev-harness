@@ -115,6 +115,7 @@ class HarnessREPL:
 
         self._help_lines.append("── Special ──")
         self._help_lines.append("  /help                Show this help")
+        self._help_lines.append("  /version             Show version info")
         self._help_lines.append("  /exit                Exit the REPL")
         self._help_lines.append("")
         self._help_lines.append("Tab auto-complete: command names, flags, file paths.")
@@ -225,6 +226,16 @@ class HarnessREPL:
 
         if cmd_name == "shell":
             click.echo("Already in the REPL.")
+            return True
+
+        if cmd_name == "version":
+            from harness._version import __version__, __build__, __build_date__, __commit__
+            date_str = __build_date__ if __build_date__ else "development"
+            commit_str = __commit__ if __commit__ else "unknown"
+            click.echo(f"dev-harness v{__version__}.{__build__:03d}")
+            click.echo(f"build:   {__build__:03d}")
+            click.echo(f"commit:  {commit_str}")
+            click.echo(f"date:    {date_str}")
             return True
 
         # ── Engagement context helpers ───────────────────────────────────

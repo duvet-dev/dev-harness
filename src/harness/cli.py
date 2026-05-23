@@ -170,7 +170,47 @@ WORKFLOWS_EPILOG = """
 )
 
 
-@click.group()
+from harness._version import __version__, __build__, __build_date__
+
+
+def _print_version(ctx, param, value):
+    """Print version and exit."""
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(f"{__version__}.{__build__:03d}")
+    ctx.exit()
+
+
+def _print_version_full(ctx, param, value):
+    """Print full version and build info, then exit."""
+    if not value or ctx.resilient_parsing:
+        return
+    date_str = __build_date__ if __build_date__ else "unknown"
+    click.echo(f"dev-harness v{__version__}.{__build__:03d}")
+    click.echo(f"build:   {__build__:03d}")
+    click.echo(f"date:    {date_str}")
+    ctx.exit()
+
+
+@click.group(
+    invoke_without_command=True,
+)
+@click.option(
+    "--version",
+    is_flag=True,
+    is_eager=True,
+    expose_value=False,
+    callback=_print_version,
+    help="Show version and exit.",
+)
+@click.option(
+    "--version-full",
+    is_flag=True,
+    is_eager=True,
+    expose_value=False,
+    callback=_print_version_full,
+    help="Show full version, build number, and build date.",
+)
 def main():
     """Dev Harness — agent orchestration for software development.
 

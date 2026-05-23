@@ -61,7 +61,22 @@ install: .venv download-temporal
 install-deps: .venv
 	$(VENV)/bin/pip install -e ".[dev]"
 
-# ── Testing ───────────────────────────────────────────────────────────────
+# ── Versioning ─────────────────────────────────────────────────────────────
+
+VERSION_FILE := src/harness/_version.py
+BUILD_FILE   := BUILD_NUMBER
+
+.PHONY: version
+version:
+	@$(PYTHON) -c "exec(open('$(VERSION_FILE)').read()); print(f'{__version__}.{__build__:03d}')"
+
+.PHONY: version-full
+version-full:
+	@$(PYTHON) -c "exec(open('$(VERSION_FILE)').read()); print(f'dev-harness v{__version__}.{__build__:03d}'); print(f'build:   {__build__:03d}'); print(f'date:    {__build_date__ if __build_date__ else \"unknown\"}')"
+
+.PHONY: version-bump
+version-bump:
+	$(PYTHON) scripts/version-bump.py
 
 .PHONY: test
 test:
@@ -121,13 +136,13 @@ check-types:
 # ── Build ─────────────────────────────────────────────────────────────────
 
 .PHONY: build
-build: clean download-temporal
+build: clean version-bump download-temporal
 	$(PYTHON) -m build
 	@echo ""
 	@echo "✓ Wheel built. See dist/"
 
 .PHONY: build-exe
-build-exe: download-temporal
+build-exe: version-bump download-temporal
 	@echo "Building single executable (requires PyInstaller)..."
 	@which pyinstaller > /dev/null 2>&1 || { \
 		echo "PyInstaller not found. Install with: pip install pyinstaller"; \
@@ -169,6 +184,7 @@ $(TEMPORAL_BIN):
 clean:
 	rm -rf dist/ build/ *.egg-info/ .pytest_cache/ .ruff_cache/
 	rm -rf $(TEMPORAL_DIR)
+	$(PYTHON) -c "Path('$(BUILD_FILE)').write_text('0\n')" 2>/dev/null || true
 	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete
 	@echo "✓ Cleaned build artifacts"

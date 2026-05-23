@@ -1,6 +1,7 @@
 # Dev Harness
 
-[![Tests](https://img.shields.io/badge/tests-1687%20%E2%9C%85-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-1826%20%E2%9C%85-brightgreen)](#)
+[![Coverage](https://img.shields.io/badge/coverage-74%25-yellowgreen)](#)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](#)
 [![License](https://img.shields.io/badge/license-proprietary-lightgrey)](#)
 
@@ -26,22 +27,21 @@ to plan, implement, test, and review code through structured, gated workflows.
 ## Quick Start
 
 ```bash
-# 1. Install
-pip install -e .
+# 1. Install with dev dependencies + auto-download Temporal CLI
+make install
 
-# 2. Initialise a project
+# 2. Verify
+harness --help
+
+# 3. Initialise a project
 cd my-project
 harness init
 
-# 3. Configure (or set env vars)
-#     DEEPSEEK_API_KEY  — primary LLM provider
-#     OPENAI_API_KEY    — fallback
-#     ANTHROPIC_API_KEY — fallback
+# 4. Set your LLM API key
+export DEEPSEEK_API_KEY="sk-..."
 
-# 4. Create an engagement
+# 5. Create an engagement and run a session
 harness engagement create "Add user authentication"
-
-# 5. Run an interactive session
 harness session
 ```
 
@@ -50,8 +50,8 @@ harness session
 Analyse any repo instantly, no setup needed:
 
 ```bash
-harness observe /path/to/repo          # fast scan
-harness assess /path/to/repo           # full deep analysis (LLM-based)
+harness observe /path/to/repo          # fast scan (15+ checks)
+harness assess /path/to/repo           # full deep analysis with LLM
 ```
 
 ---
@@ -63,27 +63,83 @@ harness assess /path/to/repo           # full deep analysis (LLM-based)
 ```bash
 git clone https://github.com/your-org/dev-harness.git
 cd dev-harness
-pip install -e .
+
+# Install with dev dependencies — auto-downloads Temporal dev server binary
+make install
+
+# Or install manually:
+pip install -e ".[dev]"
+```
+
+The Temporal CLI dev server binary is auto-downloaded on first use if
+not already in PATH. To download it explicitly:
+
+```bash
+make download-temporal
 ```
 
 ### Single executable (alpha)
 
 ```bash
-make build
+make build-exe
 # Output: dist/harness (Linux/macOS) or dist/harness.exe (Windows)
 ```
 
-The single executable bundles Temporal's dev server binary so you have
-everything you need in one file.
+Bundles Temporal's dev server for a zero-install experience.
 
 ### Dependencies
 
 | Dependency | Purpose |
 |---|---|
 | Python ≥3.9 | Runtime |
-| Temporal CLI | Workflow engine (auto-downloaded on first use if absent) |
+| Temporal CLI | Workflow engine (auto-downloaded) |
 | LLM API key | At least one of: DeepSeek, OpenAI, Anthropic |
 | Git | SCM integration |
+
+---
+
+## Testing
+
+### Quick test run
+
+```bash
+make test           # 1826 tests, 0 failures, 0 warnings — ~10s
+```
+
+### Full CI pipeline (what CI runs)
+
+```bash
+make ci
+# 1. Lint check (ruff)
+# 2. Full test suite with coverage report + HTML output
+# 3. Coverage threshold enforcement (≥70%)
+```
+
+### Other test targets
+
+```bash
+make test-coverage     # Tests + coverage report + HTML in coverage/
+make coverage-html     # Same as above, then opens report path
+make test-e2e          # On-demand end-to-end tests (LLM APIs, live services)
+make test-verbose      # Tests with verbose output + slowest durations
+make test-ci           # Alias for make ci
+```
+
+### Running specific tests
+
+```bash
+# Directly with pytest
+pytest tests/                               # whole suite
+pytest tests/analysis/                      # analysis module
+pytest tests/test_cycle.py                  # single file
+pytest tests/test_validator.py -k "interface"  # by keyword
+pytest tests/ -W error::RuntimeWarning      # CI mode
+pytest -m e2e                               # e2e-marked tests only
+```
+
+All 1826 functional tests run in under 10 seconds with **zero external
+dependencies**. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full
+developer guide.
 
 ---
 
@@ -162,6 +218,25 @@ for per-command options.
 
 ---
 
+## Makefile targets
+
+| Target | Description |
+|---|---|
+| `make install` | Install package with dev deps + download Temporal |
+| `make test` | Run full test suite (1826 tests, ~10s) |
+| `make ci` | Full CI: lint → tests → coverage (≥70%) |
+| `make test-coverage` | Tests + coverage report + HTML |
+| `make coverage-html` | Generate coverage HTML report |
+| `make lint` | Run ruff linter |
+| `make test-e2e` | End-to-end tests (on-demand) |
+| `make build` | Build Python wheel |
+| `make build-exe` | Single executable (alpha) |
+| `make download-temporal` | Download Temporal CLI binary |
+| `make clean` | Remove build artifacts |
+| `make publish` | Build and publish to registry |
+
+---
+
 ## Architecture
 
 ```
@@ -229,31 +304,6 @@ settings and `constitution.yaml` for project constitution, gates, and rules.
 
 ---
 
-## Testing
-
-```bash
-# Core functional/feature tests (no external dependencies)
-pytest tests/
-
-# With coverage
-pytest --cov=src/harness tests/
-
-# Run specific area
-pytest tests/analysis/
-pytest tests/test_cycle.py
-
-# End-to-end tests (LLM APIs, live services — run on demand)
-pytest -m e2e
-
-# Run everything including e2e
-pytest -m ''
-```
-
-All 1687+ functional tests run in <10s with zero external dependencies.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full developer guide.
-
----
-
 ## Project Standards
 
 - **Test Isolation** — tests must work in any order with no shared mutable state
@@ -261,6 +311,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full developer guide.
   only before implementation)
 - **No External Dependencies In CI** — all functional tests mock/patch external
   services (LLM APIs, Temporal server, etc.)
+- **Coverage Threshold** — CI enforces ≥70% line coverage; HTML report in
+  `coverage/index.html`
 - **Commit Conventions** — semantic prefixes: `feat:`, `fix:`, `refactor:`,
   `docs:`, `test:`, `chore:` — see CONTRIBUTING.md
 

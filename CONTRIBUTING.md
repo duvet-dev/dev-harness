@@ -6,10 +6,9 @@
 
 - **Python ≥3.9** — [pyenv](https://github.com/pyenv/pyenv) recommended
 - **Git** — for SCM integration
-- **Temporal CLI** (optional) — for workflow durability; auto-downloaded
-  on first use if absent
-- **LLM API key** (optional) — at least one of DeepSeek, OpenAI, or Anthropic
-  for development work (not needed to run tests)
+- **Temporal CLI** (optional) — auto-downloaded on first use if absent
+- **LLM API key** (optional) — DeepSeek, OpenAI, or Anthropic for
+  development work (not needed to run tests)
 
 ### Clone and install
 
@@ -17,11 +16,12 @@
 git clone https://github.com/your-org/dev-harness.git
 cd dev-harness
 
-# Create a virtual environment
+# Quick install (includes dev dependencies + auto-downloads Temporal)
+make install
+
+# Or manually:
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install in editable mode with dev extras
 pip install -e ".[dev]"
 
 # Verify
@@ -68,56 +68,111 @@ dev-harness/
 │   ├── templates/        # Agent templates
 │   ├── tools/            # Web search
 │   └── workflows/        # Temporal workflows
-├── tests/                # Functional and feature tests (~1700+)
-├── tests_e2e/            # End-to-end/integration tests (on-demand only)
-├── scripts/              # Build and utility scripts
-├── Makefile              # Build, test, lint targets
-├── pyproject.toml        # Project metadata and dependencies
-└── setup.py              # Legacy setup script
+├── tests/                # Functional and feature tests (1826+)
+│   ├── analysis/         # Code analysis tests
+│   ├── docs/             # Documentation generation tests
+│   ├── engagement/       # Engagement lifecycle tests
+│   ├── refactor/         # Refactoring tests
+│   ├── session/          # Session tests
+│   └── ...
+├── tests_e2e/            # End-to-end/integration tests (on-demand)
+├── scripts/_temporal/    # Auto-downloaded Temporal CLI binary
+├── Makefile              # Build, test, lint, package targets
+├── pyproject.toml        # Project metadata, dependencies, tool config
+├── README.md
+└── CONTRIBUTING.md
 ```
+
+---
+
+## Makefile targets (quick reference)
+
+| Target | What it does |
+|---|---|
+| `make install` | `pip install -e ".[dev]"` + download Temporal |
+| `make test` | Run full suite: `pytest tests/ -W error::RuntimeWarning` |
+| `make ci` | Full CI pipeline: lint → test → coverage (≥70%) |
+| `make test-coverage` | Tests + coverage report + HTML |
+| `make test-e2e` | On-demand end-to-end tests |
+| `make test-verbose` | Tests with verbose output + top 10 slowest |
+| `make lint` | Run ruff linter (src/harness/ + tests/) |
+| `make check-types` | Run mypy (if installed) |
+| `make build` | Build Python wheel in `dist/` |
+| `make build-exe` | Single-file executable (requires PyInstaller) |
+| `make download-temporal` | Download Temporal CLI for current platform |
+| `make clean` | Remove build artifacts, coverage/ |
+| `make publish` | Build + publish to internal registry |
+
+Run `make help` for a full list.
 
 ---
 
 ## Running tests
 
-### Core test suite (no external dependencies)
+### Using Make
+
+```bash
+make test              # Full suite — 1826 tests, ~10s
+make test-coverage     # Tests + coverage with HTML report
+make test-verbose      # Verbose with slowest durations
+make test-e2e          # On-demand e2e tests (live services)
+make ci                # CI pipeline (lint → test → coverage)
+```
+
+### Directly with pytest
 
 ```bash
 # Run everything
 pytest tests/
 
-# Run with warnings as errors (CI does this)
+# CI mode (warnings as errors)
 pytest tests/ -W error::RuntimeWarning
 
-# Run with coverage
+# With coverage
 pytest --cov=src/harness tests/
 
-# Run a specific test file
+# With coverage + HTML report
+pytest --cov=src/harness --cov-report=html:coverage tests/
+
+# Run a specific area
+pytest tests/analysis/
 pytest tests/test_cycle.py
-
-# Run a specific test class
 pytest tests/analysis/test_analysis_observer.py::TestAnalyse
+pytest tests/test_validator.py -k "interface"
 
-# Run a specific test
-pytest tests/test_paths.py::TestPaths::test_project_root
-```
-
-### End-to-end tests (require live services)
-
-These tests make real API calls to LLM providers or need a running
-Temporal server. They are **excluded by default** and must be run
-explicitly:
-
-```bash
-pytest -m e2e              # only e2e tests
-pytest -m ''               # all tests including e2e
-pytest tests_e2e/          # the e2e test directory
+# End-to-end tests (require live services)
+pytest -m e2e
+pytest tests_e2e/
 ```
 
 ### Performance
 
-The core test suite (~1700 tests) runs in under 10 seconds on a modern
-machine. There are no slow integration tests in the core suite.
+The full core suite (1826 tests) runs in under 10 seconds with
+**zero external dependencies**. All LLM calls, Temporal server
+operations, and external services are mocked or patched.
+
+---
+
+## Linting
+
+```bash
+make lint       # Run ruff check on src/harness/ and tests/
+ruff check .    # Lint the whole repository (alt)
+```
+
+Configuration is in `pyproject.toml` under `[tool.ruff]`. Per-file
+ignores are set for test files (cosmetic rules suppressed) and
+source files (pre-existing issues gradually resolved).
+
+### Coverage
+
+Coverage HTML reports are generated to `coverage/index.html`.
+The threshold is **70%** — CI fails below this.
+
+```bash
+make test-coverage               # Run + generate HTML
+open coverage/index.html         # Browse in browser
+```
 
 ---
 
@@ -161,7 +216,7 @@ def test_bad_example(self):
 # ❌ Bad — depends on external state
 def test_also_bad(self):
     os.chdir("/some/external/path")
-    result = my_function()  # This depends on /some/external/path existing
+    result = my_function()  # Depends on /some/external/path existing
 ```
 
 ### Mock patterns
@@ -170,14 +225,14 @@ For async functions (like `assess()` in `harness.analysis.assessment`):
 
 ```python
 # Patch at the import source — the lazy import in the function body
-# will pick up the patched version at call time.
+# picks up the patched version at call time.
 with patch("harness.analysis.assessment.assess",
            return_value=_mock_report()):
     result = my_function(deep=True)
 ```
 
 For `patch()` on async functions, Python 3.9 auto-creates an `AsyncMock`.
-If you don't want that behaviour, use `new_callable=MagicMock`.
+If you need a plain `MagicMock`, pass `new_callable=MagicMock`.
 
 ### Markers
 
@@ -200,6 +255,7 @@ If you don't want that behaviour, use `new_callable=MagicMock`.
   all function signatures
 - **Docstrings:** Google-style with `Args:`, `Returns:`, `Raises:`
 - **Line length:** 90 characters soft limit
+- **Linting:** Enforced by ruff — run `make lint` before committing
 
 ### Commit messages
 
@@ -220,8 +276,6 @@ Resolves 10-minute hang when API keys are configured.
 Prefixes: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`,
 `build:`, `ci:`, `perf:`, `style:`.
 
-Never leave a local repo without a remote. Push changes early and often.
-
 ### Branch naming
 
 ```
@@ -240,19 +294,20 @@ refactor/agent-runner
 1. **Pick or create a GitHub issue** describing the problem
 2. **Create a branch:** `git checkout -b type/short-description`
 3. **Write the code** with tests
-4. **Run the full suite:** `pytest tests/` — must pass
+4. **Run the full suite:** `make ci` — must pass cleanly
 5. **Commit** with a descriptive message
 6. **Push** to your fork
 7. **Open a pull request**
 
 ### Before submitting a PR
 
-- [ ] Full test suite passes (`pytest tests/ -W error::RuntimeWarning`)
-- [ ] No new warnings introduced
+- [ ] `make ci` passes (lint → tests → coverage ≥70%)
+- [ ] No new warnings introduced (`pytest tests/ -W error::RuntimeWarning`)
 - [ ] Code is type-annotated
 - [ ] New features have tests
-- [ ] Documentation updated (README, CLI help, or docstrings as appropriate)
-- [ ] Changes are backward-compatible or clearly documented as breaking
+- [ ] Documentation updated (README, CLI help, or docstrings)
+- [ ] Changes are backward-compatible or documented as breaking
+- [ ] Remote is set up and changes pushed (never work on a local-only repo)
 
 ---
 
@@ -261,29 +316,26 @@ refactor/agent-runner
 ### Building the package
 
 ```bash
-# Build a wheel
-make build
-
-# The resulting wheel is at dist/dev_harness-*.whl
+make clean       # Remove old artifacts
+make build       # Build wheel → dist/dev_harness-*.whl
 ```
 
 ### Building a single executable (alpha)
 
 ```bash
-make build-exe
-
-# Output: dist/harness (macOS/Linux) or dist/harness.exe (Windows)
+make build-exe   # Requires PyInstaller
 ```
 
-The single executable bundles the Temporal CLI dev server binary,
-so no separate Temporal installation is needed. See `Makefile` for
-details.
+Output: `dist/harness` (macOS/Linux) or `dist/harness.exe` (Windows).
+The binary bundles the Temporal CLI dev server — no separate install needed.
 
 ### Publishing
 
 ```bash
-make publish    # Build and upload to internal registry
+make publish     # Build + upload to internal PyPI registry
 ```
+
+Configure your registry URL in the `Makefile`'s `publish` target.
 
 ---
 

@@ -417,6 +417,206 @@ P5_TEST_AUDITOR = AnalysisAgent(
 )
 
 
+
+
+# P6 — Security Auditor
+P6_SECURITY_AUDITOR = AnalysisAgent(
+    name="security-auditor",
+    description=(
+        "Scans the codebase for security vulnerabilities: hardcoded secrets, "
+        "unsafe subprocess calls, path traversal, eval() usage, SQL injection "
+        "risks, and insecure dependencies."
+    ),
+    system_prompt=(
+        "You are a security auditor. Your job is to analyse the codebase for "
+        "security vulnerabilities. You are language-agnostic — identify security "
+        "issues from file content, not language stereotypes.\n\n"
+        "For each security finding, report:\n"
+        "1. The exact file path and line number\n"
+        "2. The vulnerability type\n"
+        "3. The severity (critical, high, medium, low, info)\n"
+        "4. A description of why it's a problem\n"
+        "5. A concrete remediation suggestion\n\n"
+        "Focus on:\n"
+        "- Hardcoded API keys, passwords, tokens, secrets in source code\n"
+        "- Unsafe subprocess calls (shell=True, command injection)\n"
+        "- Path traversal vulnerabilities (user input in file paths)\n"
+        "- Use of eval()/exec() with untrusted input\n"
+        "- SQL injection risks (string concatenation in queries)\n"
+        "- Insecure cryptography (weak algorithms, hardcoded keys)\n"
+        "- Command injection via os.system(), subprocess without sanitization\n"
+        "- Insecure file permissions\n"
+        "- Exposure of internal IPs or infrastructure details\n\n"
+        "Be thorough but practical. Prioritise issues that pose real risk.\n"
+        "Use the RepoTool (read/list/exists) to inspect specific files as needed."
+    ),
+    output_schema={
+        "type": "object",
+        "properties": {
+            "findings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "file": {"type": "string", "description": "File path"},
+                        "line": {"type": "integer", "description": "Line number"},
+                        "type": {"type": "string", "enum": [
+                            "hardcoded-secret", "unsafe-subprocess", "path-traversal",
+                            "eval-exec", "sql-injection", "weak-crypto",
+                            "command-injection", "insecure-permissions",
+                            "info-leak", "other"
+                        ]},
+                        "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "info"]},
+                        "description": {"type": "string"},
+                        "remediation": {"type": "string"},
+                    },
+                    "required": ["file", "type", "severity", "description"],
+                },
+            },
+            "summary": {
+                "type": "object",
+                "properties": {
+                    "total_findings": {"type": "integer"},
+                    "critical_count": {"type": "integer"},
+                    "high_count": {"type": "integer"},
+                    "medium_count": {"type": "integer"},
+                    "low_count": {"type": "integer"},
+                    "overall_risk": {"type": "string", "enum": ["critical", "high", "moderate", "low", "minimal"]},
+                },
+            },
+        },
+        "required": ["findings", "summary"],
+    },
+)
+
+# P7 — Dependency Analyser
+P7_DEPENDENCY_ANALYSER = AnalysisAgent(
+    name="dependency-analyser",
+    description=(
+        "Analyses the dependency structure: import graph, circular dependencies, "
+        "coupling between modules, and architectural layer violations."
+    ),
+    system_prompt=(
+        "You are a dependency analyst. Your job is to analyse a codebase's "
+        "dependency structure and identify architectural issues.\n\n"
+        "Analyse from the project's configuration files and source code:\n"
+        "1. External dependencies — what libraries/packages are used\n"
+        "2. Internal module coupling — which modules depend on which\n"
+        "3. Circular dependencies — modules that depend on each other\n"
+        "4. Layer violations — code that crosses architectural boundaries\n"
+        "5. Dead or unused dependencies\n"
+        "6. Tight coupling — modules with too many direct dependencies\n\n"
+        "For each issue, report the file path and specific lines involved.\n"
+        "Focus on structural health rather than style.\n\n"
+        "Use the RepoTool (read/list/exists) to inspect imports, build files, "
+        "and module structures as needed."
+    ),
+    output_schema={
+        "type": "object",
+        "properties": {
+            "external_dependencies": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "version": {"type": "string"},
+                        "category": {"type": "string", "enum": ["framework", "library", "tool", "unknown"]},
+                        "primary_purpose": {"type": "string"},
+                    },
+                },
+            },
+            "circular_dependencies": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "cycle": {"type": "array", "items": {"type": "string"}},
+                        "description": {"type": "string"},
+                    },
+                },
+            },
+            "coupling_issues": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "module": {"type": "string"},
+                        "type": {"type": "string", "enum": [
+                            "layer-violation", "tight-coupling", "circular-dependency",
+                            "unused-dependency", "excessive-fan-out", "other"
+                        ]},
+                        "description": {"type": "string"},
+                        "impact": {"type": "string", "enum": ["high", "medium", "low"]},
+                    },
+                },
+            },
+            "overall_assessment": {"type": "string"},
+        },
+        "required": ["external_dependencies", "coupling_issues"],
+    },
+)
+
+# P8 — Documentation Reviewer
+P8_DOCUMENTATION_REVIEWER = AnalysisAgent(
+    name="documentation-reviewer",
+    description=(
+        "Reviews documentation quality: README completeness, docstring coverage, "
+        "inline documentation, API docs, and stale or misleading comments."
+    ),
+    system_prompt=(
+        "You are a documentation reviewer. Your job is to assess the quality and "
+        "completeness of a codebase's documentation.\n\n"
+        "Evaluate:\n"
+        "1. README — does it explain what the project is, how to set it up, "
+        "how to use it, how to contribute?\n"
+        "2. Docstring coverage — what proportion of public APIs have docstrings?\n"
+        "3. Inline documentation — are complex sections explained with comments?\n"
+        "4. API documentation — is there formal API/interface documentation?\n"
+        "5. Stale documentation — comments that contradict the code\n"
+        "6. Missing documentation — undocumented public interfaces\n\n"
+        "Use the RepoTool (read/list/exists) to inspect specific files.\n"
+        "Be constructive — identify what's missing and suggest improvements.\n"
+        "Rate each dimension separately."
+    ),
+    output_schema={
+        "type": "object",
+        "properties": {
+            "ratings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "dimension": {"type": "string", "enum": [
+                            "readme", "docstrings", "inline-comments",
+                            "api-docs", "accuracy", "overall"
+                        ]},
+                        "rating": {"type": "string", "enum": ["excellent", "good", "fair", "poor", "missing"]},
+                        "details": {"type": "string"},
+                    },
+                    "required": ["dimension", "rating"],
+                },
+            },
+            "findings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "enum": [
+                            "missing", "stale", "incorrect", "incomplete", "good", "other"
+                        ]},
+                        "file": {"type": "string"},
+                        "description": {"type": "string"},
+                    },
+                },
+            },
+            "recommendations": {
+                "type": "array", "items": {"type": "string"},
+            },
+        },
+        "required": ["ratings", "findings"],
+    },
+)
 class AnalysisAgentRegistry:
     """Registry of all analysis agents (P1-P5).
 
@@ -430,6 +630,9 @@ class AnalysisAgentRegistry:
         P3_ARCHITECTURE_CRITIC,
         P4_CODE_CRITIC,
         P5_TEST_AUDITOR,
+        P6_SECURITY_AUDITOR,
+        P7_DEPENDENCY_ANALYSER,
+        P8_DOCUMENTATION_REVIEWER,
     ]
 
     _custom_agents: dict[str, AnalysisAgent] = {}

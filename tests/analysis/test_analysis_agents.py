@@ -129,9 +129,9 @@ class TestAnalysisAgentRegistry:
         AnalysisAgentRegistry.reset()
 
     def test_get_all_returns_defaults(self):
-        """get_all() returns all 5 default agents."""
+        """get_all() returns all 8 default agents."""
         agents = AnalysisAgentRegistry.get_all()
-        assert len(agents) == 5
+        assert len(agents) == 8
         names = {a.name for a in agents}
         assert names == {
             "project-profiler",
@@ -139,6 +139,9 @@ class TestAnalysisAgentRegistry:
             "architecture-critic",
             "code-critic",
             "test-auditor",
+            "security-auditor",
+            "dependency-analyser",
+            "documentation-reviewer",
         }
 
     def test_get_by_name(self):
@@ -162,7 +165,7 @@ class TestAnalysisAgentRegistry:
         AnalysisAgentRegistry.register(custom)
         assert AnalysisAgentRegistry.get("custom-p6") is not None
         all_agents = AnalysisAgentRegistry.get_all()
-        assert len(all_agents) == 6
+        assert len(all_agents) == 9
 
     def test_unregister_custom_agent(self):
         """unregister() removes a custom agent."""
@@ -187,7 +190,7 @@ class TestAnalysisAgentRegistry:
         AnalysisAgentRegistry.reset()
         # get_all should still return defaults
         agents = AnalysisAgentRegistry.get_all()
-        assert len(agents) == 5
+        assert len(agents) == 8
         assert AnalysisAgentRegistry.get("temp") is None
 
     def test_get_all_includes_custom(self):

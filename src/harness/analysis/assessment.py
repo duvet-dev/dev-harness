@@ -343,7 +343,95 @@ async def assess(
         duration_ms=int((time.monotonic() - start_time) * 1000),
     )
 
+    # 6. P9 Synthesis — run if deep mode and at least one agent succeeded
+    if deep and report.metrics.get("agents_succeeded", 0) > 0:
+        try:
+            synthesis = await _synthesize_report(report, runner, root)
+            if synthesis:
+                report.report_text = synthesis
+        except Exception as exc:
+            logger.warning("Synthesis failed (graceful degradation): %s", exc)
+
     return report
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# P9 Synthesis — produces a unified report from all agent outputs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+async def _synthesize_report(
+    report: AssessmentReport,
+    runner: "AgentRunner",
+    root: Path,
+) -> str | None:
+    """Run P9 Synthesis Agent: combine all P1-P8 outputs into a unified report.
+
+    Takes the raw outputs from all completed agents and runs a single
+    LLM call to produce a coherent, cross-cutting analysis report.
+    The synthesis agent receives:
+
+    - All agent outputs (successful and degraded)
+    - The overall score and metrics
+    - A request to connect related findings across dimensions
+
+    This is the step that makes the assessment feel like a unified
+    expert review rather than a set of disconnected reports.
+
+    Args:
+        report: The completed AssessmentReport with all agent results.
+        runner: The AgentRunner instance for running the LLM call.
+        root: Project root path.
+
+    Returns:
+        The unified report string, or ``None`` on failure.
+    """
+    # Build a summary of all agent outputs
+    sections: list[str] = []
+    for agent_name in sorted(report.agent_results.keys()):
+        status = report.agent_status.get(agent_name, "unknown")
+        data = report.agent_results.get(agent_name, {})
+        sections.append(f"## {agent_name} ({status})\n\n")
+        if data:
+            import json
+            sections.append(json.dumps(data, indent=2)[:5000])
+        else:
+            sections.append("(no output)")
+
+    agent_summary = "\n\n---\n\n".join(sections)
+
+    synthesis_prompt = (
+        "You are a senior engineering lead reviewing a comprehensive "
+        "codebase analysis report. Your job is to synthesise the findings "
+        "from multiple specialist analysts into a single, coherent, "
+        "actionable report.\n\n"
+        f"The project being analysed is at: {root}\n"
+        f"Overall score from automated analysis: {report.score}\n\n"
+        f"Below are the raw outputs from each analysis agent:\n\n"
+        f"{agent_summary}\n\n"
+        "Produce a unified report that:\n"
+        "1. STARTS with a 1-2 paragraph executive summary of the codebase health\n"
+        "2. Connects related findings across dimensions "
+        "(e.g. a security flaw may relate to an architecture issue)\n"
+        "3. Prioritises findings by severity and impact\n"
+        "4. Ends with 3-5 concrete, prioritised recommendations\n\n"
+        "Format as markdown with clear section headings. "
+        "Be honest about gaps — if an agent produced no findings, say so."
+    )
+
+    result = await runner.run_simple(
+        spec_content=synthesis_prompt,
+        backend_name="api",
+        model="deepseek-v4-pro",
+        agent_role=None,  # No RepoTool needed for synthesis
+    )
+
+    if result.startswith("Error:"):
+        logger.warning("Synthesis agent failed: %s", result)
+        return None
+
+    return result
 
 
 # ── Context helpers ───────────────────────────────────────────────────────────

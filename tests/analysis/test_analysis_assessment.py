@@ -623,6 +623,9 @@ class TestSelectAgents:
         assert "architecture-critic" in names
         assert "code-critic" in names
         assert "test-auditor" in names
+        assert "security-auditor" in names
+        assert "dependency-analyser" in names
+        assert "documentation-reviewer" in names
 
     def test_select_deep_false(self):
         from harness.analysis.assessment import _select_agents

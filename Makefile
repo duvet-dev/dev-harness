@@ -59,7 +59,7 @@ install-deps:
 
 .PHONY: test
 test:
-	pytest tests/ -W error::RuntimeWarning --tb=short -q
+	python3 -m pytest tests/ -W error::RuntimeWarning --tb=short -q
 	@echo ""
 	@echo "✓ All functional tests passed."
 
@@ -75,7 +75,7 @@ ci: test-ci
 
 .PHONY: test-coverage
 test-coverage:
-	@pytest \
+	@python3 -m pytest \
 		tests/ \
 		-W error::RuntimeWarning \
 		--tb=short \
@@ -86,19 +86,19 @@ test-coverage:
 
 .PHONY: test-e2e
 test-e2e:
-	pytest -m e2e --tb=short -v
+	python3 -m pytest -m e2e --tb=short -v
 	@echo ""
 	@echo "✓ E2E tests complete."
 
 .PHONY: test-verbose
 test-verbose:
-	pytest tests/ -W error::RuntimeWarning --tb=long -v --durations=10 2>&1
+	python3 -m pytest tests/ -W error::RuntimeWarning --tb=long -v --durations=10 2>&1
 
 # ── Linting ───────────────────────────────────────────────────────────────
 
 .PHONY: lint
 lint:
-	@ruff check src/harness tests/ 2>&1
+	@python3 -m ruff check src/harness/ tests/ 2>&1
 	@echo "Lint: OK"
 
 .PHONY: check-types

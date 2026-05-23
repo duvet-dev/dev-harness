@@ -138,6 +138,111 @@ def gather_context(root: Path) -> dict[str, Any]:
     return context
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Pure logic (separated from async effects for testability)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _select_agents(
+    agent_names: list[str] | None = None,
+    deep: bool = True,
+) -> list[AnalysisAgent]:
+    """Select analysis agents by name or depth.
+
+    Pure function — no IO, no side effects.
+
+    Args:
+        agent_names: Specific agent names to run. Overrides ``deep``.
+            If provided as an empty list, returns empty (no agents
+            match nothing).
+        deep: If True, return all registered agents. If False, return
+            only P1 (Project Profiler) and P2 (Responsibility Decoder).
+
+    Returns:
+        List of ``AnalysisAgent`` instances. May be empty if no agents
+        match the criteria.
+    """
+    if agent_names is not None:
+        # Explicit list (even empty) overrides deep
+        if not agent_names:
+            return []
+        return [
+            a for a in AnalysisAgentRegistry.get_all()
+            if a.name in agent_names
+        ]
+    if deep:
+        return AnalysisAgentRegistry.get_all()
+
+    agents = [
+        AnalysisAgentRegistry.get("project-profiler"),
+        AnalysisAgentRegistry.get("responsibility-decoder"),
+    ]
+    return [a for a in agents if a is not None]
+
+
+def _process_agent_results(
+    report: AssessmentReport,
+    raw_results: list[Any],
+    agents_count: int,
+    duration_ms: int = 0,
+) -> AssessmentReport:
+    """Process raw agent task results into a complete AssessmentReport.
+
+    Pure function — no IO, no async. Takes raw agent outputs (which
+    may include exceptions for failed tasks) and produces the final
+    report with merged findings, score, metrics, and formatted text.
+
+    Args:
+        report: Initial report stub (with path and any pre-populated fields).
+        raw_results: List of results from ``asyncio.gather`` — each element
+            is a tuple ``(agent_name, data, status)`` or a ``BaseException``.
+        agents_count: Total number of agents that were dispatched.
+        duration_ms: Wall-clock duration of the assessment in milliseconds.
+
+    Returns:
+        The completed ``AssessmentReport`` with all fields populated.
+    """
+    # 4. Process results
+    for result in raw_results:
+        if isinstance(result, BaseException):
+            logger.error("Agent task raised: %s", result)
+            continue
+
+        agent_name, data, status = result
+        report.agent_results[agent_name] = data
+        report.agent_status[agent_name] = status
+
+        if status == "success":
+            _merge_agent_output(report, agent_name, data)
+
+    # 5. Derive overall score
+    report.score = _compute_overall_score(report)
+    report.metrics["duration_ms"] = duration_ms
+    report.metrics["agents_run"] = agents_count
+    report.metrics["agents_succeeded"] = sum(
+        1 for s in report.agent_status.values() if s == "success"
+    )
+    report.metrics["agents_degraded"] = sum(
+        1 for s in report.agent_status.values() if s == "degraded"
+    )
+    report.metrics["agents_failed"] = sum(
+        1 for s in report.agent_status.values() if s == "failure"
+    )
+
+    # 6. Deduplicate findings
+    report.findings = _deduplicate_findings(report.findings)
+
+    # 7. Format report
+    report.report_text = format_assessment_report(report)
+    report.findings.sort(
+        key=lambda f: {"critical": 0, "error": 1, "warning": 2, "info": 3}.get(
+            f.get("severity", "info"), 4
+        )
+    )
+
+    return report
+
+
 async def assess(
     path: str | Path,
     deep: bool = True,
@@ -177,20 +282,8 @@ async def assess(
     logger.info("Gathering context from %s", root)
     context = gather_context(root)
 
-    # 3. Select agents
-    if agent_names:
-        agents = [
-            a for a in AnalysisAgentRegistry.get_all()
-            if a.name in agent_names
-        ]
-    elif deep:
-        agents = AnalysisAgentRegistry.get_all()
-    else:
-        agents = [
-            AnalysisAgentRegistry.get("project-profiler"),
-            AnalysisAgentRegistry.get("responsibility-decoder"),
-        ]
-        agents = [a for a in agents if a is not None]
+    # 3. Select agents (pure logic)
+    agents = _select_agents(agent_names=agent_names, deep=deep)
 
     if not agents:
         report.score = "unknown"
@@ -198,7 +291,7 @@ async def assess(
         report.metrics["duration_ms"] = 0
         return report
 
-    # 3. Dispatch all agents in parallel
+    # 4. Dispatch all agents in parallel
     runner = AgentRunner(runner_config or {})
     context_json = _format_context_for_llm(context)
 
@@ -240,46 +333,14 @@ async def assess(
 
     # Run agents sequentially to respect rate limits
     agent_tasks = [run_agent(a) for a in agents]
-    results = await asyncio.gather(*agent_tasks, return_exceptions=True)
+    raw_results = await asyncio.gather(*agent_tasks, return_exceptions=True)
 
-    # 4. Process results
-    for result in results:
-        if isinstance(result, BaseException):
-            logger.error("Agent task raised: %s", result)
-            continue
-
-        agent_name, data, status = result
-        report.agent_results[agent_name] = data
-        report.agent_status[agent_name] = status
-
-        if status == "success":
-            _merge_agent_output(report, agent_name, data)
-
-    # 5. Derive overall score
-    report.score = _compute_overall_score(report)
-    report.metrics["duration_ms"] = int(
-        (time.monotonic() - start_time) * 1000
-    )
-    report.metrics["agents_run"] = len(agents)
-    report.metrics["agents_succeeded"] = sum(
-        1 for s in report.agent_status.values() if s == "success"
-    )
-    report.metrics["agents_degraded"] = sum(
-        1 for s in report.agent_status.values() if s == "degraded"
-    )
-    report.metrics["agents_failed"] = sum(
-        1 for s in report.agent_status.values() if s == "failure"
-    )
-
-    # 6. Deduplicate findings
-    report.findings = _deduplicate_findings(report.findings)
-
-    # 7. Format report
-    report.report_text = format_assessment_report(report)
-    report.findings.sort(
-        key=lambda f: {"critical": 0, "error": 1, "warning": 2, "info": 3}.get(
-            f.get("severity", "info"), 4
-        )
+    # 5. Process all results (pure logic)
+    report = _process_agent_results(
+        report=report,
+        raw_results=raw_results,
+        agents_count=len(agents),
+        duration_ms=int((time.monotonic() - start_time) * 1000),
     )
 
     return report

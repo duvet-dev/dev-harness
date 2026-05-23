@@ -7,6 +7,7 @@ and helper functions.
 from __future__ import annotations
 
 import json
+import unittest.mock
 from pathlib import Path
 
 import pytest
@@ -589,3 +590,204 @@ class TestJoinSections:
         assert "LOC_KEEP" in result, f"Got: {result!r}"
         # Low-priority src should be removed first
         assert "SRC_REMOVE" not in result, f"Got: {result!r}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for extracted pure functions (effect/logic separation pattern)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSelectAgents:
+    """Tests for _select_agents() — pure agent selection logic."""
+
+    def test_select_by_name(self):
+        from harness.analysis.assessment import _select_agents
+        agents = _select_agents(agent_names=["project-profiler", "code-critic"])
+        names = [a.name for a in agents]
+        assert "project-profiler" in names
+        assert "code-critic" in names
+        assert len(agents) == 2
+
+    def test_select_by_name_single(self):
+        from harness.analysis.assessment import _select_agents
+        agents = _select_agents(agent_names=["test-auditor"])
+        assert len(agents) == 1
+        assert agents[0].name == "test-auditor"
+
+    def test_select_deep_true(self):
+        from harness.analysis.assessment import _select_agents
+        agents = _select_agents(deep=True)
+        names = [a.name for a in agents]
+        assert "project-profiler" in names
+        assert "responsibility-decoder" in names
+        assert "architecture-critic" in names
+        assert "code-critic" in names
+        assert "test-auditor" in names
+
+    def test_select_deep_false(self):
+        from harness.analysis.assessment import _select_agents
+        agents = _select_agents(deep=False)
+        names = [a.name for a in agents]
+        assert "project-profiler" in names
+        assert "responsibility-decoder" in names
+        # Should NOT include deep-only agents
+        assert "architecture-critic" not in names
+        assert "code-critic" not in names
+
+    def test_select_empty_name_list(self):
+        from harness.analysis.assessment import _select_agents
+        agents = _select_agents(agent_names=[])
+        assert agents == []
+
+    def test_select_nonexistent_name(self):
+        from harness.analysis.assessment import _select_agents
+        agents = _select_agents(agent_names=["__nonexistent__"])
+        assert agents == []
+
+
+class TestProcessAgentResults:
+    """Tests for _process_agent_results() — pure result processing logic."""
+
+    def test_empty_results(self):
+        from harness.analysis.assessment import (
+            _process_agent_results, AssessmentReport,
+        )
+        report = AssessmentReport(path="/test")
+        result = _process_agent_results(report, [], agents_count=0)
+        assert result.score == "unknown"
+        assert result.metrics["agents_run"] == 0
+        assert result.report_text != ""
+
+    def test_all_successful(self):
+        from harness.analysis.assessment import (
+            _process_agent_results, AssessmentReport,
+        )
+        report = AssessmentReport(path="/test")
+        raw = [
+            ("profiler", {"projects": [{"name": "app"}]}, "success"),
+            ("critic", {"issues": ["missing tests"]}, "success"),
+        ]
+        result = _process_agent_results(report, raw, agents_count=2)
+        assert result.metrics["agents_run"] == 2
+        assert result.metrics["agents_succeeded"] == 2
+        assert "profiler" in result.agent_results
+        assert "critic" in result.agent_results
+
+    def test_mixed_success_and_failure(self):
+        from harness.analysis.assessment import (
+            _process_agent_results, AssessmentReport,
+        )
+        report = AssessmentReport(path="/test")
+        raw = [
+            ("profiler", {"projects": []}, "success"),
+            ("critic", {}, "failure"),
+        ]
+        result = _process_agent_results(report, raw, agents_count=2)
+        assert result.metrics["agents_run"] == 2
+        assert result.metrics["agents_succeeded"] == 1
+        assert result.metrics["agents_failed"] == 1
+
+    def test_handles_exception_result(self):
+        from harness.analysis.assessment import (
+            _process_agent_results, AssessmentReport,
+        )
+        report = AssessmentReport(path="/test")
+        raw = [
+            ("profiler", {"projects": []}, "success"),
+            RuntimeError("Agent crashed"),
+        ]
+        result = _process_agent_results(report, raw, agents_count=2)
+        assert result.metrics["agents_succeeded"] == 1
+        assert result.metrics["agents_failed"] == 0  # exception not counted as failure
+
+    def test_dedup_findings(self):
+        from harness.analysis.assessment import (
+            _process_agent_results, AssessmentReport,
+        )
+        report = AssessmentReport(path="/test")
+        raw = [
+            ("profiler", {"findings": [{"id": "F1", "text": "Same issue"}]}, "success"),
+        ]
+        result = _process_agent_results(report, raw, agents_count=1)
+        assert isinstance(result, AssessmentReport)
+
+    def test_score_and_metrics_set(self):
+        from harness.analysis.assessment import (
+            _process_agent_results, AssessmentReport,
+        )
+        report = AssessmentReport(path="/test")
+        raw = [
+            ("profiler", {"projects": [{"name": "app"}]}, "success"),
+        ]
+        result = _process_agent_results(report, raw, agents_count=1, duration_ms=123)
+        assert result.metrics["duration_ms"] == 123
+        assert isinstance(result.score, str)
+        assert result.score in ("excellent", "good", "fair", "poor", "unknown")
+
+
+class TestAssessRepoToolWiring:
+    """Verify RepoTool is wired through the full assess() pipeline.
+
+    This is the key test for R27 — confirms that analysis agents receive
+    file access via RepoTool during assessment.
+    """
+
+    @pytest.mark.asyncio
+    async def test_assess_passes_agent_role_and_project_dir(self, tmp_path):
+        """_attach_repo_tool is reachable because assess() passes agent_role
+        and project_dir through run_simple() → constraint_section."""
+        from harness.analysis.assessment import assess
+        from harness.agents.runner import AgentRunner
+
+        (tmp_path / "hello.py").write_text("x = 1\n")
+
+        # Patch AgentRunner.run_simple to verify it receives the right params
+        original_run_simple = AgentRunner.run_simple
+
+        captured_kwargs = {}
+
+        async def mock_run_simple(self, **kwargs):
+            nonlocal captured_kwargs
+            captured_kwargs = kwargs
+            # Return valid JSON for a successful analysis
+            return '{"projects": [{"name": "test", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'
+
+        with unittest.mock.patch.object(
+            AgentRunner, "run_simple", mock_run_simple
+        ):
+            result = await assess(str(tmp_path), deep=False, agent_names=["project-profiler"])
+
+        # Verify the key parameters that enable RepoTool wiring
+        assert "project_dir" in captured_kwargs, "assess() must pass project_dir to run_simple()"
+        assert "agent_role" in captured_kwargs, "assess() must pass agent_role to run_simple()"
+        assert captured_kwargs["agent_role"] is not None
+        assert captured_kwargs["project_dir"] is not None
+
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_assess_repo_tool_integration(self, tmp_path):
+        """End-to-end: assess() with a valid path and patched LLM should
+        successfully complete, showing the agent_role flowed through."""
+        from harness.analysis.assessment import assess
+        from harness.agents.runner import AgentRunner
+
+        (tmp_path / "src" / "main.py").parent.mkdir(parents=True)
+        (tmp_path / "src" / "main.py").write_text("def hello(): print('hello')\n")
+
+        # Mock run_simple to track whether agent_role was set
+        tracked = {}
+
+        async def tracking_run_simple(self, **kwargs):
+            tracked["agent_role"] = kwargs.get("agent_role")
+            tracked["project_dir"] = kwargs.get("project_dir")
+            return '{"projects": [{"name": "app", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'
+
+        with unittest.mock.patch.object(
+            AgentRunner, "run_simple", tracking_run_simple
+        ):
+            report = await assess(str(tmp_path), deep=False, agent_names=["project-profiler"])
+
+        assert tracked["agent_role"] == "critical-analyser"
+        assert tracked["project_dir"] == tmp_path
+        assert report.metrics["agents_run"] == 1
+        assert report.metrics["agents_succeeded"] == 1

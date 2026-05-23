@@ -66,7 +66,7 @@ class CommandResult:
     consult_resolved: bool = False
     """True if a blocking consult was resolved."""
 
-    set_in_session: bool = False
+    set_in_session: Optional[bool] = None
     """True if _print_help should be told it's in session mode."""
 
 

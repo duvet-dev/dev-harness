@@ -29,6 +29,12 @@ from typing import Any
 
 import httpx
 
+from harness.agents.backends.formatters import (
+    InternalMessage,
+    get_formatter,
+)
+
+
 from harness.agents.backends.base import (
     AbstractBackend,
     BackendResult,
@@ -197,7 +203,22 @@ class ApiBackend(AbstractBackend):
         max_rounds = (
             self._config.max_tool_rounds if has_tools else 1
         )
-        all_messages = payload.get("messages", [])
+        formatter = get_formatter(
+            invocation.resolved_config.get("provider", "")
+            if invocation.resolved_config else ""
+        )
+
+        # Convert initial messages to InternalMessage format
+        messages: list[InternalMessage] = []
+        for msg in payload.get("messages", []):
+            messages.append(InternalMessage(
+                role=msg.get("role", "user"),
+                content=msg.get("content"),
+                tool_calls=msg.get("tool_calls"),
+                tool_call_id=msg.get("tool_call_id"),
+                reasoning_content=msg.get("reasoning_content"),
+            ))
+
         errors: list[str] = []
         final_content = ""
         total_tool_calls = 0
@@ -205,7 +226,7 @@ class ApiBackend(AbstractBackend):
         for round_idx in range(max_rounds):
             round_payload = {
                 **payload,
-                "messages": all_messages,
+                "messages": formatter.format_messages(messages),
             }
             if has_tools:
                 round_payload["tools"] = tools
@@ -221,54 +242,22 @@ class ApiBackend(AbstractBackend):
 
             data: dict = result.metadata  # contains parsed response
 
-            # --- Extract assistant message ---
-            choices = data.get("choices", [])
-            if not choices:
-                errors.append("API response missing 'choices'")
-                break
-
-            assistant_msg = choices[0].get("message", {})
+            # --- Parse response via formatter ---
+            parsed = formatter.parse_response(data)
+            assistant_msg = parsed.assistant_message
 
             # --- Check for tool_calls ---
-            tool_calls = assistant_msg.get("tool_calls")
-            if not tool_calls:
-                # Normal content response — we're done
-                final_content = assistant_msg.get("content", "")
+            if not assistant_msg.tool_calls:
+                final_content = assistant_msg.content or ""
+                messages.append(assistant_msg)
                 break
 
             # --- Process tool_calls ---
-            total_tool_calls += len(tool_calls)
-
-            # Add the assistant message to history
-            assistant_msg_for_history = {
-                "role": "assistant",
-                "content": assistant_msg.get("content") or None,
-            }
-
-            # Preserve reasoning_content for models that use thinking mode
-            # (e.g. DeepSeek V4 Pro) — the API requires it to be passed back
-            reasoning = assistant_msg.get("reasoning_content")
-            if reasoning is not None:
-                assistant_msg_for_history["reasoning_content"] = reasoning
-
-            if tool_calls:
-                # Convert tool_calls to serializable format
-                serialized_calls = []
-                for tc in tool_calls:
-                    serialized_calls.append({
-                        "id": tc.get("id"),
-                        "type": tc.get("type", "function"),
-                        "function": {
-                            "name": tc.get("function", {}).get("name"),
-                            "arguments": tc.get("function", {}).get("arguments"),
-                        },
-                    })
-                assistant_msg_for_history["tool_calls"] = serialized_calls
-
-            all_messages.append(assistant_msg_for_history)
+            total_tool_calls += len(assistant_msg.tool_calls)
+            messages.append(assistant_msg)
 
             # Execute each tool call
-            for tc in tool_calls:
+            for tc in assistant_msg.tool_calls:
                 tc_id = tc.get("id", "call_unknown")
                 function_info = tc.get("function", {})
                 func_name = function_info.get("name", "")
@@ -286,11 +275,12 @@ class ApiBackend(AbstractBackend):
                 )
 
                 # Add tool response to message history
-                all_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc_id,
-                    "content": json.dumps(tool_output),
-                })
+                messages.append(InternalMessage(
+                    role="tool",
+                    content=json.dumps(tool_output),
+                    tool_call_id=tc_id,
+                    tool_name=func_name,
+                ))
 
         # --- Extract final result ---
         duration_ms = int((time.monotonic() - start_time) * 1000)
@@ -366,15 +356,31 @@ class ApiBackend(AbstractBackend):
                 tools = invocation.available_tools
 
         has_tools = bool(tools)
-        all_messages = payload.get("messages", [])
+        formatter = get_formatter(
+            invocation.resolved_config.get("provider", "")
+            if invocation.resolved_config else ""
+        )
+
+        # Convert initial messages to InternalMessage format
+        messages: list[InternalMessage] = []
+        for msg in payload.get("messages", []):
+            messages.append(InternalMessage(
+                role=msg.get("role", "user"),
+                content=msg.get("content"),
+                tool_calls=msg.get("tool_calls"),
+                tool_call_id=msg.get("tool_call_id"),
+                reasoning_content=msg.get("reasoning_content"),
+            ))
+
         errors: list[str] = []
 
         # Phase 1: Tool-calling loop (non-streaming, silent)
         if has_tools:
             for round_idx in range(self._config.max_tool_rounds):
+                wire_messages = formatter.format_messages(messages)
                 round_payload = {
                     **payload,
-                    "messages": all_messages,
+                    "messages": wire_messages,
                     "tools": tools,
                 }
 
@@ -387,49 +393,17 @@ class ApiBackend(AbstractBackend):
                     return
 
                 data: dict = result.metadata
-                choices = data.get("choices", [])
-                if not choices:
-                    errors.append("API response missing 'choices'")
+                parsed = formatter.parse_response(data)
+                assistant_msg = parsed.assistant_message
+
+                if not assistant_msg.tool_calls:
+                    messages.append(assistant_msg)
                     break
 
-                assistant_msg = choices[0].get("message", {})
-                tool_calls = assistant_msg.get("tool_calls")
-
-                if not tool_calls:
-                    # No more tool calls — save final content
-                    msg_entry = {
-                        "role": "assistant",
-                        "content": assistant_msg.get("content", ""),
-                    }
-                    reasoning = assistant_msg.get("reasoning_content")
-                    if reasoning is not None:
-                        msg_entry["reasoning_content"] = reasoning
-                    all_messages.append(msg_entry)
-                    break
-
-                # Add assistant message with tool calls to history
-                msg_for_history = {
-                    "role": "assistant",
-                    "content": assistant_msg.get("content") or None,
-                }
-                reasoning = assistant_msg.get("reasoning_content")
-                if reasoning is not None:
-                    msg_for_history["reasoning_content"] = reasoning
-                serialized_calls = []
-                for tc in tool_calls:
-                    serialized_calls.append({
-                        "id": tc.get("id"),
-                        "type": tc.get("type", "function"),
-                        "function": {
-                            "name": tc.get("function", {}).get("name"),
-                            "arguments": tc.get("function", {}).get("arguments"),
-                        },
-                    })
-                msg_for_history["tool_calls"] = serialized_calls
-                all_messages.append(msg_for_history)
+                messages.append(assistant_msg)
 
                 # Execute each tool call
-                for tc in tool_calls:
+                for tc in assistant_msg.tool_calls:
                     tc_id = tc.get("id", "call_unknown")
                     function_info = tc.get("function", {})
                     func_name = function_info.get("name", "")
@@ -448,16 +422,18 @@ class ApiBackend(AbstractBackend):
                         invocation, func_name, func_args
                     )
 
-                    all_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc_id,
-                        "content": json.dumps(tool_output),
-                    })
+                    messages.append(InternalMessage(
+                        role="tool",
+                        content=json.dumps(tool_output),
+                        tool_call_id=tc_id,
+                        tool_name=func_name,
+                    ))
 
         # Phase 2: Stream the final response
+        wire_messages = formatter.format_messages(messages)
         stream_payload = {
             **payload,
-            "messages": all_messages,
+            "messages": wire_messages,
             "stream": True,
         }
         stream_payload.pop("tools", None)
@@ -507,13 +483,13 @@ class ApiBackend(AbstractBackend):
 
             # Store complete response for history
             assistant_reply = "".join(full_content)
-            all_messages.append({
-                "role": "assistant",
-                "content": assistant_reply,
-            })
+            messages.append(InternalMessage(
+                role="assistant",
+                content=assistant_reply,
+            ))
 
         # Keep message history on invocation for later queries
-        invocation._stream_messages = all_messages
+        invocation._stream_messages = formatter.format_messages(messages)
 
 # Tool execution
     # ------------------------------------------------------------------

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "dev-harness"
+version = "0.1.0"
+description = "Agent orchestration system for software development"
+requires-python = ">=3.9"
+dependencies = [
+    "pyyaml>=6.0",
+    "aiofiles>=23.0",
+    "jinja2>=3.1",
+    "rich>=13.0",
+    "httpx>=0.24",
+]
+
+[project.scripts]
+harness = "harness.entry:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["harness*"]
+
+[tool.setuptools.package-data]
+"harness" = ["**/*.yaml", "**/*.j2", "**/*.md"]

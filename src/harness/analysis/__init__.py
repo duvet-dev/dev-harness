@@ -1,0 +1,44 @@
+"""Analysis package — code analysis and metrics.
+
+Provides fast scanning, deep static analysis, observer mode,
+and LLM-based independent assessment (R22).
+"""
+
+from harness.analysis.agents import (
+    AnalysisAgent,
+    AnalysisAgentRegistry,
+    P1_PROJECT_PROFILER,
+    P2_RESPONSIBILITY_DECODER,
+    P3_ARCHITECTURE_CRITIC,
+    P4_CODE_CRITIC,
+    P5_TEST_AUDITOR,
+)
+from harness.analysis.assessment import (
+    AssessmentReport,
+    assess,
+    format_assessment_report,
+    gather_context,
+)
+from harness.analysis.base import Finding, ScanResult, VALID_CATEGORIES
+from harness.analysis.observer import analyse, analyse_async
+from harness.analysis.summary import debt_section
+
+__all__ = [
+    "AnalysisAgent",
+    "AnalysisAgentRegistry",
+    "AssessmentReport",
+    "Finding",
+    "ScanResult",
+    "VALID_CATEGORIES",
+    "P1_PROJECT_PROFILER",
+    "P2_RESPONSIBILITY_DECODER",
+    "P3_ARCHITECTURE_CRITIC",
+    "P4_CODE_CRITIC",
+    "P5_TEST_AUDITOR",
+    "assess",
+    "analyse",
+    "analyse_async",
+    "debt_section",
+    "format_assessment_report",
+    "gather_context",
+]

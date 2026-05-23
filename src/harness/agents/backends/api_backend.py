@@ -203,10 +203,12 @@ class ApiBackend(AbstractBackend):
         max_rounds = (
             self._config.max_tool_rounds if has_tools else 1
         )
-        formatter = get_formatter(
+        provider_type = (
             invocation.resolved_config.get("provider", "")
             if invocation.resolved_config else ""
         )
+        model_name = invocation.model or ""
+        formatter = get_formatter(provider_type=provider_type, model=model_name)
 
         # Convert initial messages to InternalMessage format
         messages: list[InternalMessage] = []
@@ -356,10 +358,12 @@ class ApiBackend(AbstractBackend):
                 tools = invocation.available_tools
 
         has_tools = bool(tools)
-        formatter = get_formatter(
+        provider_type = (
             invocation.resolved_config.get("provider", "")
             if invocation.resolved_config else ""
         )
+        model_name = invocation.model or ""
+        formatter = get_formatter(provider_type=provider_type, model=model_name)
 
         # Convert initial messages to InternalMessage format
         messages: list[InternalMessage] = []

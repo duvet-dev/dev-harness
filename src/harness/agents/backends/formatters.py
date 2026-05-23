@@ -472,31 +472,44 @@ _FORMATTERS: dict[str, type[MessageFormatter]] = {
 }
 
 
-def get_formatter(provider_type: str) -> MessageFormatter:
-    """Get the appropriate formatter for a provider type.
+def get_formatter(
+    provider_type: str = "",
+    model: str = "",
+) -> MessageFormatter:
+    """Get the appropriate formatter for a provider type or model.
 
     Args:
         provider_type: Provider type string, e.g. ``"openai-compatible"``,
             ``"deepseek"``, ``"anthropic"``, ``"google"``, ``"gemini"``.
+        model: Model name, used as fallback when ``provider_type`` is empty.
+            e.g. ``"deepseek-v4-pro"`` → DeepSeekFormatter.
 
     Returns:
         A ``MessageFormatter`` instance.
-
-    Raises:
-        ValueError: If no formatter is registered for the provider type.
     """
-    key = provider_type.lower().strip()
+    key = provider_type.lower().strip() if provider_type else ""
     # Try exact match first
     if key in _FORMATTERS:
         return _FORMATTERS[key]()
 
-    # Fall back to generic heuristics
-    if "anthropic" in key or "claude" in key:
-        return _FORMATTERS["anthropic"]()
-    if "google" in key or "gemini" in key:
-        return _FORMATTERS["google"]()
-    if "deepseek" in key:
-        return _FORMATTERS["deepseek"]()
+    # Fall back to generic heuristics from provider_type
+    if key:
+        if "anthropic" in key or "claude" in key:
+            return _FORMATTERS["anthropic"]()
+        if "google" in key or "gemini" in key:
+            return _FORMATTERS["google"]()
+        if "deepseek" in key:
+            return _FORMATTERS["deepseek"]()
+
+    # Fall back to detecting from model name
+    model_lower = model.lower() if model else ""
+    if model_lower:
+        if "deepseek" in model_lower:
+            return _FORMATTERS["deepseek"]()
+        if "claude" in model_lower:
+            return _FORMATTERS["anthropic"]()
+        if "gemini" in model_lower:
+            return _FORMATTERS["google"]()
 
     # Default to OpenAI-compatible
     return _FORMATTERS["openai-compatible"]()

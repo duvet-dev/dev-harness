@@ -65,6 +65,22 @@ class TestGetFormatter:
         f = get_formatter("deepseek-v4-pro")
         assert isinstance(f, DeepSeekFormatter)
 
+    def test_deepseek_from_model_name(self):
+        f = get_formatter(model="deepseek-v4-pro")
+        assert isinstance(f, DeepSeekFormatter)
+
+    def test_claude_from_model_name(self):
+        f = get_formatter(model="claude-3-opus")
+        assert isinstance(f, AnthropicFormatter)
+
+    def test_gemini_from_model_name(self):
+        f = get_formatter(model="gemini-2.0-flash")
+        assert isinstance(f, GoogleFormatter)
+
+    def test_empty_provider_and_model_uses_openai(self):
+        f = get_formatter()
+        assert isinstance(f, OpenAIFormatter)
+
     def test_unknown_falls_to_openai(self):
         f = get_formatter("unknown-provider")
         assert isinstance(f, OpenAIFormatter)

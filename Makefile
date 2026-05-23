@@ -13,7 +13,10 @@
 #   publish       — Build and publish to internal registry
 
 SHELL := /bin/bash
-PYTHON := python3
+VENV := .venv
+
+# Prefer venv Python; fall back to system python3
+PYTHON := $(shell test -d $(VENV) && echo "$(VENV)/bin/python3" || echo "python3") 
 
 # Detect platform for Temporal download
 UNAME_S := $(shell uname -s)
@@ -45,14 +48,18 @@ TEMPORAL_BIN     := $(TEMPORAL_DIR)/temporal
 # ── Installation ──────────────────────────────────────────────────────────
 
 .PHONY: install
-install: download-temporal
-	$(PYTHON) -m pip install -e ".[dev]"
+install: .venv download-temporal
+	$(VENV)/bin/pip install -e ".[dev]"
 	@echo ""
-	@echo "✓ Dev Harness installed. Run 'harness --help' to get started."
+	@echo "✓ Dev Harness installed. Run '$(VENV)/bin/harness --help' to get started."
+
+.venv:
+	python3 -m venv $(VENV)
+	$(VENV)/bin/pip install --upgrade pip setuptools wheel
 
 .PHONY: install-deps
-install-deps:
-	$(PYTHON) -m pip install -e ".[dev]"
+install-deps: .venv
+	$(VENV)/bin/pip install -e ".[dev]"
 
 # ── Testing ───────────────────────────────────────────────────────────────
 

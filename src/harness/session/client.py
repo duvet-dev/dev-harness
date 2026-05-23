@@ -10,17 +10,16 @@ from __future__ import annotations
 import json
 import os
 import re
-import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator, Optional
+from typing import Any
 
 import httpx
 import yaml
 
 from harness.paths import get_engagement_dir, get_providers_path
-
 
 # ── Data types ─────────────────────────────────────────────────────────────
 
@@ -321,8 +320,6 @@ class InteractiveClient:
 
 
 
-from pathlib import Path
-from typing import Any, AsyncIterator
 
 
 
@@ -505,9 +502,9 @@ class SessionClient:
         )
 
         # Create runner and backend
-        from harness.agents.runner import AgentRunner
         from harness.agents.backends.api_backend import ApiBackend
         from harness.agents.plugin_registry import PluginRegistry
+        from harness.agents.runner import AgentRunner
 
         PluginRegistry.initialize()
 

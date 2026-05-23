@@ -17,7 +17,6 @@ import yaml
 
 from harness.paths import get_architecture_goal_path, get_engagement_dir
 
-
 # ── Data model ─────────────────────────────────────────────────────────────
 
 

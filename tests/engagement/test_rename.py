@@ -48,7 +48,7 @@ class TestUpdateEngagementYaml:
         eng_dir.mkdir(parents=True)
         yaml_path = eng_dir / "engagement.yaml"
         yaml_path.write_text(yaml.dump({"slug": "old-slug"}))
-        _update_engagement_yaml(eng_dir, "new-slug")
+        _update_engagement_yaml(eng_dir, "new-slug", "old-slug")
         data = yaml.safe_load(yaml_path.read_text())
         assert data["slug"] == "new-slug"
 
@@ -57,7 +57,7 @@ class TestUpdateEngagementYaml:
         eng_dir.mkdir(parents=True)
         md_path = eng_dir / "engagement.md"
         md_path.write_text("---\nslug: old-slug\ntitle: Test\n---\n\n# Test\n")
-        _update_engagement_yaml(eng_dir, "new-slug")
+        _update_engagement_yaml(eng_dir, "new-slug", "old-slug")
         content = md_path.read_text()
         assert "slug: new-slug" in content
 
@@ -90,7 +90,7 @@ class TestUpdateEngagementYaml:
         yaml_path = eng_dir / "engagement.yaml"
         original = {"slug": "current-slug"}
         yaml_path.write_text(yaml.dump(original))
-        _update_engagement_yaml(eng_dir, "current-slug")
+        _update_engagement_yaml(eng_dir, "current-slug", "current-slug")
         data = yaml.safe_load(yaml_path.read_text())
         assert not data.get("updated")  # not actually a field; just confirming stable
 

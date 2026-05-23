@@ -10,12 +10,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-
 # ── Constants ──────────────────────────────────────────────────────────────
 
 BUILD_PYPROJECT_TOML = "pyproject.toml"
 
-from harness.agents.detectors import BUILD_SETUP_PY, BUILD_SETUP_CFG
+from harness.agents.detectors import BUILD_SETUP_CFG, BUILD_SETUP_PY
 
 
 @dataclass

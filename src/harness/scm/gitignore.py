@@ -1,6 +1,5 @@
 """.gitignore template generation with dynamic LLM-based reasoning."""
 
-import json
 from pathlib import Path
 
 DEFAULT_GITIGNORE = """# Python
@@ -103,14 +102,14 @@ def suggest_dynamic_additions(project_root: Path) -> list[str]:
     For now, returns known patterns that are commonly missed.
     """
     suggestions = []
-    
+
     # Check for common unignored patterns
-    untracked_dirs = [p for p in project_root.iterdir() 
+    untracked_dirs = [p for p in project_root.iterdir()
                       if p.is_dir() and not p.name.startswith(".")]
-    
+
     for d in untracked_dirs:
         # Check for node_modules in non-Node projects (leftover from tooling)
         if (d / "node_modules").exists():
             suggestions.append("node_modules/")
-    
+
     return suggestions

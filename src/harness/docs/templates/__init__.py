@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-
 _TEMPLATES_DIR = Path(__file__).parent
 
 

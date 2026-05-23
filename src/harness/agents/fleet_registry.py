@@ -15,9 +15,8 @@ from typing import Optional
 
 import yaml
 
-from harness.paths import get_fleets_path
 from harness.agents.fleet import Fleet, FleetGuidelines, InclusionRules, builtin_fleets
-
+from harness.paths import get_fleets_path
 
 # ---------------------------------------------------------------------------
 # Fleet Registry

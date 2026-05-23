@@ -10,8 +10,8 @@ from typing import Optional
 import yaml
 
 from harness.paths import get_engagement_dir
-from .wave_model import Plan, Wave, WaveType, WaveState, WaveProvenance
 
+from .wave_model import Plan, Wave, WaveProvenance, WaveState, WaveType
 
 PLAN_YAML = "plan.yaml"
 
@@ -79,7 +79,7 @@ class PlanManager:
             lines.append(f"- **State:** {wave.state}")
 
             if wave.provenance is not None:
-                lines.append(f"- **Provenance:**")
+                lines.append("- **Provenance:**")
                 lines.append(
                     f"  - Trigger: {wave.provenance.trigger_phase}"
                     f" — {wave.provenance.trigger_reason}"

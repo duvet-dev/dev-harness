@@ -17,7 +17,6 @@ import yaml
 
 from harness.paths import get_config_path, get_engagement_dir
 
-
 # ── Defaults ───────────────────────────────────────────────────────────────
 
 _DEFAULT_ALLOW_REFACTORING = True

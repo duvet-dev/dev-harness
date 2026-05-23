@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # ── Module-level state ──────────────────────────────────────────────────
 
 _worker_thread: Optional[threading.Thread] = None
-_worker_ref: Optional["Worker"] = None
+_worker_ref: Optional[Worker] = None
 _worker_loop: Optional[asyncio.AbstractEventLoop] = None
 _worker_lock = threading.Lock()
 _shutdown_event = threading.Event()
@@ -163,17 +163,17 @@ async def _run_worker_async() -> None:
     from temporalio.client import Client
     from temporalio.worker import Worker
 
+    from harness.workflows.activities import (
+        aggregate_phase_outputs,
+        check_phase_coverage,
+        collect_outputs,
+        snapshot_state,
+        validate_inputs,
+    )
     from harness.workflows.engagement import EngagementWorkflow
     from harness.workflows.phases.phase_manager import PhaseManager
     from harness.workflows.phases.run_single_agent import (
         run_single_agent as run_single_agent_activity,
-    )
-    from harness.workflows.activities import (
-        validate_inputs,
-        collect_outputs,
-        aggregate_phase_outputs,
-        check_phase_coverage,
-        snapshot_state,
     )
 
     try:

@@ -10,33 +10,30 @@ import click
 from harness.constitution.loader import scaffold as scaffold_constitution
 from harness.constitution.templates.template_registry import (
     TemplateRegistry,
-    get_template,
     refresh_agent_profiles,
     seed_agent_profiles,
 )
+from harness.engagement.checkpoint import CHECKPOINT_EXPIRY_HOURS
 from harness.paths import (
     find_project_root as _py_find_project_root,
-    resolve_project_root as _py_resolve_project_root,
-    resolve_explicit_project_root as _py_resolve_explicit_project_root,
-    get_harness_dir,
-    get_engagements_dir,
+)
+from harness.paths import (
     get_engagement_dir,
     get_engagement_md,
-    get_active_engagements_path,
-    get_agents_dir,
-    get_config_path,
-    get_fleets_path,
-    get_freshness_path,
+    get_engagements_dir,
+    get_harness_dir,
     get_harness_state_path,
-    get_providers_path,
 )
-import re
-
+from harness.paths import (
+    resolve_explicit_project_root as _py_resolve_explicit_project_root,
+)
+from harness.paths import (
+    resolve_project_root as _py_resolve_project_root,
+)
 from harness.scm.git import GitRepo
 from harness.scm.gitignore import write_gitignore
-from harness.state.snapshot import SnapshotWriter, ProjectSnapshot, EngagementSnapshot
-from harness.state.freshness import save_freshness, FreshnessRecord
-from harness.engagement.checkpoint import CHECKPOINT_EXPIRY_HOURS
+from harness.state.freshness import FreshnessRecord, save_freshness
+from harness.state.snapshot import EngagementSnapshot, ProjectSnapshot, SnapshotWriter
 
 # Re-exported for introspection / documentation
 __all__ = ["main"]
@@ -286,12 +283,12 @@ def init(project_dir, template, seed, no_git, force):
             )
             click.echo(f"  Created {len(created_dirs)} scaffold directories")
         else:
-            click.echo(f"  (no template — no scaffold directories created)")
+            click.echo("  (no template — no scaffold directories created)")
 
         # 5. Create .harness/ directory structure
         get_engagements_dir(project_path).mkdir(parents=True, exist_ok=True)
         get_harness_dir(project_path).joinpath(".gitkeep").write_text("")
-        click.echo(f"  Created .harness/ (engagement state directory)")
+        click.echo("  Created .harness/ (engagement state directory)")
 
         # 6. Create initial state snapshot
         snapshot_path = get_harness_state_path(project_path)
@@ -465,8 +462,8 @@ def work(description, mode, backend, max_iterations, partial_approval):
         harness work "Fix bugs" --mode auto --no-partial-approval
     """
     try:
-        from harness.state.temporal_server import ensure_temporal_server
         from harness.state.temporal_adapter import start_engagement
+        from harness.state.temporal_server import ensure_temporal_server
 
         root = _require_project_root()
         repo = GitRepo(root)
@@ -561,10 +558,12 @@ def summary(deep, assess_flag, engagement, json_flag, reconcile):
         harness summary --reconcile
     """
     try:
-        from harness.analysis.fast import scan_structure, scan_git_diff, produce_summary
         from harness.analysis.deep import (
-            check_architecture_conformance, assess_coverage, find_dead_code,
+            assess_coverage,
+            check_architecture_conformance,
+            find_dead_code,
         )
+        from harness.analysis.fast import scan_git_diff, scan_structure
         from harness.analysis.summary import format_report
 
         root = _require_project_root()
@@ -596,8 +595,9 @@ def summary(deep, assess_flag, engagement, json_flag, reconcile):
         # R22: LLM-based assessment when --assess
         if assess_flag:
             try:
-                from harness.analysis.assessment import assess as run_assessment
                 import asyncio
+
+                from harness.analysis.assessment import assess as run_assessment
                 assessment = asyncio.run(run_assessment(root, deep=True))
                 if output_format == "json":
                     # Merge assessment into JSON output
@@ -623,7 +623,10 @@ def summary(deep, assess_flag, engagement, json_flag, reconcile):
 def _reconcile_before_summary(root: Path) -> None:
     """Reconcile freshness before running summary analysis."""
     try:
-        from harness.state.freshness import load_freshness, save_freshness, FreshnessRecord
+        from harness.state.freshness import (
+            load_freshness,
+            save_freshness,
+        )
         from harness.state.reconciliation import BranchReconciler
 
         freshness = load_freshness(root)
@@ -726,12 +729,12 @@ def show(agent_role):
             fleet = registry.get_fleet(fleet_name)
             click.echo(f"  Fleet: {fleet_name} (lead: {fleet.lead_role if fleet else '-'})")
         else:
-            click.echo(f"  Fleet: (none)")
+            click.echo("  Fleet: (none)")
 
     # Permissions
     perms = getattr(spec, 'tool_permissions', None)
     if perms:
-        click.echo(f"  Tool Permissions:")
+        click.echo("  Tool Permissions:")
         for perm_name, perm_val in perms.__dict__.items():
             if not perm_name.startswith("_"):
                 click.echo(f"    {perm_name}: {perm_val}")
@@ -1017,8 +1020,10 @@ def set_fleet_governance(level, slug):
             f"Engagement '{slug}' governance set to '{level}'."
         )
     else:
-        from harness.agents.governance import set_project_governance
-        from harness.agents.governance import get_project_governance
+        from harness.agents.governance import (
+            get_project_governance,
+            set_project_governance,
+        )
         set_project_governance(root, gov)
         current = get_project_governance(root)
         click.echo(
@@ -1049,8 +1054,8 @@ def consult(question, fleet, mode, engagement):
         harness consult --mode blocking \"Any critical issues?\"
     """
     root = _require_project_root(command_name="consult")
+    from harness.agents.consultation import ConsultationOrchestrator
     from harness.agents.fleet_registry import FleetRegistry
-    from harness.agents.consultation import ConsultationOrchestrator, ConsultationResult
 
     registry = FleetRegistry(root)
     orchestrator = ConsultationOrchestrator(registry)
@@ -1176,7 +1181,7 @@ def run(wave_id, no_test, backend, slug):
         )
         raise click.Abort()
 
-    from harness.wave.wave_cycle import WaveCycleRunner, WaveCycleConfig
+    from harness.wave.wave_cycle import WaveCycleConfig, WaveCycleRunner
 
     config = WaveCycleConfig(
         auto_test=not no_test,
@@ -1455,8 +1460,8 @@ def review(engagement_id, approve, reject, request_changes,
             })
 
     try:
-        from harness.state.temporal_server import ensure_temporal_server
         from harness.state.temporal_adapter import send_gate_review
+        from harness.state.temporal_server import ensure_temporal_server
 
         temporal_ok = False
         try:
@@ -1493,7 +1498,7 @@ def review(engagement_id, approve, reject, request_changes,
         else:
             click.echo(f"Gate {decision} (local state only).")
 
-    except Exception as exc:
+    except Exception:
         click.echo(f"Gate {decision} (local state only).")
 
 
@@ -1661,13 +1666,15 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
             slug = eng_id[len("eng-main-"):]
 
         # ── Phase state manager ────────────────────────────────────────
-        from harness.engagement.phase_state import (
-            PhaseStateManager, PhaseState, PhaseRecord,
-        )
-        from harness.engagement.feedback import (
-            FeedbackManager, FeedbackPacket,
-        )
         from harness.engagement.checkpoint import CheckpointManager
+        from harness.engagement.feedback import (
+            FeedbackManager,
+            FeedbackPacket,
+        )
+        from harness.engagement.phase_state import (
+            PhaseState,
+            PhaseStateManager,
+        )
 
         psm = PhaseStateManager(root, slug)
         fbm = FeedbackManager(root, slug)
@@ -1865,9 +1872,15 @@ def catchup():
     Run this after a git merge or when work was done outside the harness.
     """
     try:
-        from harness.state.reconciliation import BranchReconciler, ReconciliationReport
-        from harness.state.freshness import load_freshness, save_freshness, FreshnessRecord
-        from harness.state.snapshot import SnapshotWriter, ProjectSnapshot, EngagementSnapshot
+        from harness.state.freshness import (
+            FreshnessRecord,
+            load_freshness,
+            save_freshness,
+        )
+        from harness.state.reconciliation import BranchReconciler
+        from harness.state.snapshot import (
+            SnapshotWriter,
+        )
 
         root = _require_project_root()
         repo = GitRepo(root)
@@ -2001,7 +2014,11 @@ def finish():
     Run `harness catchup` first if state may be stale.
     """
     try:
-        from harness.state.freshness import load_freshness, save_freshness, FreshnessRecord
+        from harness.state.freshness import (
+            FreshnessRecord,
+            load_freshness,
+            save_freshness,
+        )
 
         root = _require_project_root()
         repo = GitRepo(root)
@@ -2151,7 +2168,7 @@ def create(name, slug, allow_refactoring_suggestions):
         click.echo(f"Engagement created: {slug}")
         click.echo(f"  Name   : {name}")
         click.echo(f"  Branch : {branch_name}")
-        click.echo(f"  Status : planning")
+        click.echo("  Status : planning")
         if allow_refactoring_suggestions is not None:
             click.echo(f"  Refactoring suggestions: {allow_refactoring_suggestions}")
         click.echo(f"  Path   : {eng_dir}")
@@ -2544,10 +2561,10 @@ def generate_docs(output_dir, overwrite, doc_type, source_tier):
 
         from harness.docs.generator import (
             DocType,
-            SourceTier,
             OverwriteMode,
-            generate_doc,
+            SourceTier,
             generate_all_docs,
+            generate_doc,
             populate_context_from_project,
         )
 

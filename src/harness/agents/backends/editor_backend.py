@@ -10,19 +10,16 @@ Backend name: 'editor'
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from harness.agents.context import ContextPacket
 from harness.agents.backends.base import (
     AbstractBackend,
-    BackendConfigError,
     BackendResult,
     Invocation,
 )
+from harness.agents.context import ContextPacket
 
 
 @dataclass

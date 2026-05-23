@@ -20,8 +20,6 @@ import copy
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from harness.constitution.models import PhilosophyConfig
 from harness.paths import get_agents_dir
 from harness.templates.agent_templates import (
@@ -30,7 +28,6 @@ from harness.templates.agent_templates import (
     IDENTITY_MD_TEMPLATE,
     PROCEDURES_MD_TEMPLATE,
 )
-
 
 # ──────────────────────────────────────────────
 # Exceptions
@@ -514,7 +511,7 @@ def refresh_agent_profiles(
         Summary of actions taken, keyed by ``"created"``, ``"updated"``,
         and ``"existing"``. Each value is a list of agent role names.
     """
-    from harness.agents.agent_registry import AGENTS, AgentRole
+    from harness.agents.agent_registry import AGENTS
 
     result: dict[str, list[str]] = {
         "created": [],
@@ -567,7 +564,7 @@ def refresh_agent_profiles(
                 for prefix in tp.write_prefixes:
                     perm_lines.append(f"  - Write prefix: {prefix}")
             else:
-                perm_lines.append(f"  - Write prefixes: any path")
+                perm_lines.append("  - Write prefixes: any path")
 
         tags_line = (
             ", ".join(spec.tags) if spec.tags else "(none)"
@@ -649,8 +646,8 @@ def _migrate_legacy_agents_dir(project_path: Path, target_dir: Path) -> None:
         # Target already has content — don't stomp
         return
 
-    import shutil
     import logging
+    import shutil
 
     logger = logging.getLogger(__name__)
 

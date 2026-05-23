@@ -63,9 +63,26 @@ test:
 	@echo ""
 	@echo "✓ All functional tests passed."
 
-.PHONY: test-ci
-test-ci: test
-	@echo "✓ CI tests complete."
+# ── CI ────────────────────────────────────────────────────────────────────
+
+.PHONY: ci
+test-ci: lint test-coverage
+	@echo "✓ CI checks passed."
+
+.PHONY: ci
+ci: test-ci
+	@true
+
+.PHONY: test-coverage
+test-coverage:
+	@pytest \
+		tests/ \
+		-W error::RuntimeWarning \
+		--tb=short \
+		--cov=src/harness \
+		--cov-report=term-missing:skip-covered \
+		--quiet 2>&1
+	@echo "Tests: OK"
 
 .PHONY: test-e2e
 test-e2e:
@@ -77,17 +94,12 @@ test-e2e:
 test-verbose:
 	pytest tests/ -W error::RuntimeWarning --tb=long -v --durations=10 2>&1
 
-.PHONY: coverage
-coverage:
-	pytest --cov=src/harness tests/ --tb=short -q --cov-report=term-missing:skip-covered 2>&1
-
 # ── Linting ───────────────────────────────────────────────────────────────
 
 .PHONY: lint
 lint:
-	ruff check src/harness tests/ 2>&1 || true
-	@echo ""
-	@echo "Lint complete."
+	@ruff check src/harness tests/ 2>&1
+	@echo "Lint: OK"
 
 .PHONY: check-types
 check-types:

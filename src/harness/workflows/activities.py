@@ -101,6 +101,7 @@ async def run_single_agent(context_packet: dict) -> dict:
 
         # Reconstruct ContextPacket from the serialised dict
         from pathlib import Path
+
         from harness.agents.context import ContextPacket, OutputContract
         from harness.agents.runner import AgentRunner
 

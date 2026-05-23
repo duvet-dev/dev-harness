@@ -17,17 +17,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-
 # ── Constants: common file names ───────────────────────────────────────
 
 BUILD_PYPROJECT_TOML = "pyproject.toml"
 BUILD_README = "README.md"
 
 from harness.agents.detectors import BUILD_SETUP_PY
-from harness.docs.templates import render_template, list_templates
-from harness.docs.monorepo import detect_sub_projects, relationship_map
-from harness.docs.overwrite import handle_overwrite, OverwriteMode
-
+from harness.docs.monorepo import detect_sub_projects
+from harness.docs.overwrite import OverwriteMode, handle_overwrite
+from harness.docs.templates import render_template
 
 # ── TOML fallback parser (Python 3.9 compat) ────────────────────────────────
 
@@ -262,9 +260,7 @@ def _detect_commands(ctx: DocGenerationContext, root: Path) -> DocGenerationCont
     if not ctx.install_command:
         if (root / "requirements.txt").is_file():
             ctx.install_command = "pip install -r requirements.txt"
-        elif (root / BUILD_PYPROJECT_TOML).is_file():
-            ctx.install_command = "pip install -e ."
-        elif (root / BUILD_SETUP_PY).is_file():
+        elif (root / BUILD_PYPROJECT_TOML).is_file() or (root / BUILD_SETUP_PY).is_file():
             ctx.install_command = "pip install -e ."
         elif (root / "package.json").is_file():
             ctx.install_command = "npm install"

@@ -13,7 +13,6 @@ from typing import Any
 
 from harness.analysis.base import Finding, ScanResult
 
-
 # Common source file extensions by language
 LANGUAGE_MAP: dict[str, list[str]] = {
     "python": [".py"],
@@ -31,7 +30,6 @@ LANGUAGE_MAP: dict[str, list[str]] = {
     "java": [".java"],
     "kotlin": [".kt", ".kts"],
     "ruby": [".rb"],
-    "rust": [".rs"],
 }
 
 # Directories to skip in scans
@@ -95,7 +93,7 @@ def scan_structure(path: str | Path) -> ScanResult:
 
             # Count lines
             try:
-                with open(filepath, "r", errors="replace") as f:
+                with open(filepath, errors="replace") as f:
                     line_count = sum(1 for _ in f)
                 metrics["total_lines"] += line_count
             except (OSError, UnicodeDecodeError):

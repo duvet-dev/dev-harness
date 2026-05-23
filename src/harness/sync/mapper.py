@@ -11,11 +11,11 @@ from dataclasses import dataclass, field
 
 from harness.sync.openclaw_extractor import ExtractionResult
 from harness.templates.agent_templates import (
+    AGENT_ROLES,
+    COMMUNITY_STANDARDS_MD_TEMPLATE,
     IDENTITY_MD_TEMPLATE,
     PROCEDURES_MD_TEMPLATE,
-    COMMUNITY_STANDARDS_MD_TEMPLATE,
     TOOLS_MD_TEMPLATE,
-    AGENT_ROLES,
 )
 
 

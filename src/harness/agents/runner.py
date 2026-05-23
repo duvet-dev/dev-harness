@@ -23,23 +23,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from harness.agents.context import ContextPacket, OutputContract
-from harness.agents.backends.base import (
-    AbstractBackend,
-    BackendError,
-    BackendResult,
-)
-from harness.agents.plugin_registry import PluginRegistry
-from harness.agents.repo_tool import RepoTool
 from harness.agents.agent_registry import (
+    AgentRole,
     CriticLoopConfig,
     CriticLoopIteration,
     CriticLoopState,
     get_agent,
     get_default_critic_loop_config,
-    AgentRole,
-    ToolPermissions,
 )
+from harness.agents.backends.base import (
+    AbstractBackend,
+    BackendError,
+    BackendResult,
+    Invocation,
+)
+from harness.agents.context import ContextPacket, OutputContract
 from harness.agents.cycle import (
     CycleConvergence,
     CycleResult,
@@ -47,8 +45,10 @@ from harness.agents.cycle import (
     CycleRunnerDefinition,
     CycleStep,
 )
-from harness.paths import get_providers_path
+from harness.agents.plugin_registry import PluginRegistry
+from harness.agents.repo_tool import RepoTool
 from harness.config.provider_registry import load_providers
+from harness.paths import get_providers_path
 
 logger = logging.getLogger(__name__)
 
@@ -465,7 +465,7 @@ class AgentRunner:
         the agent can browse files during analysis (requires *agent_role*
         with read-only tool permissions).
         """
-        from harness.agents.context import ContextPacket, OutputContract
+        from harness.agents.context import ContextPacket
 
         constraint_section: dict[str, str] = {
             "backend": backend_name or self._config.default_backend,

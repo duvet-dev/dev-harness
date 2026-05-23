@@ -30,15 +30,10 @@ Wave 19 — Phase 3 (Domain Interface Tester).
 from __future__ import annotations
 
 import ast
-import os
 import subprocess
 import sys
-import tempfile
-import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional
-
 
 # ──────────────────────────────────────────────────────────────────────
 # Data types
@@ -174,12 +169,7 @@ class DomainInterfaceScanner:
         has_abstract = False
         methods: list[MethodDef] = []
         for item in node.body:
-            if isinstance(item, ast.FunctionDef):
-                method = self._analyse_method(item)
-                if method.is_abstract:
-                    has_abstract = True
-                methods.append(method)
-            elif isinstance(item, ast.AsyncFunctionDef):
+            if isinstance(item, ast.FunctionDef) or isinstance(item, ast.AsyncFunctionDef):
                 method = self._analyse_method(item)
                 if method.is_abstract:
                     has_abstract = True
@@ -468,25 +458,25 @@ class ProbeGenerator:
             scenario_labels.append(("default", f"calls {method.name}"))
 
         for scenario_name, scenario_desc in scenario_labels:
-            lines.append(f"")
+            lines.append("")
             lines.append(f"# {scenario_desc}")
             test_name = f"test_{interface.module.replace('.', '_')}_{method.name}_{scenario_name}"
             lines.append(f"def {test_name}():")
             lines.append(f"    \"\"\"Probe: {scenario_desc}\"\"\"")
             lines.append(f"    # {scenario_desc}")
-            lines.append(f"    # This is a probe, not an assertion.")
-            lines.append(f"    # Results are collected for the conformance report.")
-            lines.append(f"    pytest.skip(\"Probe not yet implemented — manual implementation required\")")
-            lines.append(f"")
+            lines.append("    # This is a probe, not an assertion.")
+            lines.append("    # Results are collected for the conformance report.")
+            lines.append("    pytest.skip(\"Probe not yet implemented — manual implementation required\")")
+            lines.append("")
 
         # Also generate an implementation discovery test
         impl_test_name = f"test_{interface.module.replace('.', '_')}_{method.name}_has_implementation"
-        lines.append(f"")
-        lines.append(f"# Check at least one implementation exists")
+        lines.append("")
+        lines.append("# Check at least one implementation exists")
         lines.append(f"def {impl_test_name}():")
-        lines.append(f"    \"\"\"Probe: verify at least one concrete implementation exists.\"\"\"")
-        lines.append(f"    pytest.skip(\"Implementation discovery not yet automated\")")
-        lines.append(f"")
+        lines.append("    \"\"\"Probe: verify at least one concrete implementation exists.\"\"\"")
+        lines.append("    pytest.skip(\"Implementation discovery not yet automated\")")
+        lines.append("")
 
         return lines
 

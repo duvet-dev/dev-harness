@@ -7,18 +7,19 @@ linearly. Iteration is bounded by ``IterationConfig.max_iterations``.
 """
 
 from datetime import timedelta
+
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
     from typing import Optional
 
     from harness.workflows.signals import (
-        GateReviewSignal,
-        WorkDoneSignal,
-        StateReconcileSignal,
         EngagementQueryResult,
         FeedbackItem,
+        GateReviewSignal,
         IterationConfig,
+        StateReconcileSignal,
+        WorkDoneSignal,
     )
 
 
@@ -90,9 +91,7 @@ class EngagementWorkflow:
                 self._phases.append(phase_result)
 
                 # Check gate
-                if self._gate_mode == "full":
-                    await self._wait_for_gate()
-                elif self._gate_mode == "auto" and self._pending_items:
+                if self._gate_mode == "full" or self._gate_mode == "auto" and self._pending_items:
                     await self._wait_for_gate()
                 elif self._gate_mode == "auto" and feedback_for_phase:
                     # With iteration feedback, always wait for gate on non-first runs
@@ -185,7 +184,7 @@ class EngagementWorkflow:
                 lambda: self._gate_decision is not None,
                 timeout=GATE_TIMEOUT,
             )
-        except asyncio.TimeoutError if 'asyncio' in dir() else Exception:
+        except Exception:
             workflow.logger.warning(f"Gate timeout after {GATE_TIMEOUT}")
 
     @workflow.signal

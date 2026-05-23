@@ -1,6 +1,7 @@
 """Per-agent execution activity with heartbeats and error handling."""
 
 from pathlib import Path
+
 from temporalio import activity
 
 

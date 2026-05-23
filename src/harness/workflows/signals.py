@@ -6,7 +6,7 @@ or returned as a query result during engagement orchestration.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 @dataclass

@@ -38,7 +38,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-
 # ── Directory / subpath constants ────────────────────────────────────────
 
 _HARNESS_DIR_NAME = ".harness"

@@ -8,12 +8,10 @@ Architecture §2.2: Temporal workflow memory is the sole runtime source of truth
 """
 
 import asyncio
-from dataclasses import dataclass
 from typing import Optional
 
 from temporalio import client as temporal_client
 
-from harness.state.temporal_server import ensure_temporal_server
 from harness.state.temporal_worker import ensure_worker
 
 TEMPORAL_HOST = "localhost:7233"

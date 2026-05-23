@@ -6,7 +6,6 @@ No LLM calls. No analysis suite dependency. Runs in <1s on any reasonable tree.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any

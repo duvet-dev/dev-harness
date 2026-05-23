@@ -12,16 +12,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from harness.analysis.agents import AnalysisAgentRegistry, AnalysisAgent
-from harness.agents.context import ContextPacket
 from harness.agents.runner import AgentRunner
-from harness.analysis.base import Finding, ScanResult
+from harness.analysis.agents import AnalysisAgent, AnalysisAgentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +319,7 @@ def _read_first_n_lines(path: Path, max_lines: int = 200) -> str:
     if not path.exists():
         return ""
     try:
-        with open(path, "r", errors="replace") as f:
+        with open(path, errors="replace") as f:
             lines = []
             for i, line in enumerate(f):
                 if i >= max_lines:

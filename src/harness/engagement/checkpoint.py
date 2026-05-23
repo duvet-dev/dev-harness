@@ -15,10 +15,9 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from harness.engagement.lifecycle import ENGAGEMENTS_DIR
-
 
 CHECKPOINT_EXPIRY_HOURS = 24
 

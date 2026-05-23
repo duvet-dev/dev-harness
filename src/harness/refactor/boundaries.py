@@ -10,11 +10,9 @@ Provides:
 
 from __future__ import annotations
 
-import hashlib
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
-
+from typing import List
 
 # ── Data types ─────────────────────────────────────────────────────────────
 
@@ -228,7 +226,6 @@ def present_and_confirm_boundaries(
             print()
 
         # Ask about the full list
-        from getpass import getpass
 
         while True:
             choice = input("\nAccept all inferred boundaries? [Y/n] ").strip().lower()
@@ -281,7 +278,6 @@ def _interactive_select(candidates: list[BoundaryCandidate]) -> list[BoundaryCan
 
 def _interactive_add(confirmed: list[BoundaryCandidate]) -> None:
     """Prompt the user to add custom boundaries."""
-    from getpass import getpass
 
     print("\n  Add custom boundaries? Enter details or leave blank to skip.")
 

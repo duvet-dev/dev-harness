@@ -25,7 +25,6 @@ from harness.agents.consultation import (
     ConsultationOrchestrator,
     ConsultationResult,
 )
-from harness.agents.detectors import LanguageDetector, LanguagePatterns
 from harness.agents.cycle import (
     CycleConvergence,
     CycleResult,
@@ -44,6 +43,7 @@ from harness.agents.cycle import (
     testing_cycle_definition,
     wave_cycle_definition,
 )
+from harness.agents.detectors import LanguageDetector, LanguagePatterns
 from harness.agents.fleet import (
     ConsultationCapability,
     Fleet,

@@ -17,10 +17,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from harness.agents.detectors import LanguageDetector, LanguagePatterns
-
 
 # ---------------------------------------------------------------------------
 # Data structures

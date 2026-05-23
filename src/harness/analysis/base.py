@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 VALID_SEVERITIES = ("info", "warning", "error")
 VALID_CATEGORIES = (
     "structure",

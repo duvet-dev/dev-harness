@@ -48,7 +48,6 @@ from typing import Any, Optional
 
 from harness.agents.backends.base import BackendResult
 from harness.agents.context import ContextPacket, OutputContract
-from harness.agents.agent_registry import AgentRole
 from harness.agents.detectors import (
     BUILD_PYPROJECT_TOML,
     BUILD_PYTEST_INI,

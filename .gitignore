@@ -16,6 +16,7 @@ build/
 # IDE
 .idea/
 .vscode/
+*.code-workspace
 *.swp
 *.swo
 *~
@@ -23,6 +24,13 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Legacy build files (replaced by pyproject.toml)
+setup.cfg
+setup.py
+
+# Temp / scratch
+context.md
 
 # Harness
 .harness/

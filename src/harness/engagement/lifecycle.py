@@ -20,7 +20,6 @@ from harness.paths import (
     get_engagement_yaml,
 )
 
-
 # ── Constants ──────────────────────────────────────────────────────────────
 # These are kept for backward compatibility but deprecated.
 # All new code should use the path resolver functions from harness.paths.
@@ -297,7 +296,7 @@ def engagement_dir_for(root: Path, slug: str) -> Path:
     return get_engagement_dir(root, slug)
 
 
-import re  # noqa: E402
+import re
 
 
 def slugify(name: str) -> str:

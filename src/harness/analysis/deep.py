@@ -7,13 +7,11 @@ health against architectural conventions and quality metrics.
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Any
 
 from harness.analysis.base import Finding, ScanResult
-
 
 # Architecture convention: expected top-level package structure
 EXPECTED_PACKAGE_STRUCTURE: dict[str, list[str]] = {

@@ -10,9 +10,7 @@ appended without modifying the original content.
 
 from __future__ import annotations
 
-import json
 import re
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,10 +18,7 @@ from typing import Optional
 
 import yaml
 
-from harness.engagement.lifecycle import ENGAGEMENTS_DIR, WAVES_DIR
-
-from .templates import render_template
-
+from harness.engagement.lifecycle import ENGAGEMENTS_DIR
 
 # ── Constants ───────────────────────────────────────────────────────────────
 

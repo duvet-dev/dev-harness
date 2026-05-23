@@ -11,14 +11,18 @@ Wave 17 — Phase 3 (Pattern Injection System).
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
-from harness.paths import get_cache_dir, get_config_path, get_engagement_dir, get_harness_dir, get_patterns_dir
-
+from harness.paths import (
+    get_cache_dir,
+    get_config_path,
+    get_engagement_dir,
+    get_patterns_dir,
+)
 
 # ---------------------------------------------------------------------------
 # Pattern Model
@@ -412,7 +416,7 @@ def scaffold_pattern_file(
 
     frontmatter = []
     frontmatter.append("---")
-    frontmatter.append(f"type: pattern")
+    frontmatter.append("type: pattern")
     frontmatter.append(f"fleet: {fleet}")
     if language:
         frontmatter.append(f"language: {language}")

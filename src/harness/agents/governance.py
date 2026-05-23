@@ -19,9 +19,8 @@ from typing import Optional
 
 import yaml
 
-from harness.paths import get_config_path, get_engagement_dir
 from harness.agents.fleet import GovernanceLevel
-
+from harness.paths import get_config_path, get_engagement_dir
 
 # ── Config helpers ────────────────────────────────────────────────────────
 

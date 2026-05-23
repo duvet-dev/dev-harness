@@ -27,19 +27,18 @@ from typing import Optional
 
 import yaml
 
-from harness.paths import get_active_engagements_path, get_engagement_dir, get_engagements_dir
 from harness.engagement.lifecycle import (
-    ENGAGEMENTS_DIR,
     ENGAGEMENT_MD,
     ENGAGEMENT_YAML_FILE,
     PLAN_YAML,
-    WAVES_DIR,
-    _load_active_mapping,
     _parse_engagement_md,
-    _save_active_mapping,
     update_active_engagement_mapping,
 )
-
+from harness.paths import (
+    get_active_engagements_path,
+    get_engagement_dir,
+    get_engagements_dir,
+)
 
 # ── Branch strategy ────────────────────────────────────────────────────────
 
@@ -123,7 +122,7 @@ def _archive_engagement(eng_dir: Path, engagements_dir: Path) -> Path:
 # ── Core rename logic ──────────────────────────────────────────────────────
 
 
-def _update_engagement_yaml(eng_dir: Path, new_slug: str) -> list[str]:
+def _update_engagement_yaml(eng_dir: Path, new_slug: str, old_slug: str) -> list[str]:
     """Update slug references inside an engagement directory.
 
     Modifies:
@@ -269,7 +268,7 @@ def rename_engagement(
     )
 
     # ── Update slug references inside the directory ───────────────────
-    yaml_changes = _update_engagement_yaml(new_dir, new_slug)
+    yaml_changes = _update_engagement_yaml(new_dir, new_slug, old_slug)
     result.changes_made.extend(yaml_changes)
 
     # ── Update active engagements mapping ─────────────────────────────

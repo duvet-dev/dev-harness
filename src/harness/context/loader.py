@@ -22,15 +22,14 @@ Wave 14 — R23: Engagement File Context Loading.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
-import hashlib
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # ── Constants ──────────────────────────────────────────────────────────────
@@ -85,7 +84,6 @@ TEXT_EXTENSIONS: set[str] = {
     ".conf", ".cnf",
     ".patch", ".diff",
     ".lock", ".sum",
-    ".toml", ".ini",
     ".gradle", ".properties",
 }
 
@@ -350,7 +348,7 @@ class ContextBundleBuilder:
     @staticmethod
     def _safe_read(filepath: Path, max_bytes: int = 100_000) -> str:
         """Read a text file safely, bounded by max_bytes."""
-        with open(str(filepath), "r", encoding="utf-8", errors="replace") as f:
+        with open(str(filepath), encoding="utf-8", errors="replace") as f:
             return f.read(max_bytes)
 
     @staticmethod
@@ -587,7 +585,7 @@ class ContextLoader:
 
 def _mtime_hash(mtime: float, size: int) -> str:
     """Create a short hash from mtime + size for change detection."""
-    raw = f"{mtime}:{size}".encode("utf-8")
+    raw = f"{mtime}:{size}".encode()
     return hashlib.md5(raw).hexdigest()[:12]
 
 

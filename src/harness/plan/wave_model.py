@@ -8,8 +8,8 @@ purpose, and current state. This enables the harness to:
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 
 

@@ -23,7 +23,6 @@ from typing import Optional
 from harness.config.manager import allow_refactoring_suggestions
 from harness.refactor.debt import DebtDetector, DebtReport, DebtViolation
 
-
 # ── Suggestion model ───────────────────────────────────────────────────────
 
 

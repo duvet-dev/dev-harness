@@ -37,7 +37,6 @@ from harness.constitution.templates.template_registry import (
 
 def _atomic_write(path: Path, content: bytes) -> None:
     """Write *content* to *path* atomically via a temp file + rename."""
-    import os
     import tempfile
 
     dirname = path.parent

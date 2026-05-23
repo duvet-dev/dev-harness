@@ -1,7 +1,7 @@
 """Plan and wave management for the Dev Harness."""
 
-from .wave_model import Wave, WaveProvenance, WaveType, WaveState, Plan, WaveTask
-from .plan_manager import PlanManager  # noqa: E402
+from .plan_manager import PlanManager
+from .wave_model import Plan, Wave, WaveProvenance, WaveState, WaveTask, WaveType
 
 __all__ = [
     "Wave",

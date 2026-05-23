@@ -12,7 +12,6 @@ import re
 import sys
 from datetime import datetime, timezone
 
-
 logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Any, Optional
@@ -21,17 +20,16 @@ import click
 
 from harness.paths import get_providers_path
 from harness.session.client import (
-    SessionClient,
     ChatMessage,
     ChatTranscript,
+    SessionClient,
     resolve_provider,
 )
-
 
 # ── Enable readline line editing (word-jump with Alt+arrows, etc.) ────────
 
 try:
-    import readline  # noqa: F401 — imported for side effects (line editing)
+    import readline
 
     # Standard Emacs word-jump keys work on most terminals with Meta
     readline.parse_and_bind('"\\eb": backward-word')
@@ -491,13 +489,11 @@ def _find_active_engagement(root: Path) -> Optional[str]:
 
 
 from harness.agents.consultation import ConsultationOrchestrator, ConsultationResult
-from harness.agents.fleet_registry import FleetRegistry
 from harness.agents.cycle import (
-    CycleResult,
-    is_phase_jump_status,
-    parse_phase_jump_target,
     MAX_PHASE_JUMPS_PER_PHASE,
+    CycleResult,
 )
+from harness.agents.fleet_registry import FleetRegistry
 from harness.context.loader import ContextLoader
 
 
@@ -924,7 +920,7 @@ def _check_phase_jump_limit(
 
 
 def _format_jump_marker(
-    cycle_result: "CycleResult",
+    cycle_result: CycleResult,
 ) -> str:
     """Format a phase jump marker for terminal display."""
     if not cycle_result.is_phase_jump:
@@ -989,7 +985,7 @@ def _check_and_handle_phase_jump(
 
 
 def _process_cycle_result_for_display(
-    cycle_result: "CycleResult",
+    cycle_result: CycleResult,
 ) -> list[str]:
     """Extract human-readable lines from a CycleResult for terminal display.
 
@@ -1066,7 +1062,7 @@ async def chat_loop(
         f"Chat -- {phase_def['title']} (engagement: {engagement_slug})"
     )
     click.echo(f"Model: {model}")
-    click.echo(f"Type  /help for commands, /exit to quit")
+    click.echo("Type  /help for commands, /exit to quit")
     click.echo()
 
     if one_shot:
@@ -1338,6 +1334,16 @@ async def session_loop(
     model = provider.get("model", "deepseek-v4-pro")
     provider_type = provider.get("type", "openai-compatible")
 
+    # Resolve session type from engagement metadata (optional)
+    session_type = None
+    try:
+        from harness.session.types import read_session_type
+        st = read_session_type(root, engagement_slug)
+        if st:
+            session_type = st.value
+    except Exception:
+        pass
+
     _print_header(f"Session -- {engagement_slug}")
     click.echo(f"Starting from phase: {PHASES[start_idx]['title']}")
     if session_type:
@@ -1353,9 +1359,10 @@ async def session_loop(
             pass  # Non-critical
 
     # Load phase state for cross-phase navigation
-    from harness.engagement.phase_state import PhaseStateManager, PhaseState as PS
-    from harness.engagement.checkpoint import CheckpointManager, CHECKPOINT_EXPIRY_HOURS
+    from harness.engagement.checkpoint import CHECKPOINT_EXPIRY_HOURS, CheckpointManager
     from harness.engagement.feedback import FeedbackManager, FeedbackPacket
+    from harness.engagement.phase_state import PhaseState as PS
+    from harness.engagement.phase_state import PhaseStateManager
 
     psm = PhaseStateManager(root, engagement_slug)
     ckm = CheckpointManager(root, engagement_slug)
@@ -1376,7 +1383,8 @@ async def session_loop(
 
         # After planning, check for waves from the plan using WaveCycleRunner
         if phase_def["name"] == "implementation":
-            from harness.wave.wave_cycle import WaveCycleRunner, WaveCycleConfig
+            from harness.plan.plan_manager import PlanManager
+            from harness.wave.wave_cycle import WaveCycleConfig, WaveCycleRunner
 
             plan = PlanManager(root, engagement_slug).load()
             uncommitted = [w for w in plan.waves if not w.is_committed()]

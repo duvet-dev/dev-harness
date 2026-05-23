@@ -9,17 +9,18 @@ re-execution.
 
 import asyncio
 from datetime import timedelta
+
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
-    from harness.workflows.phases.run_single_agent import run_single_agent
     from harness.workflows.activities import (
-        collect_outputs,
         aggregate_phase_outputs,
         check_phase_coverage,
+        collect_outputs,
         snapshot_state,
     )
+    from harness.workflows.phases.run_single_agent import run_single_agent
     from harness.workflows.signals import FeedbackItem
 
 # Severity levels that trigger re-execution

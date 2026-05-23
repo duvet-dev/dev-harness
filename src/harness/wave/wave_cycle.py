@@ -15,19 +15,21 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from harness.agents.context import ContextPacket, OutputContract
-from harness.agents.cycle import CycleResult, CycleRunner, CycleRunnerDefinition, wave_cycle_definition
+from harness.agents.cycle import (
+    CycleResult,
+    CycleRunner,
+    CycleRunnerDefinition,
+    wave_cycle_definition,
+)
 from harness.agents.runner import AgentRunner, BackendResult
-from harness.plan.wave_model import Wave, WaveState, WaveType
 from harness.plan.plan_manager import PlanManager
-
+from harness.plan.wave_model import Wave
 
 # ── Cycle-based wave runner ─────────────────────────────────────────────────
 

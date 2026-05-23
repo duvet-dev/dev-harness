@@ -10,12 +10,10 @@ Also provides ``debt_section()`` for architecture debt reporting
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Optional
 
-from harness.analysis.base import Finding, ScanResult
-from harness.refactor.debt import DebtDetector, DebtReport
-
+from harness.analysis.base import ScanResult
+from harness.refactor.debt import DebtReport
 
 # ── Effort estimation heuristics ───────────────────────────────────────────
 
@@ -91,8 +89,8 @@ def debt_section(
     lines.append("")
 
     # Summary table
-    lines.append(f"| Severity | Count | Estimated Effort |")
-    lines.append(f"|----------|-------|-------------------|")
+    lines.append("| Severity | Count | Estimated Effort |")
+    lines.append("|----------|-------|-------------------|")
 
     for severity, label in [
         ("error", "Error"),
@@ -112,15 +110,15 @@ def debt_section(
         total_hours, total_str = _estimate_effort(report.violations)
         lines.append(f"| **Total** | **{len(report.violations)}** | **{total_str}** |")
 
-    lines.append(f"")
+    lines.append("")
     lines.append(f"**Files scanned:** {report.scanned_files}")
-    lines.append(f"")
+    lines.append("")
 
     # Detailed violations (limited)
     violations_to_show = report.violations[:max_violations]
     if violations_to_show:
-        lines.append(f"#### Violation Details")
-        lines.append(f"")
+        lines.append("#### Violation Details")
+        lines.append("")
         for v in violations_to_show:
             file_ref = f" `{v.file}`" if v.file else ""
             line_ref = f":{v.line}" if v.line else ""
@@ -141,7 +139,7 @@ def debt_section(
 
     remaining = len(report.violations) - max_violations
     if remaining > 0:
-        lines.append(f"")
+        lines.append("")
         lines.append(
             f"*...and {remaining} more violation(s). "
             f"Run `harness observe` for the full report.*"

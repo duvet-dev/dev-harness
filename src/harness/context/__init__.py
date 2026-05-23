@@ -7,6 +7,6 @@ agents awareness of what files exist at session start.
 Wave 14 — R23: Engagement File Context Loading.
 """
 
-from harness.context.loader import ContextLoader, ContextBundleBuilder
+from harness.context.loader import ContextBundleBuilder, ContextLoader
 
 __all__ = ["ContextLoader", "ContextBundleBuilder"]

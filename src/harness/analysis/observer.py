@@ -11,18 +11,16 @@ R22 — when --deep is used, also runs the LLM-based independent assessment
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
-from harness.analysis.fast import scan_git_diff, scan_structure
 from harness.analysis.deep import (
     assess_coverage,
     check_architecture_conformance,
     find_dead_code,
 )
+from harness.analysis.fast import scan_git_diff, scan_structure
 from harness.analysis.summary import format_report
 
 logger = logging.getLogger(__name__)

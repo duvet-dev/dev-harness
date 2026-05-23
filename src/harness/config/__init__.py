@@ -7,10 +7,25 @@ Layers:
   User config is merged on top and wins on conflicts.
 """
 
-from harness.config.provider_models import ProviderConfig, ProviderConfigSet, ProviderError
+from harness.config.architecture import (
+    ArchitectureGoal,
+    DetectionRule,
+    LayerGoal,
+    load_architecture_goal,
+    save_architecture_goal,
+)
+from harness.config.manager import (
+    HarnessConfigManager,
+    allow_refactoring_suggestions,
+    ensure_project_config,
+    load_project_config,
+)
+from harness.config.provider_models import (
+    ProviderConfig,
+    ProviderConfigSet,
+    ProviderError,
+)
 from harness.config.provider_registry import load_providers
-from harness.config.manager import HarnessConfigManager, allow_refactoring_suggestions, ensure_project_config, load_project_config
-from harness.config.architecture import ArchitectureGoal, LayerGoal, DetectionRule, load_architecture_goal, save_architecture_goal
 
 __all__ = [
     "ProviderConfig",

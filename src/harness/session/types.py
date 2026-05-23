@@ -12,7 +12,7 @@ import enum
 from pathlib import Path
 from typing import Optional
 
-from harness.paths import get_engagement_dir, get_engagement_yaml
+from harness.paths import get_engagement_yaml
 
 
 class SessionType(str, enum.Enum):
@@ -85,7 +85,6 @@ def confirm_session_type(suggested: SessionType) -> Optional[SessionType]:
     label = labels.get(suggested, suggested.value)
     print(f"\nThis looks like a {label} task.")
 
-    from getpass import getpass
 
     while True:
         choice = input(f"Start a {suggested.value} session? [Y/n] ").strip().lower()
@@ -149,7 +148,7 @@ def read_session_type(root: Path, slug: str) -> Optional[SessionType]:
     Returns ``None`` if not yet set (defaults to GREENFIELD downstream).
     """
     import yaml
-    from harness.engagement.lifecycle import engagement_dir_for
+
 
     eng_yaml = get_engagement_yaml(root, slug)
     if not eng_yaml.is_file():

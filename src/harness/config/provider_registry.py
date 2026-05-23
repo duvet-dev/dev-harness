@@ -17,7 +17,6 @@ from typing import Any
 
 import yaml
 
-from harness.paths import get_providers_path
 from harness.config.provider_models import (
     ProviderConfig,
     ProviderConfigSet,
@@ -25,6 +24,7 @@ from harness.config.provider_models import (
     provider_config_from_dict,
     resolve_env_ref,
 )
+from harness.paths import get_providers_path
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +168,7 @@ def _load_yaml_config(path: Path) -> dict[str, Any]:
         return {}
 
     try:
-        with open(path, "r") as f:
+        with open(path) as f:
             raw: dict[str, Any] = yaml.safe_load(f) or {}
     except yaml.YAMLError as exc:
         raise ProviderError(

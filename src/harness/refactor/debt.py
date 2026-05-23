@@ -11,13 +11,11 @@ Detects:
 from __future__ import annotations
 
 import ast
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from harness.config.architecture import ArchitectureGoal, LayerGoal
-
+from harness.config.architecture import ArchitectureGoal
 
 # ── Data model ─────────────────────────────────────────────────────────────
 
@@ -94,14 +92,14 @@ class DebtReport:
             lines.append("")
             return "\n".join(lines)
 
-        lines.append(f"| Severity | Count |")
-        lines.append(f"|----------|-------|")
+        lines.append("| Severity | Count |")
+        lines.append("|----------|-------|")
         lines.append(f"| Error | {len(self.errors)} |")
         lines.append(f"| Warning | {len(self.warnings)} |")
         lines.append(f"| Info | {len(self.infos)} |")
-        lines.append(f"")
+        lines.append("")
         lines.append(f"**Files scanned:** {self.scanned_files}")
-        lines.append(f"")
+        lines.append("")
 
         for severity_name, severity_group in [
             ("Error", self.errors),
@@ -286,7 +284,7 @@ class DebtDetector:
         try:
             with open(file_path) as f:
                 source = f.read()
-        except (IOError, OSError):
+        except OSError:
             return violations
 
         try:
@@ -359,7 +357,7 @@ class DebtDetector:
             try:
                 with open(file_path) as f:
                     source = f.read()
-            except (IOError, OSError):
+            except OSError:
                 continue
 
             try:
@@ -434,7 +432,7 @@ class DebtDetector:
             try:
                 with open(file_path) as f:
                     source = f.read()
-            except (IOError, OSError):
+            except OSError:
                 continue
 
             for kw in db_keywords:
@@ -478,7 +476,7 @@ class DebtDetector:
         try:
             with open(file_path) as f:
                 source = f.read()
-        except (IOError, OSError):
+        except OSError:
             return violations
 
         try:

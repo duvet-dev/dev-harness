@@ -13,9 +13,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal
 
-from harness.agents.agent_registry import AgentRole, ToolPermissions
+from harness.agents.agent_registry import AgentRole
 
 
 class GovernanceLevel(str, Enum):

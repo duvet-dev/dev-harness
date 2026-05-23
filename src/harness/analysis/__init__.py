@@ -5,13 +5,13 @@ and LLM-based independent assessment (R22).
 """
 
 from harness.analysis.agents import (
-    AnalysisAgent,
-    AnalysisAgentRegistry,
     P1_PROJECT_PROFILER,
     P2_RESPONSIBILITY_DECODER,
     P3_ARCHITECTURE_CRITIC,
     P4_CODE_CRITIC,
     P5_TEST_AUDITOR,
+    AnalysisAgent,
+    AnalysisAgentRegistry,
 )
 from harness.analysis.assessment import (
     AssessmentReport,
@@ -19,7 +19,7 @@ from harness.analysis.assessment import (
     format_assessment_report,
     gather_context,
 )
-from harness.analysis.base import Finding, ScanResult, VALID_CATEGORIES
+from harness.analysis.base import VALID_CATEGORIES, Finding, ScanResult
 from harness.analysis.observer import analyse, analyse_async
 from harness.analysis.summary import debt_section
 

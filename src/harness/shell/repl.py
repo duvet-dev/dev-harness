@@ -7,12 +7,10 @@ All CLI commands are available via /command-name [args] with tab auto-complete
 and command history. Type /help to list commands, /exit to quit.
 """
 
-import os
-import sys
-import shlex
-import readline
 import atexit
-import subprocess
+import os
+import readline
+import shlex
 from pathlib import Path
 from typing import Optional
 

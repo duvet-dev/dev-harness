@@ -18,48 +18,44 @@ Provides:
 
 from .boundaries import (
     BoundaryCandidate,
-    scan_boundary_candidates,
     present_and_confirm_boundaries,
-    register_boundaries,
     read_boundary_registration,
+    register_boundaries,
+    scan_boundary_candidates,
 )
-
 from .boundary_tests import (
-    BoundaryTest,
     IMMUTABLE_HEADER,
+    BoundaryTest,
     generate_boundary_test,
     generate_boundary_test_module,
     verify_boundary_test_integrity,
 )
-
+from .debt import (
+    DebtDetector,
+    DebtReport,
+    DebtViolation,
+)
 from .loop import (
-    RefactorPhase,
-    validate_transition,
-    RefactorSessionConfig,
-    RefactorSessionState,
-    RefactorSessionResult,
-    RefactorSessionLoop,
     REFACTOR_PHASE_LABELS,
     REFACTOR_PHASE_ORDER,
-)
-
-from .debt import (
-    DebtViolation,
-    DebtReport,
-    DebtDetector,
-)
-
-from .verification import (
-    BoundaryTestCheck,
-    TestSuiteResult,
-    SummaryEntry,
-    RefactoringVerificationResult,
-    VerificationRunner,
+    RefactorPhase,
+    RefactorSessionConfig,
+    RefactorSessionLoop,
+    RefactorSessionResult,
+    RefactorSessionState,
+    validate_transition,
 )
 from .suggestions import (
-    RefactoringSuggestion,
     DebtSuggestionEngine,
+    RefactoringSuggestion,
     generate_suggestions,
+)
+from .verification import (
+    BoundaryTestCheck,
+    RefactoringVerificationResult,
+    SummaryEntry,
+    TestSuiteResult,
+    VerificationRunner,
 )
 
 __all__ = [

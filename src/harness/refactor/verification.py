@@ -9,7 +9,6 @@ Runs after all refactoring waves to verify:
 
 from __future__ import annotations
 
-import hashlib
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -18,7 +17,6 @@ from typing import Optional
 
 from harness.refactor.boundary_tests import verify_boundary_test_integrity
 from harness.refactor.debt import DebtDetector, DebtReport
-
 
 # ── Data model ─────────────────────────────────────────────────────────────
 

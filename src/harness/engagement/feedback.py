@@ -7,7 +7,7 @@ from one phase to another. Packets live in:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -15,7 +15,6 @@ from typing import Optional
 import yaml
 
 from harness.engagement.lifecycle import ENGAGEMENTS_DIR
-
 
 # ── Feedback directories ───────────────────────────────────────────────────
 

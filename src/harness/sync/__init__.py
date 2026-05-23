@@ -5,9 +5,9 @@ maps them to harness template format, and applies them as release
 templates. It is only used at release time.
 """
 
-from harness.sync.openclaw_extractor import ExtractionResult, OpenClawExtractor
-from harness.sync.mapper import AgentTemplates, MappedTemplates, SyncMapper
 from harness.sync.applier import ApplyReport, SyncApplier
+from harness.sync.mapper import AgentTemplates, MappedTemplates, SyncMapper
+from harness.sync.openclaw_extractor import ExtractionResult, OpenClawExtractor
 from harness.sync.pipeline import run_sync
 
 __all__ = [

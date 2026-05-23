@@ -18,25 +18,23 @@ Backend name: 'api'
 
 from __future__ import annotations
 
-import asyncio  # noqa: E402 (imported after class for clarity)
+import asyncio
 import json
 import os
 import re
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 
-from harness.agents.context import ContextPacket
 from harness.agents.backends.base import (
     AbstractBackend,
-    BackendConfigError,
-    BackendError,
     BackendResult,
-    BackendTimeoutError,
     Invocation,
 )
+from harness.agents.context import ContextPacket
 
 # Max rounds of tool calling to prevent infinite loops
 MAX_TOOL_ROUNDS = 25
@@ -457,49 +455,48 @@ class ApiBackend(AbstractBackend):
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(invocation.timeout_seconds)
-        ) as client:
-            async with client.stream(
-                "POST", url, headers=headers, json=stream_payload
-            ) as response:
-                if response.status_code != 200:
-                    error_body = await response.aread()
-                    yield (
-                        f"\n[Error {response.status_code}: "
-                        f"{error_body.decode()[:500]}]\n"
-                    )
-                    return
+        ) as client, client.stream(
+            "POST", url, headers=headers, json=stream_payload
+        ) as response:
+            if response.status_code != 200:
+                error_body = await response.aread()
+                yield (
+                    f"\n[Error {response.status_code}: "
+                    f"{error_body.decode()[:500]}]\n"
+                )
+                return
 
-                full_content: list[str] = []
-                async for line in response.aiter_lines():
-                    line = line.strip()
-                    if not line:
-                        continue
-                    if not line.startswith("data: "):
-                        continue
-                    data_str = line[6:]
-                    if data_str == "[DONE]":
-                        break
+            full_content: list[str] = []
+            async for line in response.aiter_lines():
+                line = line.strip()
+                if not line:
+                    continue
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str == "[DONE]":
+                    break
 
-                    try:
-                        data = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        continue
+                try:
+                    data = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
 
-                    choices = data.get("choices", [])
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta", {})
-                    text = delta.get("content", "")
-                    if text:
-                        full_content.append(text)
-                        yield text
+                choices = data.get("choices", [])
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {})
+                text = delta.get("content", "")
+                if text:
+                    full_content.append(text)
+                    yield text
 
-                # Store complete response for history
-                assistant_reply = "".join(full_content)
-                all_messages.append({
-                    "role": "assistant",
-                    "content": assistant_reply,
-                })
+            # Store complete response for history
+            assistant_reply = "".join(full_content)
+            all_messages.append({
+                "role": "assistant",
+                "content": assistant_reply,
+            })
 
         # Keep message history on invocation for later queries
         invocation._stream_messages = all_messages

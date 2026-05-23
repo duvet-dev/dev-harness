@@ -25,12 +25,11 @@ build/
 .DS_Store
 Thumbs.db
 
-# Legacy build files (replaced by pyproject.toml)
-setup.cfg
-setup.py
-
 # Temp / scratch
 context.md
+
+# Auto-downloaded Temporal binary
+scripts/_temporal/
 
 # Coverage reports
 coverage/

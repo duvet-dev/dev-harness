@@ -10,6 +10,7 @@ re-execution.
 import asyncio
 from datetime import timedelta
 from temporalio import workflow
+from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
     from harness.workflows.phases.run_single_agent import run_single_agent
@@ -89,7 +90,7 @@ class PhaseManager:
                 context_packet,
                 start_to_close_timeout=timedelta(minutes=32),
                 heartbeat_timeout=timedelta(seconds=15),
-                retry=workflow.RetryPolicy(
+                retry=RetryPolicy(
                     maximum_attempts=5, backoff_coefficient=1.1
                 ),
             )

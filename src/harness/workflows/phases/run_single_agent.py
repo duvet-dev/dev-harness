@@ -34,7 +34,7 @@ async def run_single_agent(context_packet: dict) -> dict:
         "task_id": task_id,
         "phase_name": phase_name,
         "status": "completed",
-        "output_files": [str(p) for p in output_path.iterdir() if p.is_file()],
+        "output_files": [str(p) for p in output_path.rglob("*") if p.is_file()],
         "artifacts_produced": [],
     }
 

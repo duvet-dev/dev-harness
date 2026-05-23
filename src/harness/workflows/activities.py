@@ -86,7 +86,13 @@ async def run_single_agent(context_packet: dict) -> dict:
     Timeout: 32 minutes, heartbeat: 15 seconds.
     """
     try:
-        validated = await validate_inputs(context_packet)
+        try:
+            validated = await validate_inputs(context_packet)
+        except ValidationError as ve:
+            return {
+                "status": "failure",
+                "errors": [f"Input validation failed: {ve}"],
+            }
         if not validated["valid"]:
             return {
                 "status": "failure",

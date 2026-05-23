@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -50,6 +51,61 @@ from harness.paths import get_providers_path
 from harness.config.provider_registry import load_providers
 
 logger = logging.getLogger(__name__)
+
+
+# ── Safety: guarded rmtree ────────────────────────────────────────────────────
+
+_SAFE_DELETABLE_PREFIXES: tuple[str, ...] = (
+    "harness_simple_",
+    "harness_agent_",
+    "tmp",
+    "tmp_",
+)
+"""Prefixes of temp directories that are safe to rmtree.
+
+Any path that does NOT start with one of these prefixes, or that
+contains a ``.git`` directory, will be refused by ``_safety_rmtree()``.
+This prevents accidental deletion of project repos.
+"""
+
+
+def _safety_rmtree(path: str | os.PathLike) -> None:
+    """Remove *path* only if it is a temporary directory we created.
+
+    Safety rules (all must pass):
+      1. Path must not contain a ``.git`` directory.
+      2. The final component of the path must start with one of the
+         safe prefixes defined in ``_SAFE_DELETABLE_PREFIXES``.
+      3. Path must be an absolute path.
+
+    Raises ``RuntimeError`` if the path looks like a real project repo.
+    """
+    p = Path(path).resolve()
+
+    # Rule 1: must not contain a .git directory anywhere in the tree
+    # (check parent chain up to root)
+    for parent in [p] + list(p.parents):
+        if (parent / ".git").is_dir():
+            raise RuntimeError(
+                f"REFUSED: cannot rmtree '{p}' — it contains a .git repo at "
+                f"'{parent}'. Use Trash or manual deletion instead."
+            )
+
+    # Rule 2: final component must start with a safe prefix
+    if not p.name.startswith(_SAFE_DELETABLE_PREFIXES):
+        raise RuntimeError(
+            f"REFUSED: cannot rmtree '{p}' — name '{p.name}' does not "
+            f"start with a safe prefix {_SAFE_DELETABLE_PREFIXES}. "
+            f"Use Trash or manual deletion instead."
+        )
+
+    # Rule 3: must be absolute
+    if not p.is_absolute():
+        raise RuntimeError(
+            f"REFUSED: cannot rmtree '{p}' — not an absolute path."
+        )
+
+    shutil.rmtree(str(p), ignore_errors=True)
 
 
 @dataclass
@@ -309,8 +365,7 @@ class AgentRunner:
         finally:
             # Cleanup temp dir if used
             if temp_dir and self._config.cleanup_temp_dirs:
-                import shutil
-                shutil.rmtree(temp_dir, ignore_errors=True)
+                _safety_rmtree(temp_dir)
                 if original_target:
                     packet.target_directory = Path(original_target)
 
@@ -432,15 +487,14 @@ class AgentRunner:
             architecture_rules=architecture_rules or [],
             target_directory=target_dir,
             output_contract=OutputContract(),
-            constraint_section={},
+            constraint_section=constraint_section,
         )
 
         result = await self.run(packet, backend_name=backend_name)
 
         # Only clean up temp dirs we created, never real project dirs
         if self._config.cleanup_temp_dirs and not project_dir:
-            import shutil
-            shutil.rmtree(str(packet.target_directory), ignore_errors=True)
+            _safety_rmtree(str(packet.target_directory))
 
         if result.status == "success":
             return "\n".join(result.artifacts.values())

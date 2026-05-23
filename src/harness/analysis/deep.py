@@ -309,7 +309,7 @@ def find_dead_code(path: str | Path) -> ScanResult:
     for module in sorted(all_modules):
         if module.endswith(".__init__"):
             continue
-        if module.endswith(".cli"):
+        if module.endswith(".cli") or module == "cli":
             continue
 
         is_imported = False

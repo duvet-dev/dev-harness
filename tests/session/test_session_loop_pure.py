@@ -354,3 +354,94 @@ class TestBuildSystemPrompt:
         assert "You are a test agent." in result
         assert "CURRENT ENGAGEMENT FILES" not in result
         assert "PRIOR ARTIFACTS" not in result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Coverage gap: _check_and_handle_phase_jump (limit-exceeded branch)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCheckAndHandlePhaseJump:
+    """Tests for _check_and_handle_phase_jump() — pure orchestration."""
+
+    def test_no_marker_returns_none(self):
+        from harness.session.loop import _check_and_handle_phase_jump
+        result = _check_and_handle_phase_jump("no marker here", "build", {})
+        assert result is None
+
+    def test_jump_allowed(self):
+        from harness.session.loop import _check_and_handle_phase_jump
+        result = _check_and_handle_phase_jump("PHASE_JUMP:requirements", "build", {})
+        assert result == "requirements"
+
+    def test_jump_exceeds_limit_returns_none(self):
+        """The limit-exceeded branch was uncovered lines 1000-1006."""
+        from harness.session.loop import (
+            _check_and_handle_phase_jump,
+            MAX_PHASE_JUMPS_PER_PHASE,
+        )
+        counts = {}
+        # Exhaust the limit
+        for _ in range(MAX_PHASE_JUMPS_PER_PHASE):
+            _check_and_handle_phase_jump("PHASE_JUMP:design", "build", counts)
+        # One more should be blocked
+        result = _check_and_handle_phase_jump("PHASE_JUMP:design", "build", counts)
+        assert result is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Coverage gap: _format_consult_result with error
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestFormatConsultResult:
+    """Tests for _format_consult_result() — pure formatting."""
+
+    def test_format_error_result(self):
+        """Error branch at line 871 needs a result with an error message."""
+        from harness.session.loop import _format_consult_result
+        from harness.agents.consultation import ConsultationResult
+        result = _format_consult_result(
+            ConsultationResult(
+                question="test",
+                fleet_name="test",
+                status="error",
+                error="Something went wrong",
+            )
+        )
+        assert "Something went wrong" in result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Coverage gap: _apply_file_blocks path escape branch
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestApplyFileBlocks:
+    """Tests for _apply_file_blocks() — error handling branches."""
+
+    def test_path_escape_returns_error(self, tmp_path):
+        """Path escape should produce an 'error:' status (lines 465-468)."""
+        from harness.session.loop import _apply_file_blocks
+        # A path outside the root should be flagged
+        text = "## File: ../../etc/passwd\nroot:x:0:0\n"
+        results = _apply_file_blocks(tmp_path, text)
+        assert any("error:" in status for _, status in results)
+
+    def test_valid_path_creates_file(self, tmp_path):
+        from harness.session.loop import _apply_file_blocks
+        text = "## File: src/output.py\nprint('hello')\n"
+        results = _apply_file_blocks(tmp_path, text)
+        assert len(results) >= 1
+        assert any(status == "created" for _, status in results)
+        assert (tmp_path / "src/output.py").exists()
+
+    def test_overwrite_existing_file(self, tmp_path):
+        from harness.session.loop import _apply_file_blocks
+        existing = tmp_path / "existing.py"
+        existing.parent.mkdir(parents=True, exist_ok=True)
+        existing.write_text("old content")
+        text = "## File: existing.py\nnew content\n"
+        results = _apply_file_blocks(tmp_path, text)
+        assert any(status == "overwritten" for _, status in results)
+        assert existing.read_text() == "new content"

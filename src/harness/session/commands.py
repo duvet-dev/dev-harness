@@ -97,6 +97,17 @@ def route_chat_command(cmd: str, state: dict[str, Any]) -> CommandResult:
     if cmd in ("exit", "quit"):
         return CommandResult(exit_loop=True)
 
+    if cmd == "version":
+        from harness._version import __version__, __build__, __build_date__, __commit__
+        date_str = __build_date__ if __build_date__ else "development"
+        commit_str = __commit__ if __commit__ else "unknown"
+        return CommandResult(display_lines=[
+            f"dev-harness v{__version__}.{__build__:03d}",
+            f"build:   {__build__:03d}",
+            f"commit:  {commit_str}",
+            f"date:    {date_str}",
+        ])
+
     if cmd == "help":
         return CommandResult(set_in_session=False)
 
@@ -153,6 +164,17 @@ def route_session_command(cmd: str, state: dict[str, Any]) -> CommandResult:
     Returns:
         ``CommandResult``.
     """
+    if cmd == "version":
+        from harness._version import __version__, __build__, __build_date__, __commit__
+        date_str = __build_date__ if __build_date__ else "development"
+        commit_str = __commit__ if __commit__ else "unknown"
+        return CommandResult(display_lines=[
+            f"dev-harness v{__version__}.{__build__:03d}",
+            f"build:   {__build__:03d}",
+            f"commit:  {commit_str}",
+            f"date:    {date_str}",
+        ])
+
     if cmd == "help":
         return CommandResult(set_in_session=True)
 

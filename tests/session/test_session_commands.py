@@ -100,6 +100,16 @@ class TestRouteChatCommand:
         result = route_chat_command("consult ", self.make_state())
         assert any("Usage" in l for l in result.display_lines)
 
+    def test_version(self):
+        result = route_chat_command("version", self.make_state())
+        assert any("dev-harness" in l for l in result.display_lines)
+        assert any("build:" in l for l in result.display_lines)
+
+    def test_version(self):
+        result = route_session_command("version", self.make_state())
+        assert any("dev-harness" in l for l in result.display_lines)
+        assert any("build:" in l for l in result.display_lines)
+
     def test_unknown_command(self):
         result = route_chat_command("unknown", self.make_state())
         assert any("Unknown command" in l for l in result.display_lines)
@@ -266,6 +276,16 @@ class TestRouteSessionCommand:
     def test_consult_resolve_missing_index(self):
         result = route_session_command("consult-resolve", self.make_state())
         assert any("Usage" in l for l in result.display_lines)
+
+    def test_version(self):
+        result = route_chat_command("version", self.make_state())
+        assert any("dev-harness" in l for l in result.display_lines)
+        assert any("build:" in l for l in result.display_lines)
+
+    def test_version(self):
+        result = route_session_command("version", self.make_state())
+        assert any("dev-harness" in l for l in result.display_lines)
+        assert any("build:" in l for l in result.display_lines)
 
     def test_unknown_command(self):
         result = route_session_command("unknown", self.make_state())

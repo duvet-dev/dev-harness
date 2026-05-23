@@ -14,7 +14,6 @@
 
 SHELL := /bin/bash
 PYTHON := python3
-PIP    := pip3
 
 # Detect platform for Temporal download
 UNAME_S := $(shell uname -s)
@@ -47,19 +46,19 @@ TEMPORAL_BIN     := $(TEMPORAL_DIR)/temporal
 
 .PHONY: install
 install: download-temporal
-	$(PIP) install -e ".[dev]"
+	$(PYTHON) -m pip install -e ".[dev]"
 	@echo ""
 	@echo "✓ Dev Harness installed. Run 'harness --help' to get started."
 
 .PHONY: install-deps
 install-deps:
-	$(PIP) install -e ".[dev]"
+	$(PYTHON) -m pip install -e ".[dev]"
 
 # ── Testing ───────────────────────────────────────────────────────────────
 
 .PHONY: test
 test:
-	python3 -m pytest tests/ -W error::RuntimeWarning --tb=short -q
+	$(PYTHON) -m pytest tests/ -W error::RuntimeWarning --tb=short -q
 	@echo ""
 	@echo "✓ All functional tests passed."
 
@@ -75,7 +74,7 @@ ci: test-ci
 
 .PHONY: test-coverage
 test-coverage:
-	@python3 -m pytest \
+	@$(PYTHON) -m pytest \
 		tests/ \
 		-W error::RuntimeWarning \
 		--tb=short \
@@ -92,19 +91,19 @@ coverage-html: test-coverage
 
 .PHONY: test-e2e
 test-e2e:
-	python3 -m pytest -m e2e --tb=short -v
+	$(PYTHON) -m pytest -m e2e --tb=short -v
 	@echo ""
 	@echo "✓ E2E tests complete."
 
 .PHONY: test-verbose
 test-verbose:
-	python3 -m pytest tests/ -W error::RuntimeWarning --tb=long -v --durations=10 2>&1
+	$(PYTHON) -m pytest tests/ -W error::RuntimeWarning --tb=long -v --durations=10 2>&1
 
 # ── Linting ───────────────────────────────────────────────────────────────
 
 .PHONY: lint
 lint:
-	@python3 -m ruff check src/harness/ tests/ 2>&1
+	@$(PYTHON) -m ruff check src/harness/ tests/ 2>&1
 	@echo "Lint: OK"
 
 .PHONY: check-types

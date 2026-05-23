@@ -19,6 +19,7 @@ from typing import Any, Optional
 import click
 
 from harness.paths import get_providers_path
+from harness.session.commands import route_chat_command, route_session_command
 from harness.session.client import (
     ChatMessage,
     ChatTranscript,
@@ -1128,166 +1129,89 @@ async def chat_loop(
         if not user_input:
             continue
 
-        # Handle meta-commands
+        # Handle meta-commands using extracted command router
         if user_input.startswith("/"):
             cmd = user_input[1:].strip().lower()
 
-            if cmd in ("exit", "quit"):
+            # Build state for the command router
+            cmd_state = {
+                "root": root,
+                "provider": provider,
+                "model": model,
+                "engagement_slug": engagement_slug,
+                "last_response": client.get_last_response(),
+                "client_messages": client._messages,
+                "system_prompt": client.system_prompt,
+            }
+
+            result = route_chat_command(cmd, cmd_state)
+
+            # Execute IO side effects based on CommandResult
+            if result.exit_loop:
                 break
-            elif cmd == "help":
+
+            if result.display_lines:
+                for display_line in result.display_lines:
+                    if display_line == "__list_providers__":
+                        provs = list_providers(root)
+                        if not provs:
+                            click.echo("No providers found. Check your .harness/providers.yaml.")
+                        else:
+                            click.echo()
+                            click.echo("Available providers:")
+                            click.echo(format_providers_table(provs, current=provider.get("name", "")))
+                            click.echo(f"\nCurrent: {provider.get('name', model)} / {model}")
+                    else:
+                        click.echo(display_line)
+
+            if result.set_in_session:
+                _print_help._in_session = result.set_in_session
                 _print_help()
-                continue
-            elif cmd == "save":
+
+            if result.save_transcript:
                 transcript.ended_at = datetime.now(timezone.utc).isoformat()
                 saved = transcript.save(root)
                 click.echo(f"Transcript saved: {saved}")
-                continue
-            elif cmd == "write":
-                content = client.get_last_response()
-                if content:
-                    path = _write_phase_artifact(
-                        root, engagement_slug, phase, content
-                    )
-                    click.echo(f"Artifact written: {path}")
-                else:
-                    click.echo("No assistant response to save.")
-                continue
-            elif cmd == "apply":
-                content = client.get_last_response()
-                if content:
-                    results = _apply_file_blocks(root, content)
-                    _report_apply_results(results, root)
-                else:
-                    click.echo("No assistant response to apply.")
-                continue
-            elif cmd.startswith("phase "):
-                new_phase = cmd[6:].strip()
-                match = next(
-                    (p for p in PHASES if p["name"] == new_phase), None
-                )
+
+            if result.capture_artifact:
+                path = _write_phase_artifact(root, engagement_slug, phase, result.capture_artifact)
+                click.echo(f"Artifact written: {path}")
+
+            if result.auto_apply:
+                apply_results = _apply_file_blocks(root, result.auto_apply)
+                _report_apply_results(apply_results, root)
+
+            if result.switch_to_phase_with_history:
+                new_phase = result.switch_to_phase_with_history
+                match = next((p for p in PHASES if p["name"] == new_phase), None)
                 if match:
                     phase = new_phase
                     phase_def = match
-
-                    # Rebuild system prompt WITH conversation history
-                    hist = _format_conversation_for_context(
-                        client.conversation_history()
-                    )
+                    hist = _format_conversation_for_context(client.conversation_history())
                     client.system_prompt = _build_system_prompt(
-                        phase_def,
-                        root=root,
-                        engagement_slug=engagement_slug,
-                        conversation=hist,
+                        phase_def, root=root, engagement_slug=engagement_slug, conversation=hist,
                     )
-                    # Keep ALL messages, just update system prompt
                     for i, m in enumerate(client._messages):
                         if m["role"] == "system":
-                            client._messages[i] = {
-                                "role": "system",
-                                "content": client.system_prompt,
-                            }
+                            client._messages[i] = {"role": "system", "content": client.system_prompt}
                             break
                     else:
-                        # No system message, insert at start
-                        client._messages.insert(
-                            0,
-                            {
-                                "role": "system",
-                                "content": client.system_prompt,
-                            },
-                        )
+                        client._messages.insert(0, {"role": "system", "content": client.system_prompt})
 
-                    click.echo(
-                        f"Switched to phase: {match['title']} "
-                        f"(conversation history preserved)"
-                    )
-                else:
-                    click.echo(
-                        f"Unknown phase: {new_phase}. Available: "
-                        + ", ".join(p["name"] for p in PHASES)
-                    )
-                continue
-            elif cmd == "models":
-                provs = list_providers(root)
-                if not provs:
-                    click.echo(
-                        "No providers found. Check your .harness/providers.yaml."
-                    )
-                else:
-                    click.echo()
-                    click.echo("Available providers:")
-                    click.echo(
-                        format_providers_table(provs, current=provider.get("name", ""))
-                    )
-                    click.echo(
-                        f"\nCurrent: {provider.get('name', model)} / {model}"
-                    )
-                    click.echo(
-                        "Switch with: /model <name> [alias]"
-                    )
-                continue
-            elif cmd.startswith("model "):
-                parts = cmd[6:].strip().split(None, 1)
-                target_name = parts[0]
-                target_alias = parts[1] if len(parts) > 1 else None
-                new_prov = switch_provider(
-                    root, target_name, model_alias=target_alias
-                )
-                if new_prov is None:
-                    provs = list_providers(root)
-                    names = [p["name"] for p in provs]
-                    click.echo(
-                        f"Provider '{target_name}' not found. "
-                        f"Available: {', '.join(names)}"
-                    )
-                    click.echo("  Use /models to see all providers.")
-                    continue
-                # Update provider reference
-                provider = new_prov
-                # Reconfigure client (SessionClient resolves fresh)
-                # SessionClient uses ApiBackend which resolves from providers.yaml
-                # on each stream(), so no explicit reload needed
-                pass  # SessionClient resolves fresh each call
-                model = new_prov["model"]
-                click.echo(
-                    f"Switched to provider: {target_name}"
-                    f" (model: {new_prov['model']})"
-                )
-                if target_alias:
-                    click.echo(f"  Alias: ~{target_alias}")
-                continue
-            elif cmd == "new":
-                client._messages = [
-                    m for m in client._messages if m["role"] == "system"
-                ]
+            if result.new_provider:
+                new_prov = switch_provider(root, result.new_provider["target_name"],
+                                           model_alias=result.new_provider.get("target_alias"))
+                if new_prov:
+                    provider = new_prov
+                    model = new_prov["model"]
+
+            if result.reset_conversation:
+                client._messages = [m for m in client._messages if m["role"] == "system"]
                 if not client._messages and client.system_prompt:
-                    client._messages.append(
-                        {"role": "system", "content": client.system_prompt}
-                    )
+                    client._messages.append({"role": "system", "content": client.system_prompt})
                 click.echo("Conversation reset (phase context retained).")
-                continue
-            elif cmd.startswith("consult "):
-                parsed = _parse_consult_flags(cmd[8:].strip())
-                if not parsed["question"]:
-                    click.echo(
-                        "Usage: /consult [--fleet <name>]"
-                        " [--mode advisory|blocking] <question>"
-                    )
-                    continue
-                result = _do_consult(
-                    root,
-                    parsed["question"],
-                    fleet_filter=parsed["fleet_filter"],
-                    mode=parsed["mode"],
-                )
-                click.echo()
-                click.echo(_format_consult_result(result))
-                continue
-            else:
-                click.echo(
-                    f"Unknown command: /{cmd}. Type /help for options."
-                )
-                continue
+
+            continue
 
         # Send to LLM
         transcript.messages.append(
@@ -1553,349 +1477,151 @@ async def session_loop(
             if user_input.startswith("/"):
                 cmd = user_input[1:].strip().lower()
 
-                if cmd in ("exit", "quit"):
-                    transcript.ended_at = datetime.now(
-                        timezone.utc
-                    ).isoformat()
+                # Build state for the command router
+                cmd_state = {
+                    "root": root,
+                    "phase_def": phase_def,
+                    "blocking_consults": blocking_consults,
+                    "last_response": client.get_last_response(),
+                    "transcript": transcript,
+                    "provider": provider,
+                    "model": model,
+                    "engagement_slug": engagement_slug,
+                    "jump_counts": jump_counts,
+                    "phase_artifacts": phase_artifacts,
+                    "phase_name": phase_def["name"],
+                }
+
+                result = route_session_command(cmd, cmd_state)
+
+                # Execute IO side effects based on CommandResult
+                if result.exit_loop:
+                    transcript.ended_at = datetime.now(timezone.utc).isoformat()
                     transcript.save(root)
                     return
-                elif cmd == "help":
+
+                if result.display_lines:
+                    for display_line in result.display_lines:
+                        if display_line == "__list_providers__":
+                            provs = list_providers(root)
+                            if not provs:
+                                click.echo("No providers found. Check your .harness/providers.yaml.")
+                            else:
+                                click.echo()
+                                click.echo("Available providers:")
+                                click.echo(format_providers_table(provs, current=provider.get("name", "")))
+                                click.echo(f"\nCurrent: {provider.get('name', model)} / {model}")
+                        elif display_line == "__resume_checkpoint__":
+                            latest = ckm.get_latest()
+                            if latest is None:
+                                click.echo("No checkpoint found to resume from.")
+                            elif latest.is_stale() and "force" not in cmd:
+                                click.echo(f"\u26a0\ufe0f  Checkpoint '{latest.checkpoint_id}' is stale "
+                                           f"(>{CHECKPOINT_EXPIRY_HOURS}h old). Use /resume-force to bypass.")
+                            else:
+                                paused_phase = latest.phase_name
+                                click.echo(f"\n\U0001f4dd Restored checkpoint ({latest.checkpoint_id})")
+                                click.echo(f"\U0001f504 Resuming phase: {paused_phase}")
+                                psm.transition(paused_phase, PS.ACTIVE)
+                                transcript.ended_at = datetime.now(timezone.utc).isoformat()
+                                transcript.save(root)
+                                phase_done = True
+                                click.echo(f"Run 'harness session --phase {paused_phase}' to resume.")
+                        elif display_line == "__show_phase_diagram__":
+                            phases = psm.list_phases()
+                            if not phases:
+                                click.echo("No phase state recorded yet.")
+                            else:
+                                click.echo()
+                                click.echo(f"{'Phase':<20} {'State':<16} {'Checkpoint':<14}")
+                                click.echo(f"{'-'*20} {'-'*16} {'-'*14}")
+                                for name, record in sorted(phases.items()):
+                                    ckpt_ref = record.checkpoint_ref or "-"
+                                    click.echo(f"  {name:<18} {record.state.value:<16} {ckpt_ref:<14}")
+                        else:
+                            click.echo(display_line)
+
+                if result.set_in_session:
                     _print_help._in_session = True
                     _print_help()
-                    continue
-                elif cmd in ("next", "approve"):
-                    # Check for unresolved blocking consults
-                    pname = phase_def["name"]
-                    if pname in blocking_consults:
-                        unresolved = [
-                            c for c in blocking_consults[pname]
-                            if c.is_blocking()
-                        ]
-                        if unresolved:
-                            click.echo(
-                                f"Cannot advance: {len(unresolved)}"
-                                " unresolved blocking consult(s)."
-                            )
-                            click.echo(
-                                "Use /consult-resolve <index> <resolution>"
-                                " to resolve."
-                            )
-                            continue
-                    # Capture current output as artifact
-                    last_resp = client.get_last_response()
-                    if last_resp:
-                        phase_artifacts.append(
-                            f"## {phase_def['title']}\n\n{last_resp}"
-                        )
-                        # Also write to phases directory
-                        _write_phase_artifact(
-                            root, engagement_slug, phase_def["name"], last_resp
-                        )
-                        # Auto-apply file blocks from the last response
-                        file_results = _apply_file_blocks(root, last_resp)
-                        if file_results:
-                            click.echo()
-                            _report_apply_results(file_results, root)
-                    phase_done = True
-                    transcript.ended_at = datetime.now(
-                        timezone.utc
-                    ).isoformat()
-                    transcript.save(root)
-                    click.echo(
-                        f"  + Phase '{phase_def['title']}' completed."
-                    )
-                    if cmd == "approve":
-                        click.echo("  Approved.")
-                    continue
-                elif cmd == "save":
-                    transcript.ended_at = datetime.now(
-                        timezone.utc
-                    ).isoformat()
+
+                if result.save_transcript:
+                    transcript.ended_at = datetime.now(timezone.utc).isoformat()
                     saved = transcript.save(root)
                     click.echo(f"Transcript saved: {saved}")
-                    continue
-                elif cmd == "models":
-                    provs = list_providers(root)
-                    if not provs:
-                        click.echo(
-                            "No providers found. Check your .harness/providers.yaml."
-                        )
-                    else:
+
+                if result.capture_artifact:
+                    phase_artifacts.append(f"## {phase_def['title']}\n\n{result.capture_artifact}")
+                    _write_phase_artifact(root, engagement_slug, phase_def["name"], result.capture_artifact)
+
+                if result.auto_apply:
+                    apply_results = _apply_file_blocks(root, result.auto_apply)
+                    if apply_results:
                         click.echo()
-                        click.echo("Available providers:")
-                        click.echo(
-                            format_providers_table(
-                                provs, current=provider.get("name", "")
-                            )
-                        )
-                        click.echo(
-                            f"\nCurrent: {provider.get('name', model)} / {model}"
-                        )
-                    continue
-                elif cmd.startswith("model "):
-                    parts = cmd[6:].strip().split(None, 1)
-                    target_name = parts[0]
-                    target_alias = parts[1] if len(parts) > 1 else None
-                    new_prov = switch_provider(
-                        root, target_name, model_alias=target_alias
-                    )
+                        _report_apply_results(apply_results, root)
+
+                if result.advance_phase:
+                    phase_done = True
+                    transcript.ended_at = datetime.now(timezone.utc).isoformat()
+                    transcript.save(root)
+                    if result.approved:
+                        click.echo(f"  + Phase '{phase_def['title']}' completed.\n  Approved.")
+                    else:
+                        click.echo(f"  + Phase '{phase_def['title']}' completed.")
+
+                if result.new_provider:
+                    new_prov = switch_provider(root, result.new_provider["target_name"],
+                                               model_alias=result.new_provider.get("target_alias"))
                     if new_prov is None:
                         provs = list_providers(root)
                         names = [p["name"] for p in provs]
-                        click.echo(
-                            f"Provider '{target_name}' not found. "
-                            f"Available: {', '.join(names)}"
-                        )
-                        continue
-                    provider = new_prov
-                    client.reload(
-                        api_key=new_prov["api_key"],
-                        base_url=new_prov["base_url"],
-                        model=new_prov["model"],
-                        provider_type=new_prov["type"],
-                    )
-                    model = new_prov["model"]
-                    click.echo(
-                        f"Switched to provider: {target_name}"
-                        f" (model: {new_prov['model']})"
-                    )
-                    if target_alias:
-                        click.echo(f"  Alias: ~{target_alias}")
-                    continue
-                elif cmd == "write":
-                    content = client.get_last_response()
-                    if content:
-                        path = _write_phase_artifact(
-                            root, engagement_slug, phase_def["name"], content
-                        )
-                        click.echo(f"Artifact written: {path}")
+                        click.echo(f"Provider '{result.new_provider['target_name']}' not found. "
+                                   f"Available: {', '.join(names)}")
                     else:
-                        click.echo("No assistant response to save.")
-                    continue
-                elif cmd == "apply":
-                    content = client.get_last_response()
-                    if content:
-                        results = _apply_file_blocks(root, content)
-                        _report_apply_results(results, root)
-                    else:
-                        click.echo("No assistant response to apply.")
-                    continue
-                elif cmd == "changes" or cmd.startswith("changes "):
-                    changes_req = ""
-                    if cmd.startswith("changes "):
-                        changes_req = cmd[8:].strip()
-                    if changes_req:
-                        user_input = (
-                            f"The reviewer has requested changes: "
-                            f"{changes_req}. Please revise."
-                        )
-                    else:
-                        click.echo("Enter the changes requested:")
-                        try:
-                            changes_req = click.prompt(
-                                "Changes", prompt_suffix=" > "
-                            )
-                        except (EOFError, KeyboardInterrupt):
-                            continue
-                        user_input = (
-                            f"The reviewer has requested changes: "
-                            f"{changes_req}. Please revise."
-                        )
-                elif cmd.startswith("navigate "):
-                    target = cmd[9:].strip()
-                    if not target or not any(p["name"] == target for p in PHASES):
-                        available = ", ".join(p["name"] for p in PHASES)
-                        click.echo(f"Unknown phase '{target}'. Available: {available}")
-                        continue
+                        provider = new_prov
+                        client.reload(api_key=new_prov["api_key"], base_url=new_prov["base_url"],
+                                      model=new_prov["model"], provider_type=new_prov["type"])
+                        model = new_prov["model"]
+                        click.echo(f"Switched to provider: {result.new_provider['target_name']} (model: {new_prov['model']})")
+                        if result.new_provider.get("target_alias"):
+                            click.echo(f"  Alias: ~{result.new_provider['target_alias']}")
 
-                    # Create checkpoint
-                    ckpt = ckm.create(
-                        phase_name=phase_def["name"],
-                        context=f"Navigating from {phase_def['name']} to {target}",
-                    )
-                    click.echo(f"\n📝 Checkpoint saved ({ckpt.checkpoint_id})")
+                if result.switch_to_phase:
+                    target = result.switch_to_phase
+                    match = next((p for p in PHASES if p["name"] == target), None)
+                    if match:
+                        ckpt = ckm.create(phase_name=phase_def["name"], context=f"Navigating to {target}")
+                        click.echo(f"\n\U0001f4dd Checkpoint saved ({ckpt.checkpoint_id})")
+                        psm.transition(phase_def["name"], PS.PAUSED)
+                        psm.ensure_phase(target)
+                        psm.transition(target, PS.ACTIVE)
+                        click.echo(f"\U0001f504 Navigating to phase: {target}")
+                        transcript.ended_at = datetime.now(timezone.utc).isoformat()
+                        transcript.save(root)
+                        phase_done = True
+                        click.echo(f"Session saved. Run 'harness session --phase {target}' to continue.")
 
-                    # Pause current, activate target
-                    psm.transition(phase_def["name"], PS.PAUSED)
-                    psm.ensure_phase(target)
-                    psm.transition(target, PS.ACTIVE)
-                    click.echo(f"🔄 Navigating to phase: {target}")
-                    click.echo("Type /phase resume to return.")
-
-                    # Save current transcript and exit this loop iteration
-                    transcript.ended_at = datetime.now(timezone.utc).isoformat()
-                    transcript.save(root)
-                    phase_done = True
-                    click.echo(f"Session saved. Run 'harness session --phase {target}' to continue.")
-                    continue
-                elif cmd.startswith("feedback "):
-                    parts = cmd[9:].strip().split(None, 1)
-                    if len(parts) < 1:
-                        click.echo("Usage: /feedback <target-phase> [reason]")
-                        continue
-                    fb_target = parts[0]
-                    fb_reason = parts[1] if len(parts) > 1 else ""
-
-                    if not any(p["name"] == fb_target for p in PHASES):
-                        available = ", ".join(p["name"] for p in PHASES)
-                        click.echo(f"Unknown phase '{fb_target}'. Available: {available}")
-                        continue
-
-                    # Create checkpoint
-                    ckpt = ckm.create(
-                        phase_name=phase_def["name"],
-                        context=fb_reason or f"Feedback to {fb_target}",
-                        feedback_content=(
-                            f"# Feedback from {phase_def['name']} to {fb_target}\n\n"
-                            f"{fb_reason}"
-                        ),
-                    )
-
-                    # Create feedback packet
-                    packet = FeedbackPacket(
-                        from_phase=phase_def["name"],
-                        to_phase=fb_target,
-                        title=fb_reason[:80] if fb_reason else "Feedback",
-                        body=fb_reason,
-                        checkpoint_id=ckpt.checkpoint_id,
-                    )
-                    fb_path = fbm.create(packet)
-                    click.echo(f"\n📝 Checkpoint saved ({ckpt.checkpoint_id})")
-                    click.echo(f"📝 Feedback packet: {fb_path.name}")
-
-                    # Mark feedback sent, activate target
-                    psm.mark_feedback_sent(phase_def["name"], fb_target, ckpt.checkpoint_id)
-                    psm.ensure_phase(fb_target)
-                    psm.transition(fb_target, PS.ACTIVE)
-                    click.echo(f"🔄 Feedback sent to: {fb_target}")
-
-                    transcript.ended_at = datetime.now(timezone.utc).isoformat()
-                    transcript.save(root)
-                    phase_done = True
-                    click.echo(f"Session saved. Run 'harness session --phase {fb_target}' to continue.")
-                    continue
-                elif cmd == "resume":
-                    latest = ckm.get_latest()
-                    if latest is None:
-                        click.echo("No checkpoint found to resume from.")
-                        continue
-
-                    if latest.is_stale():
-                        click.echo(
-                            f"⚠️  Checkpoint '{latest.checkpoint_id}' is stale "
-                            f"(>{CHECKPOINT_EXPIRY_HOURS}h old). Use "
-                            f"/resume-force to bypass."
-                        )
-                        continue
-
-                    paused_phase = latest.phase_name
-                    click.echo(f"\n📝 Restored checkpoint ({latest.checkpoint_id})")
-                    click.echo(f"🔄 Resuming phase: {paused_phase}")
-
-                    psm.transition(paused_phase, PS.ACTIVE)
-                    transcript.ended_at = datetime.now(timezone.utc).isoformat()
-                    transcript.save(root)
-                    phase_done = True
-                    click.echo(f"Run 'harness session --phase {paused_phase}' to resume.")
-                    continue
-                elif cmd == "resume-force":
-                    latest = ckm.get_latest()
-                    if latest is None:
-                        click.echo("No checkpoint found to resume from.")
-                        continue
-
-                    paused_phase = latest.phase_name
-                    click.echo(f"\n📝 Restored checkpoint ({latest.checkpoint_id}) [forced]")
-                    click.echo(f"🔄 Resuming phase: {paused_phase}")
-                    psm.transition(paused_phase, PS.ACTIVE)
-                    transcript.ended_at = datetime.now(timezone.utc).isoformat()
-                    transcript.save(root)
-                    phase_done = True
-                    click.echo(f"Run 'harness session --phase {paused_phase}' to resume.")
-                    continue
-                elif cmd == "phase" or cmd.startswith("phase "):
-                    # Show phase status
-                    phases = psm.list_phases()
-                    if not phases:
-                        click.echo("No phase state recorded yet.")
-                        continue
+                if result.consult_result:
+                    consult_res = result.consult_result
                     click.echo()
-                    click.echo(f"{'Phase':<20} {'State':<16} {'Checkpoint':<14}")
-                    click.echo(f"{'-'*20} {'-'*16} {'-'*14}")
-                    for name, record in sorted(phases.items()):
-                        ckpt = record.checkpoint_ref or "-"
-                        click.echo(f"  {name:<18} {record.state.value:<16} {ckpt:<14}")
-                    continue
-                elif cmd.startswith("consult "):
-                    parsed = _parse_consult_flags(cmd[8:].strip())
-                    if not parsed["question"]:
-                        click.echo(
-                            "Usage: /consult [--fleet <name>]"
-                            " [--mode advisory|blocking] <question>"
-                        )
-                        continue
-                    result = _do_consult(
-                        root,
-                        parsed["question"],
-                        fleet_filter=parsed["fleet_filter"],
-                        mode=parsed["mode"],
-                    )
-                    click.echo()
-                    click.echo(_format_consult_result(result))
-                    # Track blocking consults
-                    if result.status == "matched" \
-                            and result.mode == "blocking":
+                    click.echo(_format_consult_result(consult_res))
+                    if consult_res.status == "matched" and consult_res.mode == "blocking":
                         pname = phase_def["name"]
                         if pname not in blocking_consults:
                             blocking_consults[pname] = []
-                        blocking_consults[pname].append(result)
-                        click.echo(
-                            f"  \u26a0\ufe0f Blocking consult #{len(blocking_consults[pname])}"
-                            " — resolve with /consult-resolve"
-                        )
-                    continue
-                elif cmd.startswith("consult-resolve "):
-                    rest = cmd[17:].strip()
-                    parts = rest.split(None, 1)
-                    if len(parts) < 2:
-                        click.echo(
-                            "Usage: /consult-resolve <index> <resolution>"
-                        )
-                        continue
-                    idx_str, resolution = parts
-                    try:
-                        idx = int(idx_str) - 1
-                    except ValueError:
-                        click.echo("Index must be a number.")
-                        continue
+                        blocking_consults[pname].append(consult_res)
+                        click.echo(f"  \u26a0\ufe0f Blocking consult #{len(blocking_consults[pname])}"
+                                   " \u2014 resolve with /consult-resolve")
 
-                    pname = phase_def["name"]
-                    consults = blocking_consults.get(pname, [])
-                    if idx < 0 or idx >= len(consults):
-                        click.echo(
-                            f"Invalid index. Have {len(consults)}"
-                            " blocking consult(s)."
-                        )
-                        continue
+                if result.consult_resolved:
+                    # The /consult-resolve was processed by the command handler
+                    click.echo(result.display_lines[-1] if result.display_lines else "Consult resolved.")
 
-                    consults[idx].resolve(resolution, "user")
-                    click.echo(
-                        f"\u2705 Blocking consult #{idx + 1} resolved:"
-                        f" {resolution}"
-                    )
+                if result.phase_jump_allowed and result.switch_to_phase:
+                    # Feedback sent via navigate handler above
+                    pass
 
-                    # Check if all resolved
-                    if not any(c.is_blocking() for c in consults):
-                        click.echo(
-                            "All blocking consults resolved —"
-                            " you can now advance."
-                        )
-                    continue
-                else:
-                    click.echo(
-                        f"Unknown command: /{cmd}. Type /help for options."
-                    )
-                    continue
+                continue
 
             # Add user message to transcript
             transcript.messages.append(

@@ -81,8 +81,14 @@ test-coverage:
 		--tb=short \
 		--cov=src/harness \
 		--cov-report=term-missing:skip-covered \
+		--cov-report=html:coverage \
 		--quiet 2>&1
 	@echo "Tests: OK"
+	@echo "Coverage: open coverage/index.html in a browser"
+
+.PHONY: coverage-html
+coverage-html: test-coverage
+	@echo "Coverage HTML report at: coverage/index.html"
 
 .PHONY: test-e2e
 test-e2e:
@@ -184,10 +190,11 @@ help:
 	@echo ""
 	@echo "  install           Install package with dev dependencies"
 	@echo "  test              Run full test suite (unit + functional)"
-	@echo "  test-ci           CI test suite (warnings-as-errors)"
+	@echo "  ci                Full CI: lint + tests + coverage (threshold: 60%)"
+	@echo "  test-coverage     Tests with coverage report + HTML"
+	@echo "  coverage-html     Generate coverage HTML report"
+	@echo "  lint              Run ruff linters"
 	@echo "  test-e2e          End-to-end tests (on-demand only)"
-	@echo "  coverage          Test with coverage report"
-	@echo "  lint              Run linters"
 	@echo "  build             Build Python wheel"
 	@echo "  build-exe         Build single-file executable (alpha)"
 	@echo "  clean             Remove build artifacts"

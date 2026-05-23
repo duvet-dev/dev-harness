@@ -46,6 +46,27 @@ python_files = ["test_*.py"]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
 
+[tool.coverage.run]
+source = ["src/harness"]
+omit = ["*/__pycache__/*", "*/.tox/*", "*/venv/*", "*.egg-info/*"]
+
+[tool.coverage.report]
+fail_under = 60
+skip_covered = true
+skip_empty = true
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "coverage/"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["harness*"]

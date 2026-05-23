@@ -32,6 +32,11 @@ setup.py
 # Temp / scratch
 context.md
 
+# Coverage reports
+coverage/
+.coverage
+.coverage.*
+
 # Harness
 .harness/
 

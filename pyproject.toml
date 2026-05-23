@@ -51,7 +51,7 @@ source = ["src/harness"]
 omit = ["*/__pycache__/*", "*/.tox/*", "*/venv/*", "*.egg-info/*"]
 
 [tool.coverage.report]
-fail_under = 60
+fail_under = 70
 skip_covered = true
 skip_empty = true
 show_missing = true

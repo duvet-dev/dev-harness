@@ -362,3 +362,76 @@ class TestSafetyRmtree:
         with pytest.raises(RuntimeError, match="REFUSED"):
             _safety_rmtree(str(temp_in_repo))
         assert temp_in_repo.exists()
+
+
+class TestRunnerConfig:
+    """Tests for RunnerConfig dataclass."""
+
+    def test_defaults(self):
+        from harness.agents.runner import RunnerConfig
+        c = RunnerConfig()
+        assert c.timeout_seconds == 600
+        # project_dir defaults to empty string, not None
+        assert c.project_dir == ""
+
+    def test_from_dict(self):
+        from harness.agents.runner import RunnerConfig
+        c = RunnerConfig.from_dict({
+            "timeout_seconds": 120,
+            "project_dir": "/tmp/proj",
+        })
+        assert c.timeout_seconds == 120
+        assert c.project_dir == "/tmp/proj"
+
+    def test_from_dict_empty(self):
+        from harness.agents.runner import RunnerConfig
+        c = RunnerConfig.from_dict({})
+        assert c.timeout_seconds == 600
+
+
+class TestCriticLoopResult:
+    """Tests for CriticLoopResult dataclass."""
+
+    def test_defaults(self):
+        from harness.agents.runner import CriticLoopResult
+        r = CriticLoopResult()
+        assert r.converged is False
+        assert r.iteration_results == []
+
+    def test_converged(self):
+        from harness.agents.runner import CriticLoopResult
+        from harness.agents.agent_registry import CriticLoopIteration
+        r = CriticLoopResult(converged=True, iteration_results=[
+            CriticLoopIteration(iteration=0, architect_artifacts={"file.py": "code"}),
+            CriticLoopIteration(iteration=1, architect_artifacts={"file.py": "v2"},
+                                converged=True),
+        ])
+        assert r.converged is True
+        assert len(r.iteration_results) == 2
+        assert r.iteration_results[0].iteration == 0
+
+    def test_critic_loop_error(self):
+        from harness.agents.runner import CriticLoopError
+        e = CriticLoopError("max iterations reached")
+        assert str(e) == "max iterations reached"
+        assert isinstance(e, Exception)
+
+
+class TestSafetyRmtree:
+    """Tests for the guarded _safety_rmtree."""
+
+    def test_safe_prefixes(self, tmp_path):
+        from harness.agents.runner import _safety_rmtree
+        safe_dir = tmp_path / "harness_simple_test"
+        safe_dir.mkdir()
+        (safe_dir / "file.txt").write_text("data")
+        _safety_rmtree(safe_dir)
+        assert not safe_dir.exists()
+
+    def test_unsafe_path_raises(self, tmp_path):
+        from harness.agents.runner import _safety_rmtree
+        unsafe_dir = tmp_path / "etc"
+        unsafe_dir.mkdir()
+        with pytest.raises(RuntimeError):
+            _safety_rmtree(unsafe_dir)
+        assert unsafe_dir.exists()

@@ -36,6 +36,8 @@ context.md
 coverage/
 .coverage
 .coverage.*
+*.py,cover
+*.py,cover
 
 # Harness
 .harness/

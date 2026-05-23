@@ -397,10 +397,14 @@ class ApiBackend(AbstractBackend):
 
                 if not tool_calls:
                     # No more tool calls — save final content
-                    all_messages.append({
+                    msg_entry = {
                         "role": "assistant",
                         "content": assistant_msg.get("content", ""),
-                    })
+                    }
+                    reasoning = assistant_msg.get("reasoning_content")
+                    if reasoning is not None:
+                        msg_entry["reasoning_content"] = reasoning
+                    all_messages.append(msg_entry)
                     break
 
                 # Add assistant message with tool calls to history
@@ -408,6 +412,9 @@ class ApiBackend(AbstractBackend):
                     "role": "assistant",
                     "content": assistant_msg.get("content") or None,
                 }
+                reasoning = assistant_msg.get("reasoning_content")
+                if reasoning is not None:
+                    msg_for_history["reasoning_content"] = reasoning
                 serialized_calls = []
                 for tc in tool_calls:
                     serialized_calls.append({

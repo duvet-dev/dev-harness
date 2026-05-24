@@ -15,7 +15,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable
 import click
 
 from harness.agents.runner import AgentRunner
@@ -354,17 +354,43 @@ async def assess(
         duration_ms=int((time.monotonic() - start_time) * 1000),
     )
 
-    # 6. P10 Critical Reviewer — run after P1-P8 complete
+    # 6. P10 Critical Reviewer + P11 Refactoring Analyser — run after
+    #    P1-P8 complete. They are independent, so they run in parallel.
     if deep and report.metrics.get("agents_succeeded", 0) > 0:
+        deep_tasks: list[tuple[str, Awaitable[str | None]]] = []
+
+        # P10 — cross-cutting critical review
         try:
             click.echo("  \u23f3 Running P10 Critical Reviewer...")
-            p10_report = await _run_critical_review(report, runner, root)
-            if p10_report:
-                report.report_text = p10_report  # Store as report text
+            deep_tasks.append((
+                "P10", _run_critical_review(report, runner, root),
+            ))
         except Exception as exc:
-            logger.warning("Critical review failed: %s", exc)
+            logger.warning("P10 setup failed: %s", exc)
 
-    # 7. P9 Synthesis — run after all agents (including P10)
+        # P11 — refactoring and abstraction analyser
+        try:
+            click.echo("  \u23f3 Running P11 Refactoring Analyser...")
+            deep_tasks.append((
+                "P11", _run_refactoring_analysis(report, runner, root),
+            ))
+        except Exception as exc:
+            logger.warning("P11 setup failed: %s", exc)
+
+        # Run P10 and P11 concurrently (they are independent)
+        if deep_tasks:
+            p10p11_results = await asyncio.gather(
+                *(task for _, task in deep_tasks),
+                return_exceptions=True,
+            )
+            for (name, _), r in zip(deep_tasks, p10p11_results):
+                if isinstance(r, BaseException):
+                    logger.warning("%s failed: %s", name, r)
+                elif r:
+                    # Store report text (last one to complete wins for fallback)
+                    report.report_text = r
+
+    # 7. P9 Synthesis — run after all agents (including P10, P11)
     if deep and report.metrics.get("agents_succeeded", 0) > 0:
         try:
             click.echo("Running P9 Synthesis Agent (unified report)...")
@@ -467,6 +493,101 @@ async def _run_critical_review(
 
         # Add P10 findings to report (same module, no import needed)
         _merge_agent_output(report, "critical-reviewer", parsed)
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# P11 Refactoring Analyser — concept-first duplication/abstraction analysis
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+async def _run_refactoring_analysis(
+    report: AssessmentReport,
+    runner: "AgentRunner",
+    root: Path,
+) -> str | None:
+    """Run P11 Refactoring Analyser: concept-extraction analysis with RepoTool.
+
+    Takes all P1-P8 outputs plus fast scan results and runs a single
+    LLM call with full RepoTool access. Identifies duplication patterns,
+    missing abstractions, and concept-extraction opportunities.
+
+    Philosophy: duplication signals a missing concept. Extract the
+    concept, implement once, use everywhere.
+
+    Args:
+        report: The AssessmentReport with all P1-P8 agent results.
+        runner: The AgentRunner instance for running the LLM call.
+        root: Project root path.
+
+    Returns:
+        Refactoring analysis text, or ``None`` on failure.
+    """
+    from harness.analysis.agents import P11_REFACTORING_ANALYSER
+    import json as _json
+
+    # Build summary of all agent results to feed into P11
+    agent_outputs: list[str] = []
+    for agent_name in sorted(report.agent_results.keys()):
+        status = report.agent_status.get(agent_name, "unknown")
+        data = report.agent_results.get(agent_name, {})
+        agent_outputs.append(f"## {agent_name} ({status})")
+        if data:
+            dims = data.get("dimensions", []) if isinstance(data, dict) else []
+            finding_count = (
+                len(data.get("findings", [])) +
+                sum(len(d.get("findings", [])) for d in dims)
+            ) if isinstance(data, dict) else 0
+            agent_outputs.append(f"*Findings: {finding_count}*")
+            agent_outputs.append(_json.dumps(data, indent=2)[:8000])
+        else:
+            agent_outputs.append("(no output)")
+
+    agent_summary = "\n\n---\n\n".join(agent_outputs)
+
+    fast_scan_summary = (
+        f"Structure: {report.files} files, {report.dirs} dirs\n"
+        f"Coverage: {report.coverage_pct}% module coverage\n"
+        f"Dead modules: {report.dead_modules}\n"
+    ) if hasattr(report, 'files') else "Fast scan results embedded in report."
+
+    spec = _build_agent_prompt(
+        P11_REFACTORING_ANALYSER,
+        context=(
+            f"## Agent Outputs\n\n{agent_summary}\n\n"
+            f"---\n\n"
+            f"## Fast Scan Results\n{fast_scan_summary}\n\n"
+            f"## Project Root\n{root}\n\n"
+            f"The outputs above are from P1-P8. Use RepoTool to read "
+            f"actual source files and identify concept-extraction "
+            f"opportunities. Look for code that implements the same "
+            f"concept in different forms — that's where abstractions "
+            f"should live."
+        ),
+    )
+
+    result = await runner.run_simple(
+        spec_content=spec,
+        backend_name="api",
+        model="deepseek-v4-pro",
+        project_dir=root,
+        agent_role="critical-analyser",  # Enables RepoTool
+    )
+
+    if result.startswith("Error:"):
+        logger.warning("P11 Refactoring Analyser failed: %s", result)
+        return None
+
+    # Store raw output in report for P9 to consume
+    parsed = _extract_json(result)
+    if parsed:
+        report.agent_results["refactoring-analyser"] = parsed
+        report.agent_status["refactoring-analyser"] = "success"
+        report.metrics["agents_succeeded"] = report.metrics.get("agents_succeeded", 0) + 1
+
+        # Add P11 findings to report
+        _merge_agent_output(report, "refactoring-analyser", parsed)
 
     return result
 
@@ -1170,6 +1291,52 @@ def _merge_agent_output(
         ]:
             for item in items:
                 report.recommendations.append(f"[{cat_name}] {item}")
+
+    elif agent_name == "refactoring-analyser":
+        refactorings = data.get("refactorings", [])
+        for r in refactorings:
+            concept = r.get("concept_name", "?")
+            r_type = r.get("type", "?")
+            effort = r.get("effort_hours", "?")
+            risk = r.get("risk", "low")
+            prop = r.get("refactoring_proposal", {})
+            prop_type = prop.get("type", "?")
+            prop_name = prop.get("name", "?")
+            desc = r.get("concept_definition", r.get("recommendation", ""))[:200]
+
+            report.findings.append({
+                "severity": {"high": "error", "medium": "warning", "low": "info"}.get(
+                    risk, "info"
+                ),
+                "category": f"refactoring_{r_type}",
+                "message": (
+                    f"[{r_type}] {concept}: {desc} "
+                    f"(proposal: {prop_type} {prop_name}, "
+                    f"effort: {effort}h, risk: {risk})"
+                ),
+                "file": ", ".join(
+                    i.get("file", "") for i in r.get("instances", [])
+                ),
+            })
+
+            # Add as recommendation if actionable
+            if r.get("recommendation"):
+                report.recommendations.append(
+                    f"[Refactoring: {r_type}] {concept} — "
+                    f"Extract {prop_name} ({effort}h, {risk} risk)"
+                )
+
+        # Add target architecture vision as a high-level finding
+        target = data.get("target_architecture", {})
+        if target:
+            desc = target.get("description", "")[:300]
+            if desc:
+                report.findings.append({
+                    "severity": "info",
+                    "category": "refactoring_target_architecture",
+                    "message": f"Target architecture: {desc}",
+                    "file": "",
+                })
 
 
 def _merge_purposes(

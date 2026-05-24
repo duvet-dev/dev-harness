@@ -780,6 +780,211 @@ class AnalysisAgentRegistry:
         cls._custom_agents.clear()
 
 
-# P10 is NOT registered in DEFAULT_AGENTS or as custom — it runs after
-# P1-P8 complete and is wired directly into assess(). Use P10_CRITICAL_REVIEWER
-# constant for imports; registry.get_all() intentionally excludes it.
+# P11 — Refactoring & Abstraction Analyser
+# Runs after P1-P8 (parallel with P10), reads their outputs, uses RepoTool.
+# Philosophy: duplication signals a missing concept. Extract the concept,
+# implement once, use everywhere.
+P11_REFACTORING_ANALYSER = AnalysisAgent(
+    name="refactoring-analyser",
+    description=(
+        "Refactoring and abstraction analyser. Reads all P1-P8 outputs, "
+        "then browses the codebase via RepoTool to identify duplication "
+        "patterns, missing abstractions, and concept-extraction "
+        "opportunities. Philosophy: duplication signals a missing concept. "
+        "Extract the concept, implement once, use everywhere."
+    ),
+    system_prompt=(
+        "You are the Refactoring & Abstraction Analyser (P11). "
+        "You have access to:\n"
+        "1. The outputs from P1-P8 (preceding analysis agents) — their raw "
+        "JSON responses are provided below.\n"
+        "2. RepoTool — read(), list(), exists() — any file in the repository.\n"
+        "3. The fast scan results (structure, git diff, coverage, dead code).\n\n"
+        "Your philosophy: **Duplication is a symptom of a missing concept.**\n"
+        "When you see the same code or logic in multiple places, don't just "
+        "flag it as duplication — identify the concept that should be "
+        "extracted, name it, and propose an abstraction.\n\n"
+        "## Analysis Checklist\n\n"
+        "1. **Exact code duplication** — Identical code blocks in 90%+ "
+        "match across 2+ files. The concept is the operation being performed.\n"
+        "2. **Logic duplication (semantic similarity)** — Same algorithm or "
+        "pattern in different forms (e.g., same validation across dict and "
+        "object inputs). The concept is the transformation being applied.\n"
+        "3. **Missing abstraction** — Multiple implementations of the same "
+        "idea without a shared interface (e.g., 3 backends all implementing "
+        "run() with slightly different signatures). The concept is the "
+        "contract between them.\n"
+        "4. **Generic implementation opportunity** — Multiple similar "
+        "implementations where a single generic version with a type "
+        "parameter would work (e.g., WaveCycleRunner + ConsultationCycleRunner). "
+        "The concept is the generic process they execute.\n"
+        "5. **Boundary clarity** — Concepts that exist but have fuzzy "
+        "boundaries (e.g., 'Phase' used as label, container, and execution "
+        "stage). The concept needs a clear definition and scope.\n"
+        "6. **Cross-module leakage** — Concepts that belong in one module "
+        "but are reimplemented/referenced in others (e.g., retry logic in "
+        "3 places instead of shared error module). The concept needs a home.\n"
+        "7. **Layering violations** — Code that crosses abstraction "
+        "boundaries (e.g., business logic directly calling file I/O). "
+        "The concept needs proper separation.\n"
+        "8. **Generic vs specific trade-off** — Places where generic code "
+        "would be slightly more complex but much more reusable. Evaluate "
+        "the cost vs benefit of extracting a generic version.\n\n"
+        "For each finding, provide:\n"
+        "- Type (from checklist above)\n"
+        "- Concept name — a descriptive name for the concept being "
+        "duplicated or missing\n"
+        "- Concept definition — what this concept really represents\n"
+        "- File(s) with line numbers for all instances\n"
+        "- Code snippet from one instance (representative)\n"
+        "- Refactoring proposal — type (extract function/class/module/"
+        "interface), proposed name, location, interface signature\n"
+        "- Impact — lines removed, complexity reduction, reusability gain\n"
+        "- Effort (estimated hours to implement the refactoring)\n"
+        "- Risk (high/medium/low)\n"
+        "- Recommendation (whether to refactor, and in which phase)\n\n"
+        "## Target Architecture\n"
+        "After listing all findings, provide a 'Target Architecture' section "
+        "describing how the codebase would look if all refactorings were "
+        "applied. This should be a high-level overview with module structure, "
+        "key interfaces, and expected improvements in maintainability metrics.\n\n"
+        "Use RepoTool to read actual source files. The directory tree is "
+        "provided in the context. Browse deeply — the most valuable findings "
+        "come from reading code that looks different on the surface but "
+        "implements the same concept.\n\n"
+        "Avoid duplicating findings already reported by P10 (P10 covers "
+        "constant duplication, phantom roles, concurrency gaps, etc). "
+        "P11 focuses on semantically deeper abstractions: missing interfaces, "
+        "generic refactoring opportunities, and architectural evolution. "
+        "If P10 already flagged a constant, don't flag it again — but do "
+        "flag if the pattern suggests a broader design concept."
+    ),
+    output_schema={
+        "type": "object",
+        "properties": {
+            "refactorings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "enum": [
+                            "exact_duplication", "logic_duplication",
+                            "missing_abstraction", "generic_opportunity",
+                            "boundary_clarity", "cross_module_leakage",
+                            "layering_violation", "generic_tradeoff"
+                        ]},
+                        "concept_name": {"type": "string",
+                            "description": "Name for the concept being duplicated/missing"
+                        },
+                        "concept_definition": {"type": "string",
+                            "description": "What this concept really represents"
+                        },
+                        "instances": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "file": {"type": "string"},
+                                    "lines": {"type": "string"},
+                                    "location": {"type": "string",
+                                        "description": "Class/function name"
+                                    },
+                                    "description": {"type": "string",
+                                        "description": "How this instance implements the concept"
+                                    },
+                                },
+                                "required": ["file"],
+                            },
+                        },
+                        "refactoring_proposal": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "enum": [
+                                    "extract_function", "extract_class",
+                                    "extract_module", "extract_interface",
+                                    "consolidate_definition",
+                                    "introduce_abstraction"
+                                ]},
+                                "name": {"type": "string",
+                                    "description": "Proposed abstraction name"
+                                },
+                                "location": {"type": "string",
+                                    "description": "Where to place the abstraction"
+                                },
+                                "interface": {"type": "string",
+                                    "description": "Method/function signatures"
+                                },
+                                "description": {"type": "string",
+                                    "description": "How to implement and use it"
+                                },
+                            },
+                            "required": ["type", "name"],
+                        },
+                        "impact": {
+                            "type": "object",
+                            "properties": {
+                                "lines_removed": {"type": "integer"},
+                                "duplication_eliminated": {"type": "boolean"},
+                                "reusability_gain": {"type": "string"},
+                                "complexity_reduction": {"type": "string"},
+                            },
+                        },
+                        "effort_hours": {"type": "number"},
+                        "risk": {"type": "string", "enum": ["high", "medium", "low"]},
+                        "recommendation": {"type": "string"},
+                    },
+                    "required": ["type", "concept_name", "instances", "refactoring_proposal", "effort_hours", "risk"],
+                },
+            },
+            "target_architecture": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string",
+                        "description": "High-level overview of the target architecture"
+                    },
+                    "module_structure": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Proposed module/package layout"
+                    },
+                    "key_interfaces": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Key interfaces/protocols to introduce"
+                    },
+                    "expected_improvements": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+            },
+            "summary": {
+                "type": "object",
+                "properties": {
+                    "total_refactorings": {"type": "integer"},
+                    "total_effort_hours": {"type": "number"},
+                    "estimated_lines_removed": {"type": "integer"},
+                    "quick_wins": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "< 2 hours each, clear concept to extract"
+                    },
+                    "high_impact": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "2-8 hours, structural improvement"
+                    },
+                    "architectural_change": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "8+ hours, requires design discussion"
+                    },
+                },
+            },
+        },
+        "required": ["refactorings", "summary"],
+    },
+)
+
+
+# P10 and P11 are NOT registered in DEFAULT_AGENTS or as custom — they run
+# after P1-P8 complete and are wired directly into assess(). Use the
+# P10_CRITICAL_REVIEWER / P11_REFACTORING_ANALYSER constants for imports;
+# registry.get_all() intentionally excludes them.

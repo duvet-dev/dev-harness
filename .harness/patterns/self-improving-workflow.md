@@ -16,41 +16,45 @@ You don't need external tools, reviewers, or prior analysis. The observer (`harn
 
 ```
                    ┌─────────────────────────┐
-                   │  Initial Observer Run   │
-                   │  harness observe --deep  │
+                   │  Baseline Assessment    │
+                   │  harness assess . --deep │
                    └───────────┬─────────────┘
                                │
                     ┌──────────▼──────────┐
                     │  Review Findings     │
-                    │  Categorise +        │
-                    │  Prioritise          │
+                    │  + Categorise        │
+                    │  + Prioritise        │
                     └──────────┬──────────┘
                                │
                     ┌──────────▼──────────┐
                     │  Create Engagement   │
-                    │  harness work "..."  │
-                    └──────────┬──────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │  Plan Waves          │
-                    │  (3-5 per engagement)│
+                    │  + auto-waves        │
+                    │  eng create --refact │
                     └──────────┬──────────┘
                                │
                     ┌──────────▼──────────┐
                     │  Execute Each Wave   │
                     │  harness wave run    │
-                    │  harness phase ...   │
                     └──────────┬──────────┘
                                │
                     ┌──────────▼──────────┐
-                    │  Verify + Re-Assess  │
-                    │  harness observe     │
-                    │  Compare findings    │
+                    │  Compare to Baseline │
+                    │  eng diff            │
+                    │  (CLOSED / REMAINING)│
                     └──────────┬──────────┘
                                │
                     ┌──────────▼──────────┐
-                    │  Finish / Next       │
-                    │  Engagement          │
+                    │  Finish + Re-Assess  │
+                    │  finish --re-assess  │
+                    │  (auto-observer,     │
+                    │   closure metrics,   │
+                    │   history tracked)   │
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │  Next Engagement     │
+                    │  (from NEW baseline, │
+                    │   fewer findings)    │
                     └─────────────────────┘
 ```
 
@@ -63,15 +67,17 @@ You don't need external tools, reviewers, or prior analysis. The observer (`harn
 ```bash
 # 1. Run the observer (no prior knowledge needed)
 cd /path/to/repo
-harness observe --deep . --report baseline-assessment.md
+harness assess . --report baseline-assessment.md
+# (assess is an alias for observe --deep)
 
 # 2. Read the report — it tells you what's wrong
 #    The report includes:
 #    - Executive summary of codebase health
-#    - Prioritised findings table
+#    - Prioritised findings table with IDs (finding-001, finding-002, ...)
 #    - Cross-connected issues across dimensions
 #    - Top 5 concrete recommendations
 #    - Effort estimates per finding
+#    - The manifest .json file has structured findings for tooling
 ```
 
 ### Phase 2: Categorise Findings
@@ -86,34 +92,45 @@ Group the observer findings into three buckets:
 
 Each bucket becomes a separate engagement. Quick wins first, then medium, then architectural.
 
-### Phase 3: Create the First Engagement
+### Phase 3: Create a Refactoring Engagement (Auto-Waves)
 
 ```bash
-# Create an engagement for quick wins
-harness work "Self-Review: Critical Bug Fixes" --mode auto
+# Create an engagement that auto-creates waves from high-risk findings
+harness engagement create "Self-Review: Critical Bug Fixes" --refactoring --focus high-risk
 
 # This:
 # - Creates .harness/engagements/self-review-critical-bug-fixes/
 # - Sets up branch eng/self-review-critical-bug-fixes
-# - Populates an initial plan from the architecture goal
-# - Starts tracking state and freshness
+# - Reads the latest assessment manifest
+# - Auto-creates waves for each high-risk finding via PlanManager
+# - Stores baseline finding count + manifest reference in engagement.yaml
+# - Sets session_type=refactoring for agent context
+#
+# Result: waves are already defined — no manual wave creation needed.
 ```
 
-### Phase 4: Define Waves
+Use `--focus all` to create waves from every finding, or `--focus medium` for errors and warnings.
 
-For each finding in the engagement scope, create a wave:
+### Phase 4: Manual Wave Creation (Optional)
+
+If you need to add a wave for a specific finding that wasn't auto-created:
 
 ```bash
-# From the observer report's "fix immediately" items:
-harness wave create fix-phantom-roles
-harness wave create fix-env-var-inconsistency
-harness wave create add-e2e-tests
+# Create a wave from a specific assessment finding
+harness wave create-from-finding finding-001
 
-# Each wave creates:
-# - A requirements section
-# - Design space
-# - Code + test targets
-# - Acceptance criteria (the finding that should be gone)
+# This:
+# - Reads the latest assessment manifest
+# - Finds finding-001 by ID
+# - Creates a wave with the finding as the spec
+# - Updates the manifest to track wave→finding association
+# - Prevents duplicates (safe to re-run)
+```
+
+List all waves to see what was created:
+
+```bash
+harness wave list
 ```
 
 ### Phase 5: Execute the Wave
@@ -124,42 +141,38 @@ Each wave runs through the standard harness phases:
 # Run the full session for one wave
 harness session
 
-# This triggers:
-# 1. Requirements Builder — expands the wave into detailed spec
-# 2. Architect — designs the change
-# 3. Architect Critic — reviews the design
-# 4. Planner — plans implementation steps
-# 5. Coder — implements the change
-# 6. Tester — writes/updates tests
-# 7. Reviewer — reviews the result
+# Or use the wave runner for implement→test→verify→commit:
+harness wave run wave-01
 ```
 
-Or run phases individually for more control:
+### Phase 6: Verify Improvements (Baseline Comparison)
+
+After executing waves, compare the current state to the engagement's baseline:
 
 ```bash
-harness phase run requirements
-harness phase run architect
-harness phase run plan
-harness phase run code
-harness phase run test
-harness phase run review
+# Compare baseline assessment to current state
+harness engagement diff
+
+# Shows:
+#   ┌─────────────────────────────────────────────────────────────┐
+#   │  Engagement: self-review-critical-bug-fixes                │
+#   │  ─────────────────────────────────────────────             │
+#   │  CLOSED: 23 findings                                       │
+#   │    ✓ finding-001: phantom-roles...                         │
+#   │    ✓ finding-002: env-var-inconsistency...                 │
+#   │  REMAINING: 48 findings                                    │
+#   │    ○ finding-004: cli-god-module...                        │
+#   │  NEW: 0 findings ✅                                         │
+#   │  ──────────────────────────────                            │
+#   │  Closure rate: 32%                                          │
+#   └─────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 6: Verify Improvements
-
-After each wave (or the full engagement), re-run the observer and compare:
+Or run the full observer manually:
 
 ```bash
-# Run after fixing one wave's findings
-harness observe --deep . --report wave-verification.md
-
-# Compare: findings count should be LOWER than baseline
-# Compare: specific finding should be GONE
-# Compare: no regressions should appear
-
-# If the specific finding is gone → wave successful
-# If new issues appeared → adjust approach
-# If nothing changed → fix didn't work, iterate
+harness assess . --report verify.md
+# Compare with baseline: fewer findings, specific finding should be gone
 ```
 
 ### Phase 7: Gate Review
@@ -167,34 +180,32 @@ harness observe --deep . --report wave-verification.md
 ```bash
 # Formal review of the engagement
 harness review
-
-# Reviews:
-# - Are all planned fixes complete?
-# - Did the observer confirm improvements?
-# - Are there regressions?
-# - Is the engagement ready to close?
 ```
 
-### Phase 8: Finish & Next
+### Phase 8: Finish & Re-Assess
 
 ```bash
-# Complete the engagement
-harness finish
+# Complete the engagement with automatic re-verification
+harness finish --re-assess
 
 # This:
-# - Commits all changes
-# - Records the engagement artifact
-# - Cleans up state
-# - Merges back to main
+# - Commits all changes (opens git editor for commit message)
+# - Runs the observer automatically
+# - Compares current findings to baseline
+# - Shows: findings closed, remaining, closure rate
+# - Writes new assessment report to the engagement directory
+# - Records metrics in .harness/config.yaml assessment_history
+#
+# The new baseline becomes the starting point for the next engagement.
 ```
 
 ### Phase 9: Start the Next Engagement
 
 ```bash
-# Medium refactors
-harness work "Self-Review: Architecture Refactoring" --mode auto
+# Next engagement starts from the NEW baseline (fewer findings)
+harness engagement create "Self-Review: Architecture" --refactoring --focus high-risk
 
-# Same cycle: define waves → execute → verify → review → finish
+# Same cycle: auto-waves → execute → diff → finish --re-assess
 ```
 
 ---
@@ -205,12 +216,13 @@ The observer run can (and should) be used at multiple points in the engagement l
 
 | When | What to Run | Why |
 |------|-------------|-----|
-| **Before engagement** | `harness observe --deep .` | Baseline — establishes what needs fixing |
-| **After each wave** | `harness observe --deep .` | Verify the wave's fix actually resolved the issue |
-| **At gate review** | `harness observe --deep .` | Full health check before merging |
-| **After finish** | `harness observe --deep .` | Final comparison to baseline — track improvement trajectory |
+| **Before engagement** | `harness assess . --deep` | Baseline — establishes what needs fixing |
+| **During engagement** | `harness wave create-from-finding finding-N` | Create a wave for a specific finding |
+| **After wave execution** | `harness wave list` | See which waves have been completed |
+| **At gate review** | `harness engagement diff` | Baseline comparison — closed vs remaining vs new |
+| **After finish** | `harness finish --re-assess` | Auto-run observer, compare, update history |
 
-The observer output is saved to the engagement's assessments directory, building a history of how the codebase has improved over time.
+No manual observer re-runs needed. The `diff` and `finish --re-assess` commands handle all comparison automatically.
 
 ---
 
@@ -220,18 +232,18 @@ For a non-trivial codebase, a single engagement won't cover everything. Use mult
 
 ### Engagement 1: Critical Bug Fixes
 **Scope:** Observer findings with risk=high and effort<2h  
-**Waves:** 3-5 quick fixes  
+**Waves:** Auto-created from high-risk findings (3-5 waves)  
 **Goal:** Clear the easy, impactful items. Build momentum.
 
 ### Engagement 2: Test Coverage & Quality
 **Scope:** Observer findings about test gaps, dead test infra, low-coverage paths  
-**Waves:** Add missing tests, fix test infrastructure, improve coverage  
+**Waves:** Test-focused refactoring (add missing tests, fix infrastructure)  
 **Goal:** Raise coverage to a level where refactoring is safe (e.g., 70%+ on critical paths).
 
 ### Engagement 3: Architecture Refactoring
 **Scope:** Observer findings about architectural debt (god modules, circular deps, concurrency)  
 **Waves:** Split large files, resolve cycles, add interfaces, generic implementations  
-**Goal:** Make the codebase maintainable and extensible. Only safe to do after test coverage is solid.
+**Goal:** Make the codebase maintainable and extensible.
 
 ### Engagement 4+: Ongoing
 **Scope:** Remaining debt, new patterns, continuous improvement  
@@ -242,30 +254,29 @@ For a non-trivial codebase, a single engagement won't cover everything. Use mult
 ## The Self-Improving Loop
 
 ```
-Baseline observer run
+Baseline assessment (harness assess)
        │
        ▼
-Create engagement ←──┐
-       │              │
-       ▼              │
-Define waves          │
-       │              │
-       ▼              │
-Execute wave          │
-       │              │
-       ▼              │
-Re-run observer ──────┤
-       │              │
-       ├─ All fixed? ─┘
+Create engagement --refactoring ────┐
+  (auto-creates waves from findings)  │
+       │                               │
+       ▼                               │
+Execute waves (harness wave run)       │
+       │                               │
+       ▼                               │
+Compare to baseline (eng diff) ────────┤
+       │                               │
+       ├─ All fixed? ──────────────────┘
        │
        ▼
-Gate review
-       │
-       ▼
-Finish engagement
+Finish + re-assess (finish --re-assess)
+  (auto-observer, closure metrics,
+   history tracked)
        │
        ▼
 Next engagement →
+  (from NEW baseline,
+   fewer findings)
 ```
 
 Each cycle:
@@ -306,36 +317,36 @@ Use `harness status` and `harness engagement list` to check progress at any time
 ## Complete Quick-Start (One Command Sequence)
 
 ```bash
-# 1. Baseline
-harness observe --deep . --report baseline.md
+# ── FIRST TIME ──
 
-# 2. Read findings, pick the critical ones
+# 1. Baseline assessment
+harness assess . --report baseline.md
 
-# 3. First engagement
-harness work "Self-Review: Critical Bug Fixes" --mode auto
-harness wave create fix-phantom-roles
-harness wave create fix-env-vars
-harness wave create add-e2e-tests
+# 2. Create refactoring engagement (auto-creates waves from findings)
+harness engagement create "Self-Review: Critical Bug Fixes" --refactoring --focus high-risk
 
-# 4. Execute each wave (or run full session for all)
-harness wave run fix-phantom-roles
-harness observe --deep . --report verify-1.md
+# 3. See what waves were created
+harness wave list
 
-harness wave run fix-env-vars
-harness observe --deep . --report verify-2.md
+# 4. Execute each wave
+harness wave run wave-01
+harness wave run wave-02
 
-harness wave run add-e2e-tests
-harness observe --deep . --report verify-3.md
+# 5. Compare to baseline
+harness engagement diff
 
-# 5. Review and close
-harness review
-harness finish
+# 6. Finish and re-assess
+harness finish --re-assess
 
-# 6. Next engagement
-harness work "Self-Review: Architecture Refactoring" --mode auto
-harness wave create split-cli-god-module
-harness wave create extract-cycle-runner
-# ...repeat
+# ── NEXT ENGAGEMENT ──
+
+# 7. Next engagement from new baseline (fewer findings)
+harness engagement create "Self-Review: Architecture" --refactoring --focus high-risk
+
+# 8. Execute waves from the new set of findings
+harness wave run wave-01
+# ...
+harness finish --re-assess
 ```
 
 ---

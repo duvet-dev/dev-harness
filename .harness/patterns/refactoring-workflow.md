@@ -192,35 +192,46 @@ Each engagement has its own:
 ```bash
 # 0. Prerequisites
 cd /path/to/repo
-harness init
 
-# 1. Baseline assessment
+# 1. Baseline assessment (produces findings with IDs)
 harness assess . --report baseline.md
-# (assess is an alias for observe --deep)
 
-# 2. Read the report, pick your scope
-#    For this example: critical bug fixes
+# 2. Create refactoring engagement — auto-creates waves from findings
+harness engagement create "Refactoring: Critical Bug Fixes" --refactoring --focus high-risk
+# → Reads latest assessment manifest (e.g., 71 findings)
+# → Creates engagement at .harness/engagements/.../
+# → Auto-creates waves for each high-risk finding
+# → Stores baseline reference + finding count in engagement.yaml
 
-# 3. Create the refactoring engagement
-harness work "Refactoring: Critical Bug Fixes" --mode auto
+# 3. See what waves were created
+harness wave list
 
-# 4. Create waves from observer findings
-harness wave create fix-phantom-roles
-harness wave create fix-env-vars
+# 4. Run a wave (implement a fix)
+harness wave run wave-01
 
-# 5. Run a wave (all phases)
-harness wave run fix-phantom-roles
+# 5. Compare to baseline — how many findings are closed?
+harness engagement diff
+# Shows: CLOSED 5 findings, REMAINING 3, NEW 0
 
-# 6. Verify the fix
-harness assess . --report verify-fix-phantom-roles.md
-# Check: is the finding gone?
+# 6. Finish and auto-re-assess
+harness finish --re-assess
+# → Commits changes
+# → Runs observer automatically
+# → Compares to baseline, shows closure rate
+# → Records metrics in assessment_history
 
-# 7. Review and close
-harness review
-harness finish
+# 7. Next engagement from NEW baseline
+harness engagement create "Refactoring: Architecture" --refactoring --focus high-risk
+# → Starts from 48 findings, not 71
+```
 
-# 8. Next engagement
-harness work "Refactoring: Architecture" --mode auto
+### Adding a wave manually (optional)
+
+For findings that weren't auto-created, create a wave from a specific finding ID:
+
+```bash
+harness wave create-from-finding finding-004
+# Creates wave with the finding as spec, tracks association in manifest
 ```
 
 ---
@@ -228,29 +239,30 @@ harness work "Refactoring: Architecture" --mode auto
 ## Per-Wave Workflow (Detailed)
 
 ```
-1. Select a finding from the observer report
+1. Waves are auto-created by: harness engagement create --refactoring
    ↓
-2. Create wave: harness wave create <wave-name>
+2. List waves: harness wave list
    ↓
-3. Design refactoring: harness phase run architect
-   (produces design doc with concept name, locations, new interface)
+3. Run a wave: harness wave run wave-01
+   (runs implement → test → verify → commit cycle)
    ↓
-4. Review design: harness phase run review
-   (checks: is this the right abstraction? any side effects?)
+4. Verify tests still pass: python3 -m pytest -x -q
    ↓
-5. Implement: harness phase run code
-   (extracts the concept, updates all references)
+5. Check progress: harness engagement diff
+   (doesn't re-run observer — just compares current to baseline)
    ↓
-6. Verify tests: python3 -m pytest -x -q
-   (all existing tests must still pass)
-   ↓
-7. Verify observer: harness assess . --report verify.md
-   (original finding should be gone)
-   ↓
-8. If complete: harness phase run review
-   (gate check for this wave)
-   ↓
-9. Next wave
+6. Next wave
+```
+
+Or with more granular control:
+
+```bash
+harness wave create-from-finding finding-001   # Create wave from specific finding
+harness phase run architect                    # Design the extraction
+harness phase run coder                        # Implement the refactoring
+python3 -m pytest -x -q                        # Verify tests
+harness engagement diff                         # Compare to baseline
+harness wave run wave-01                        # Commit the wave
 ```
 
 ---
@@ -261,7 +273,7 @@ The existing phase model has some friction with refactoring work:
 
 | Friction Point | Description | Workaround | Long-Term Fix |
 |---------------|-------------|------------|---------------|
-| **"Requirements" phase** | Refactoring has no user-facing requirements. The "requirement" is the observer finding. | Use the Assessment Review prompt (above) instead of a requirements prompt. | Add a `--refactoring` flag to engagement creation that skips requirements and seeds from the observer report. |
+| **"Requirements" phase** | Refactoring has no user-facing requirements. The "requirement" is the observer finding. | Use `--refactoring` flag on engagement create — it seeds waves from the observer report. | ✅ **Resolved in Wave 2** — `harness engagement create --refactoring` auto-creates waves from assessment findings. |
 | **"Test" phase name** | Testing a refactoring is primarily about verifying no regressions, not adding new tests (though new tests are often valuable). | Use the Verify prompt. The observer re-run is the definitive test. | Rename to "Verify" in the refactoring context. |
 | **Architect designs "what"** | For refactoring, the "what" is already known (the observer finding). The architect designs "how to extract". | Clarify in the architect prompt that the design is about extraction mechanics, not feature decisions. | Add a refactoring agent role that understands concept extraction. |
 | **Wave independence** | Some refactorings have dependencies (e.g., can't split CLI god module until testing infrastructure is in place). | Order waves by dependency. Document dependencies in plan. | Add a dependency field to wave definitions. |
@@ -279,49 +291,31 @@ Any phase that feels awkward is a signal, not a blocker. The harness is flexible
 
 ---
 
-## Modelling Gaps to Address
+## Modelling Gaps — Resolution Status
 
-If you find yourself fighting the phase model while doing refactoring work, these are the likely root causes:
+All four original gaps have been addressed in Waves 1-3:
 
-### Gap 1: No "Assess" Phase in the Standard Lifecycle
+### Gap 1: No "Assess" Phase — ✅ Resolved (Wave 2)
 
-**Symptom:** You're running the observer manually and treating its output as requirements. This works but feels disconnected from the engagement lifecycle.
+`harness engagement create --refactoring` reads the latest assessment manifest and seeds waves from findings. No separate assess step needed.
 
-**Fix:** Add a built-in assess step at engagement creation:
-```bash
-harness work "Refactoring: ..." --refactoring
-# This runs the observer as part of engagement creation,
-# stores the baseline in the engagement state,
-# and seeds the wave plan from the findings.
-```
+### Gap 2: No Refactoring Agent Role — 🔶 Partial (prompts not yet automated)
 
-### Gap 2: No Refactoring Agent Role
+`--refactoring` engagements store `session_type: refactoring` in engagement.yaml. Agent prompt overrides to switch to "extraction mode" are planned but not yet implemented. In the meantime, wave descriptions are seeded from finding descriptions which naturally frame the work as refactoring.
 
-**Symptom:** The architect and coder agents default to "build new thing" mode. Their output includes unnecessary features.
+### Gap 3: No Finding→Wave Mapping — ✅ Resolved (Waves 1+2)
 
-**Fix:** Add a "refactoring" agent role with system prompts that:
-- Assume no behaviour change
-- Focus on extraction mechanics
-- Prioritise minimal diffs
-- Respect existing interfaces
+Two approaches:
+- **Auto-created:** `harness engagement create --refactoring` creates waves from all findings (optionally filtered by `--focus`).
+- **Manual:** `harness wave create-from-finding finding-001` creates a wave from a specific finding.
 
-### Gap 3: No Finding→Wave Mapping
+Both store the finding→wave association in the assessment manifest (wave_slug + wave_status fields).
 
-**Symptom:** You manually copy findings from the observer report into wave descriptions.
+### Gap 4: No Baseline→Current Comparison — ✅ Resolved (Wave 3)
 
-**Fix:** Add a `harness wave create-from-finding <finding-id>` command that:
-- Reads the assessment manifest
-- Creates a wave with the finding's description as the wave spec
-- Links the wave to the finding for traceability
+`harness engagement diff` loads the baseline manifest from engagement creation, runs a fresh assessment, and shows closed/remaining/new findings with a closure rate.
 
-### Gap 4: No Baseline→Current Comparison
-
-**Symptom:** You manually compare observer run N to observer run N-1.
-
-**Fix:** Add `harness engagement diff` that:
-- Compares the baseline assessment to the current state
-- Shows which findings are closed, which remain, which are new
-- Generates a closure rate metric
+`harness finish --re-assess` combines committing, re-assessment, and baseline comparison into a single command, and records metrics to `.harness/config.yaml assessment_history` for tracking across engagements.
 
 ---
 
@@ -351,25 +345,43 @@ harness work "Refactoring: ..." --refactoring
 
 ```bash
 # ── START HERE ──
-harness assess . --report baseline.md        # Step 1: baseline
-# Read the report. Find the high-priority findings.
+harness assess . --report baseline.md        # Step 1: baseline (produces findings with IDs)
 
-harness work "Refactoring: <scope>" --mode auto  # Step 2: engagement
-harness wave create <finding-name>               # Step 3: wave per finding
+# ── ENGAGEMENT (auto-waves from findings) ──
+harness engagement create "Refactoring: <scope>" --refactoring --focus high-risk
+harness wave list                              # See auto-created waves
 
 # ── PER WAVE ──
-harness phase run architect    # Design the extraction
-harness phase run planner      # Plan implementation steps
-harness phase run coder        # Implement the refactoring
-python3 -m pytest -x -q        # Verify tests still pass
-harness assess . --report verify.md  # Verify finding closed
-harness phase run reviewer      # Gate: is this done?
+harness wave run wave-01                       # implement → test → verify → commit
+# or with granular control:
+#   harness phase run architect
+#   harness phase run coder
+#   python3 -m pytest -x -q
+#   harness engagement diff
+
+# ── VERIFY ──
+harness engagement diff                        # baseline comparison
+# Shows: CLOSED N / REMAINING M / NEW 0
 
 # ── CLOSE ──
-harness review                  # Full engagement review
-harness finish                  # Commit and merge
-harness assess . --report final.md  # Track overall progress
+harness finish --re-assess                     # Commit + auto-observer + metrics
+
+# ── NEXT ──
+harness engagement create "Refactoring: Next" --refactoring --focus high-risk
+# Starts from NEW baseline (fewer findings)
 ```
+
+### Quick Reference: All Refactoring Commands
+
+| Command | Purpose |
+|---------|---------|
+| `harness assess . --deep` | Run baseline assessment (produces findings with IDs) |
+| `harness engagement create "..." --refactoring --focus high-risk` | Create engagement with auto-waves from high-risk findings |
+| `harness wave create-from-finding finding-001` | Add a wave for a specific finding manually |
+| `harness wave list` | See all waves in the plan |
+| `harness wave run wave-01` | Execute a wave through the full cycle |
+| `harness engagement diff` | Compare baseline to current state |
+| `harness finish --re-assess` | Commit, re-run observer, compare, track history |
 
 ---
 

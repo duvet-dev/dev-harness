@@ -617,6 +617,118 @@ P8_DOCUMENTATION_REVIEWER = AnalysisAgent(
         "required": ["ratings", "findings"],
     },
 )
+# P10 — Critical Reviewer (Embedded Crichton)
+# Runs after P1-P8, reads their outputs, uses RepoTool for deep file access.
+# Catches cross-cutting issues that specialised agents miss.
+P10_CRITICAL_REVIEWER = AnalysisAgent(
+    name="critical-reviewer",
+    description=(
+        "Cross-cutting critical reviewer. Reads all other agent outputs, "
+        "then browses the codebase via RepoTool to find issues specialised "
+        "agents miss: constant duplication, serialisation asymmetry, phantom "
+        "roles, contract violations, concurrency gaps, stub implementations, "
+        "test quality nuance, and effort estimation."
+    ),
+    system_prompt=(
+        "You are the Critical Reviewer (P10), the final analysis agent. "
+        "You have access to:\n"
+        "1. The outputs from P1-P8 (preceding analysis agents) — their raw "
+        "JSON responses are provided below.\n"
+        "2. RepoTool — read(), list(), exists() — any file in the repository.\n"
+        "3. The fast scan results (structure, git diff, coverage, dead code).\n\n"
+        "Your job is to find what the other agents missed by reading actual "
+        "source code and connecting patterns across modules. Be thorough "
+        "and specific — reference actual file paths and line numbers.\n\n"
+        "## Review Checklist (cross-cutting)\n\n"
+        "1. **Duplicated constants** — Same value defined in multiple files "
+        "(e.g. paths.py patterns)\n"
+        "2. **Serialisation symmetry** — For classes with to_dict()/from_dict(): "
+        "do field names match? Any transformed keys?\n"
+        "3. **Phantom roles** — Role/type strings in module A that don't exist "
+        "as enum members in module B\n"
+        "4. **Contract violations** — Abstract interface lifecycle vs "
+        "implementation (prepare/run pattern, undocumented status values)\n"
+        "5. **Concurrency gaps** — File-based state access without locks "
+        "(load→modify→save patterns)\n"
+        "6. **Production stubs** — Placeholder implementations in production "
+        "code (NotImplementedError, pass-only bodies, pytest.skip() in non-test)\n"
+        "7. **Test quality** — Beyond coverage \%: assertion specificity, "
+        "fixture isolation, edge case coverage\n"
+        "8. **Version/platform gaps** — EOL Python versions, stale patterns\n"
+        "9. **Effort estimation** — Estimate hours to fix each finding\n"
+        "10. **YAML/config write safety** — yaml.dump() losing comments "
+        "and field ordering\n\n"
+        "For each finding, provide:\n"
+        "- Category (from checklist above)\n"
+        "- File(s) with line numbers\n"
+        "- Description (what's wrong and why it matters)\n"
+        "- Effort (estimated hours to fix)\n"
+        "- Risk (high/medium/low)\n"
+        "- Recommendation (specific fix)\n\n"
+        "Use RepoTool to read source files. The directory tree is provided "
+        "in the context. Browse deeply — the most valuable findings come "
+        "from reading actual code, not just the structure.\n\n"
+        "Prioritise: focus on findings that P1-P8 would miss. If an issue "
+        "is already reported by another agent, don't duplicate it — reference "
+        "it and add cross-dimension context instead."
+    ),
+    output_schema={
+        "type": "object",
+        "properties": {
+            "findings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string", "enum": [
+                            "duplicated-constants", "serialisation-asymmetry",
+                            "phantom-roles", "contract-violation",
+                            "concurrency-gap", "production-stub",
+                            "test-quality", "version-gap",
+                            "yaml-write-safety", "other-cross-cutting"
+                        ]},
+                        "files": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "File paths involved"
+                        },
+                        "description": {"type": "string"},
+                        "effort_hours": {"type": "number"},
+                        "risk": {"type": "string", "enum": ["high", "medium", "low"]},
+                        "recommendation": {"type": "string"},
+                    },
+                    "required": ["category", "description", "effort_hours", "risk"],
+                },
+            },
+            "summary": {
+                "type": "object",
+                "properties": {
+                    "total_findings": {"type": "integer"},
+                    "total_effort_hours": {"type": "number"},
+                    "fix_immediately": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "< 1 hour each, no risk"
+                    },
+                    "fix_soon": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "1-4 hours, low risk"
+                    },
+                    "design_debt": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "4+ hours, needs design discussion"
+                    },
+                    "leave_alone": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "Intentional trade-offs"
+                    },
+                },
+            },
+        },
+        "required": ["findings", "summary"],
+    },
+)
+
+
 class AnalysisAgentRegistry:
     """Registry of all analysis agents (P1-P5).
 
@@ -666,3 +778,8 @@ class AnalysisAgentRegistry:
     def reset(cls) -> None:
         """Remove all custom agents."""
         cls._custom_agents.clear()
+
+
+# P10 is NOT registered in DEFAULT_AGENTS or as custom — it runs after
+# P1-P8 complete and is wired directly into assess(). Use P10_CRITICAL_REVIEWER
+# constant for imports; registry.get_all() intentionally excludes it.

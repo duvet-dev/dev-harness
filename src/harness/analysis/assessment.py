@@ -338,10 +338,13 @@ async def assess(
             )
             return agent.name, {}, "failure"
 
-    # Run agents sequentially to respect rate limits
-    agent_tasks = [run_agent(a) for a in agents]
+    # Run agents sequentially to respect rate limits (not parallel —
+    # 8 simultaneous API calls cause timeouts and degraded responses)
     click.echo("Processing agent results...")
-    raw_results = await asyncio.gather(*agent_tasks, return_exceptions=True)
+    raw_results: list[tuple[str, dict[str, Any], str]] = []
+    for agent in agents:
+        result = await run_agent(agent)
+        raw_results.append(result)
 
     # 5. Process all results (pure logic)
     report = _process_agent_results(
@@ -351,7 +354,17 @@ async def assess(
         duration_ms=int((time.monotonic() - start_time) * 1000),
     )
 
-    # 6. P9 Synthesis — run if deep mode and at least one agent succeeded
+    # 6. P10 Critical Reviewer — run after P1-P8 complete
+    if deep and report.metrics.get("agents_succeeded", 0) > 0:
+        try:
+            click.echo("  \u23f3 Running P10 Critical Reviewer...")
+            p10_report = await _run_critical_review(report, runner, root)
+            if p10_report:
+                report.report_text = p10_report  # Store as report text
+        except Exception as exc:
+            logger.warning("Critical review failed: %s", exc)
+
+    # 7. P9 Synthesis — run after all agents (including P10)
     if deep and report.metrics.get("agents_succeeded", 0) > 0:
         try:
             click.echo("Running P9 Synthesis Agent (unified report)...")
@@ -364,6 +377,98 @@ async def assess(
     click.echo("Assessment complete.")
     return report
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# P10 Critical Reviewer — cross-cutting review that reads source files
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+async def _run_critical_review(
+    report: AssessmentReport,
+    runner: "AgentRunner",
+    root: Path,
+) -> str | None:
+    """Run P10 Critical Reviewer: deep cross-cutting analysis with RepoTool.
+
+    Takes all P1-P8 outputs plus fast scan results and runs a single
+    LLM call with full RepoTool access. The critical reviewer can
+    navigate any file in the repo to find issues the specialised
+    agents miss.
+
+    Args:
+        report: The AssessmentReport with all P1-P8 agent results.
+        runner: The AgentRunner instance for running the LLM call.
+        root: Project root path.
+
+    Returns:
+        Critical review text, or ``None`` on failure.
+    """
+    from harness.analysis.agents import P10_CRITICAL_REVIEWER
+    import json as _json
+
+    # Build summary of all agent results to feed into P10
+    agent_outputs: list[str] = []
+    for agent_name in sorted(report.agent_results.keys()):
+        status = report.agent_status.get(agent_name, "unknown")
+        data = report.agent_results.get(agent_name, {})
+        agent_outputs.append(f"## {agent_name} ({status})")
+        if data:
+            # Compute finding count for metadata
+            dims = data.get("dimensions", []) if isinstance(data, dict) else []
+            finding_count = (
+                len(data.get("findings", [])) +
+                sum(len(d.get("findings", [])) for d in dims)
+            ) if isinstance(data, dict) else 0
+            agent_outputs.append(f"*Findings: {finding_count}*")
+            agent_outputs.append(_json.dumps(data, indent=2)[:8000])
+        else:
+            agent_outputs.append("(no output)")
+
+    agent_summary = "\n\n---\n\n".join(agent_outputs)
+
+    # Get the fast scan results from the report
+    fast_scan_summary = (
+        f"Structure: {report.files} files, {report.dirs} dirs\n"
+        f"Coverage: {report.coverage_pct}% module coverage\n"
+        f"Dead modules: {report.dead_modules}\n"
+    ) if hasattr(report, 'files') else "Fast scan results embedded in report."
+
+    spec = _build_agent_prompt(
+        P10_CRITICAL_REVIEWER,
+        context=(
+            f"## Agent Outputs\n\n{agent_summary}\n\n"
+            f"---\n\n"
+            f"## Fast Scan Results\n{fast_scan_summary}\n\n"
+            f"## Project Root\n{root}\n\n"
+            f"The outputs above are from P1-P8. Use RepoTool to read "
+            f"actual source files and find issues they missed."
+        ),
+    )
+
+    result = await runner.run_simple(
+        spec_content=spec,
+        backend_name="api",
+        model="deepseek-v4-pro",
+        project_dir=root,
+        agent_role="critical-analyser",  # Enables RepoTool
+    )
+
+    if result.startswith("Error:"):
+        logger.warning("P10 Critical Reviewer failed: %s", result)
+        return None
+
+    # Store raw output in report for P9 to consume
+    parsed = _extract_json(result)
+    if parsed:
+        report.agent_results["critical-reviewer"] = parsed
+        report.agent_status["critical-reviewer"] = "success"
+        report.metrics["agents_succeeded"] = report.metrics.get("agents_succeeded", 0) + 1
+
+        # Add P10 findings to report (same module, no import needed)
+        _merge_agent_output(report, "critical-reviewer", parsed)
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -397,7 +502,7 @@ async def _synthesize_report(
     Returns:
         The unified report string, or ``None`` on failure.
     """
-    # Build a summary of all agent outputs
+    # Build a summary of all agent outputs with metadata headers
     sections: list[str] = []
     for agent_name in sorted(report.agent_results.keys()):
         status = report.agent_status.get(agent_name, "unknown")
@@ -405,7 +510,18 @@ async def _synthesize_report(
         sections.append(f"## {agent_name} ({status})\n\n")
         if data:
             import json
-            sections.append(json.dumps(data, indent=2)[:5000])
+            # Compute metadata for the synthesis agent
+            agent_finding_count = 0
+            if isinstance(data, dict):
+                agent_finding_count = (
+                    len(data.get("findings", [])) +
+                    sum(len(d.get("findings", [])) for d in data.get("dimensions", [])) +
+                    len(data.get("recommendations", []))
+                )
+            sections.append(
+                f"*Output metadata: {agent_finding_count} findings, status={status}*\n\n"
+            )
+            sections.append(json.dumps(data, indent=2)[:15000])
         else:
             sections.append("(no output)")
 
@@ -814,8 +930,24 @@ def _build_agent_prompt(agent: AnalysisAgent, context: str) -> str:
     Combines the agent's system prompt, codebase context, and output
     schema instructions into a single spec_content string for the
     AgentRunner.
+
+    When the agent has RepoTool access (agent_role="critical-analyser"),
+    adds a tool announcement so the LLM knows it can read files.
     """
     schema_json = json.dumps(agent.output_schema, indent=2)
+
+    # If this agent has RepoTool/read access, tell it how to use it
+    tool_notice = ""
+    if agent.agent_role == "critical-analyser":
+        tool_notice = (
+            "\n\nYou have **RepoTool** access — you can read, list, and check "
+            "existence of any file in this repository. Use this to browse code "
+            "that isn't shown in the context above. For example:\n"
+            "- To read a file: use the `read(path)` tool with a relative path \n"
+            "- To list a directory: use the `list(path)` tool\n"
+            "- A directory tree is provided above — use RepoTool to drill into "
+            "specific files that need deeper inspection.\n"
+        )
 
     return (
         f"{agent.system_prompt}\n\n"
@@ -823,6 +955,7 @@ def _build_agent_prompt(agent: AnalysisAgent, context: str) -> str:
         f"Analyse the following codebase and produce a structured assessment.\n\n"
         f"{context}\n\n"
         f"---\n\n"
+        f"{tool_notice}"
         f"Respond with ONLY a valid JSON object matching this schema. "
         f"Do not include any explanatory text before or after the JSON.\n\n"
         f"```json\n{schema_json}\n```"
@@ -1005,6 +1138,38 @@ def _merge_agent_output(
         report.recommendations.extend(
             f"[Tests] {r}" for r in recs
         )
+
+    elif agent_name == "critical-reviewer":
+        findings = data.get("findings", [])
+        for f in findings:
+            report.findings.append({
+                "severity": {"high": "error", "medium": "warning", "low": "info"}.get(
+                    f.get("risk", "low"), "info"
+                ),
+                "category": f"cross-cutting_{f.get('category', 'other')}",
+                "message": (
+                    f"[{f.get('category', 'cross-cutting')}] "
+                    f"{f.get('description', '')} "
+                    f"(effort: {f.get('effort_hours', '?')}h, "
+                    f"risk: {f.get('risk', '?')})"
+                ),
+                "file": ", ".join(f.get("files", [])),
+            })
+
+        recs = data.get("recommendations", [])
+        report.recommendations.extend(
+            f"[Critical] {r}" for r in recs
+        )
+
+        # Add summary categories as recommendations
+        summary = data.get("summary", {})
+        for cat_name, items in [
+            ("Fix Immediately", summary.get("fix_immediately", [])),
+            ("Fix Soon", summary.get("fix_soon", [])),
+            ("Design Debt", summary.get("design_debt", [])),
+        ]:
+            for item in items:
+                report.recommendations.append(f"[{cat_name}] {item}")
 
 
 def _merge_purposes(

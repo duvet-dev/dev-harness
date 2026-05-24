@@ -16,6 +16,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+import click
 
 from harness.agents.runner import AgentRunner
 from harness.analysis.agents import AnalysisAgent, AnalysisAgentRegistry
@@ -240,6 +241,7 @@ def _process_agent_results(
         )
     )
 
+    click.echo("Assessment complete.")
     return report
 
 
@@ -279,6 +281,7 @@ async def assess(
         return report
 
     # 2. Gather context
+    click.echo("Gathering repository context...")
     logger.info("Gathering context from %s", root)
     context = gather_context(root)
 
@@ -299,6 +302,7 @@ async def assess(
         """Run a single analysis agent and return (name, parsed_output, status)."""
         try:
             # Build the prompt with system prompt + context + output schema
+            click.echo(f"  \u23f3 Running {agent.name}...")
             spec = _build_agent_prompt(agent, context_json)
 
             result = await runner.run_simple(
@@ -311,6 +315,7 @@ async def assess(
 
             if result.startswith("Error:"):
                 logger.warning("Agent '%s' failed: %s", agent.name, result)
+                click.echo(f"  \u274c {agent.name}: failed")
                 return agent.name, {}, "failure"
 
             # Try to parse JSON from the result
@@ -321,8 +326,10 @@ async def assess(
                     "Falling back to text.",
                     agent.name,
                 )
+                click.echo(f"  \u26a0\ufe0f {agent.name}: degraded (non-JSON)")
                 return agent.name, {"_raw_text": result[:2000]}, "degraded"
 
+            click.echo(f"  \u2705 {agent.name}: complete")
             return agent.name, parsed, "success"
 
         except Exception as exc:
@@ -333,6 +340,7 @@ async def assess(
 
     # Run agents sequentially to respect rate limits
     agent_tasks = [run_agent(a) for a in agents]
+    click.echo("Processing agent results...")
     raw_results = await asyncio.gather(*agent_tasks, return_exceptions=True)
 
     # 5. Process all results (pure logic)
@@ -346,12 +354,14 @@ async def assess(
     # 6. P9 Synthesis — run if deep mode and at least one agent succeeded
     if deep and report.metrics.get("agents_succeeded", 0) > 0:
         try:
+            click.echo("Running P9 Synthesis Agent (unified report)...")
             synthesis = await _synthesize_report(report, runner, root)
             if synthesis:
                 report.report_text = synthesis
         except Exception as exc:
             logger.warning("Synthesis failed (graceful degradation): %s", exc)
 
+    click.echo("Assessment complete.")
     return report
 
 

@@ -2364,13 +2364,22 @@ def engagement():
 @engagement.command()
 @click.argument("name")
 @click.option("--slug", help="Override auto-derived slug")
+@click.option("--refactoring", is_flag=True,
+              help="Create a refactoring engagement from the latest assessment")
+@click.option("--focus", type=click.Choice(["high-risk", "medium", "all"]),
+              default="all",
+              help="Filter findings by severity when --refactoring (default: all)")
 @click.option("--allow-refactoring-suggestions", type=bool, default=None,
               help="Allow refactoring suggestions for this engagement (overrides project config)")
-def create(name, slug, allow_refactoring_suggestions):
+def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
     """Create a new engagement.
 
     Creates the engagement directory structure, switches to a new
     ``eng/<slug>`` branch, and sets the engagement as active.
+
+    When --refactoring is set, reads the latest assessment manifest
+    and auto-creates waves from assessment findings. Use --focus to
+    filter which findings become waves.
 
     Examples:
 
@@ -2379,6 +2388,10 @@ def create(name, slug, allow_refactoring_suggestions):
         harness engagement create "Hotfix" --slug hotfix-72
 
         harness engagement create "Refactor auth" --allow-refactoring-suggestions true
+
+        harness engagement create "Fix critical bugs" --refactoring
+
+        harness engagement create "High-risk fixes" --refactoring --focus high-risk
     """
     try:
         root = _require_project_root()
@@ -2403,6 +2416,36 @@ def create(name, slug, allow_refactoring_suggestions):
             )
             raise click.Abort()
 
+        # If --refactoring, read the latest assessment manifest before creating
+        baseline_manifest = None
+        if refactoring:
+            import json as _json
+            from harness.paths import get_engagements_dir
+
+            # Find the latest assessment manifest across all engagements
+            all_assess_dirs = list(get_engagements_dir(root).rglob("*-manifest.json"))
+            if not all_assess_dirs:
+                click.echo(
+                    "No assessment manifests found. Run an assessment first:\n"
+                    "  harness assess . --deep",
+                    err=True,
+                )
+                raise click.Abort()
+
+            # Pick the newest
+            baseline_manifest_path = sorted(all_assess_dirs, reverse=True)[0]
+            baseline_manifest = _json.loads(baseline_manifest_path.read_text())
+            findings = baseline_manifest.get("findings", [])
+
+            if not findings:
+                click.echo(
+                    "The latest assessment does not contain structured findings. "
+                    "Re-run with --deep:\n"
+                    "  harness assess . --deep",
+                    err=True,
+                )
+                raise click.Abort()
+
         # Create engagement directory structure
         from harness.engagement.lifecycle import (
             create_engagement_dir,
@@ -2426,14 +2469,91 @@ def create(name, slug, allow_refactoring_suggestions):
             )
             raise click.Abort()
 
+        # Determine session type
+        session_type = "refactoring" if refactoring else None
+
         # Write engagement metadata
         write_engagement_metadata(
             eng_dir,
             name,
             slug,
             branch_name,
+            session_type=session_type,
             allow_refactoring_suggestions=allow_refactoring_suggestions,
         )
+
+        # If refactoring, update engagement.yaml with baseline reference + auto-create waves
+        waves_created = 0
+        if refactoring and baseline_manifest:
+            import json as _json
+            from harness.plan.plan_manager import PlanManager
+
+            # Also store baseline reference and refactoring config in engagement.yaml
+            eng_yaml_path = eng_dir / "engagement.yaml"
+            import yaml as _yaml
+            with open(eng_yaml_path) as f:
+                yaml_data = _yaml.safe_load(f) or {}
+            yaml_data["refactoring"] = True
+            yaml_data["session_type"] = "refactoring"
+            yaml_data["baseline_manifest"] = str(baseline_manifest_path)
+            yaml_data["baseline_finding_count"] = len(
+                baseline_manifest.get("findings", [])
+            )
+            yaml_data["focus"] = focus
+            with open(eng_yaml_path, "w") as f:
+                _yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
+
+            # Filter findings by --focus
+            focus_findings = []
+            for f in findings:
+                sev = f.get("severity", "info")
+                if focus == "high-risk" and sev not in ("error", "critical"):
+                    continue
+                if focus == "medium" and sev not in ("error", "critical", "warning"):
+                    continue
+                focus_findings.append(f)
+
+            if not focus_findings:
+                click.echo(
+                    f"No findings match focus level '{focus}'. Creating engagement "
+                    f"without waves — add them manually with:\n"
+                    f"  harness wave create-from-finding <finding-id>",
+                )
+            else:
+                # Auto-create waves from filtered findings
+                pm = PlanManager(root, slug)
+                manifest_updates = []
+
+                for f in focus_findings:
+                    finding_id = f.get("id", "?")
+                    if f.get("wave_slug"):
+                        continue  # Already has a wave assigned
+
+                    message = f.get("message", "")[:72]
+                    title = message + ("..." if len(f.get("message", "")) > 72 else "")
+                    severity = f.get("severity", "info")
+                    category = f.get("category", "other")
+
+                    wave = pm.add_wave(
+                        title=title,
+                        wave_type="refactor",
+                        trigger_phase="assessment",
+                        trigger_reason=(
+                            f"Finding {finding_id}: [{severity}] {category} — "
+                            f"{f.get('message', '')[:80]}"
+                        ),
+                    )
+
+                    f["wave_slug"] = wave.id
+                    f["wave_status"] = "open"
+                    manifest_updates.append((finding_id, wave.id))
+                    waves_created += 1
+
+                # Update the manifest to persist wave associations
+                if manifest_updates:
+                    baseline_manifest_path.write_text(
+                        _json.dumps(baseline_manifest, indent=2)
+                    )
 
         # Set active engagement
         from harness.engagement.lifecycle import set_active_engagement
@@ -2442,10 +2562,19 @@ def create(name, slug, allow_refactoring_suggestions):
         click.echo(f"Engagement created: {slug}")
         click.echo(f"  Name   : {name}")
         click.echo(f"  Branch : {branch_name}")
+        click.echo(f"  Type   : {'refactoring' if refactoring else 'standard'}")
+        if refactoring:
+            click.echo(f"  Focus  : {focus} ({waves_created} waves created)")
         click.echo("  Status : planning")
         if allow_refactoring_suggestions is not None:
             click.echo(f"  Refactoring suggestions: {allow_refactoring_suggestions}")
         click.echo(f"  Path   : {eng_dir}")
+        if refactoring and waves_created:
+            click.echo("")
+            click.echo(f"  Created {waves_created} waves from assessment findings:")
+            click.echo(f"    Run:  harness wave list")
+            click.echo(f"    Run:  harness wave run <wave-id>")
+            click.echo(f"    See:  cat {eng_dir / 'engagement.yaml'}")
         click.echo("")
         click.echo("Tip: Start a design loop with `harness work <description>`")
 

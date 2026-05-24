@@ -41,8 +41,13 @@ coverage/
 *.py,cover
 *.py,cover
 
-# Harness
-.harness/
+# Harness — transient regeneratable subdirs only
+# Everything else (config, engagements, agents, plans, assessments) is tracked
+# for multi-user collaboration and history.
+.harness/agents/*/memory/
+.harness/cache/
+.harness/docs-backups/
+.harness/backups/
 
 # Temp
 harness_simple_*

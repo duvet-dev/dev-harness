@@ -1421,6 +1421,157 @@ def create_wave_from_finding(finding_id, slug):
     click.echo(f"  See plan:     harness wave list")
 
 
+@wave.command(name="create-from-assessment")
+@click.option("--focus", type=click.Choice(["high-risk", "medium", "all"]),
+              default="high-risk",
+              help="Filter findings by severity (default: high-risk)")
+@click.option("--limit", type=int, default=0,
+              help="Max waves to create (0 = no limit)")
+@click.option("--engagement", "slug", help="Engagement slug (default: active)")
+def create_waves_from_assessment(focus, limit, slug):
+    """Create waves from all matching assessment findings.
+
+    Reads the latest assessment manifest, filters findings by the
+    given focus level, and creates a wave for each finding that
+    doesn't already have one. Updates the manifest to track
+    finding-to-wave associations.
+
+    Use --limit to cap the number of waves created (useful for
+    starting with just the top N findings).
+
+    Examples:
+
+        harness wave create-from-assessment
+        harness wave create-from-assessment --focus medium
+        harness wave create-from-assessment --focus all --limit 5
+        harness wave create-from-assessment --engagement my-engagement
+    """
+    import json
+    from harness.plan.plan_manager import PlanManager
+
+    root = _require_project_root()
+
+    if not slug:
+        from harness.engagement.resolver import resolve_active_engagement
+        slug = resolve_active_engagement(root)
+
+    if not slug:
+        click.echo(
+            "No active engagement. Create one with:\n"
+            "  harness engagement create \"your task\"",
+            err=True,
+        )
+        raise click.Abort()
+
+    # Find the latest assessment manifest
+    from harness.paths import get_engagements_dir
+    assess_dir = get_engagements_dir(root) / slug / "assessments"
+    if not assess_dir.is_dir():
+        click.echo(
+            f"No assessments found for engagement '{slug}'.\n"
+            f"Run an assessment first:\n"
+            f"  harness assess . --deep",
+            err=True,
+        )
+        raise click.Abort()
+
+    manifests = sorted(
+        assess_dir.glob("*-manifest.json"),
+        reverse=True,
+    )
+    if not manifests:
+        click.echo(
+            f"No assessment manifests found in {assess_dir}.",
+            err=True,
+        )
+        raise click.Abort()
+
+    manifest = json.loads(manifests[0].read_text())
+    findings = manifest.get("findings", [])
+
+    if not findings:
+        click.echo(
+            "The latest assessment does not contain structured findings.\n"
+            "Re-run with:\n"
+            f"  harness assess . --deep",
+            err=True,
+        )
+        raise click.Abort()
+
+    # Filter findings by severity
+    def _matches_focus(f: dict) -> bool:
+        sev = f.get("severity", "info")
+        if focus == "high-risk":
+            return sev in ("error", "critical")
+        elif focus == "medium":
+            return sev in ("error", "critical", "warning")
+        return True  # all
+
+    matching = [f for f in findings if _matches_focus(f)]
+
+    if not matching:
+        click.echo(f"No findings match focus level '{focus}'.")
+        return
+
+    # Filter out findings that already have waves
+    unassigned = [f for f in matching if not f.get("wave_slug")]
+
+    if not unassigned:
+        click.echo(
+            f"All {len(matching)} matching findings already have "
+            f"waves assigned. Nothing to create."
+        )
+        return
+
+    # Apply limit
+    if limit > 0:
+        unassigned = unassigned[:limit]
+
+    # Create waves
+    pm = PlanManager(root, slug)
+    created = 0
+    skipped = 0
+    manifest_updated = False
+
+    for f in unassigned:
+        fid = f.get("id", "?")
+        severity = f.get("severity", "info")
+        category = f.get("category", "other")
+        message = f.get("message", "")
+        title = message[:72] + ("..." if len(message) > 72 else "")
+
+        wave = pm.add_wave(
+            title=title,
+            wave_type="refactor",
+            trigger_phase="assessment",
+            trigger_reason=(
+                f"Finding {fid}: [{severity}] {category} — {message[:100]}"
+            ),
+        )
+
+        f["wave_slug"] = wave.id
+        f["wave_status"] = "open"
+        manifest_updated = True
+        created += 1
+
+        click.echo(f"  ✓ {fid}: created wave '{wave.id}' — {title[:50]}")
+
+    if manifest_updated:
+        manifests[0].write_text(json.dumps(manifest, indent=2))
+
+    skipped = len(matching) - len(unassigned) - (len(unassigned) - created)
+    click.echo()
+    click.echo(
+        f"  Created {created} wave(s) from {focus} findings "
+        f"({len(matching)} matched, {skipped} already assigned)"
+    )
+    if limit > 0 and created == limit:
+        click.echo(f"  Reached --limit {limit}. Run again to create more.")
+    click.echo()
+    click.echo(f"  Run:  harness wave list")
+    click.echo(f"  Run:  harness wave run <wave-id>")
+
+
 @main.command()
 @click.argument("prompt_text", required=False, default=None)
 @click.option("--engagement", "engagement_slug", help="Engagement slug (default: active)")
@@ -2704,7 +2855,8 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
                 click.echo(
                     f"No findings match focus level '{focus}'. Creating engagement "
                     f"without waves — add them manually with:\n"
-                    f"  harness wave create-from-finding <finding-id>",
+                    f"  harness wave create-from-assessment\n"
+                    f"  or: harness wave create-from-finding <finding-id>",
                 )
             else:
                 # Auto-create waves from filtered findings

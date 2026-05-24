@@ -1,0 +1,51 @@
+# Dev Harness – Architecture Goal
+# Project: Agent-driven software development system
+
+goal: |
+  Build an agent-driven software development system that orchestrates
+  multiple AI agents to plan, implement, test, and review code changes
+  within a structured engagement workflow.
+
+layers:
+  - name: Agent System
+    description: Core agent orchestration - runner, backends, tool access, fleet
+    modules:
+      - agents/runner
+      - agents/backends
+      - agents/repo_tool
+      - agents/fleet
+      - agents/consultation
+
+  - name: Analysis
+    description: Code analysis pipeline - fast scan, deep analysis, observer mode
+    modules:
+      - analysis/fast
+      - analysis/deep
+      - analysis/observer
+      - analysis/assessment
+
+  - name: State & Workflow
+    description: Engagement lifecycle, temporal workflow, state management
+    modules:
+      - state
+      - workflows
+      - engagement
+
+  - name: Infrastructure
+    description: Configuration, SCM, session management, docs generation
+    modules:
+      - config
+      - scm
+      - session
+      - docs
+      - sync
+
+detection_rules:
+  - pattern: "import harness\\.agents"
+    category: "agent"
+  - pattern: "import harness\\.analysis"
+    category: "analysis"
+  - pattern: "import harness\\.state"
+    category: "state"
+  - pattern: "import harness\\.workflows"
+    category: "workflows"

@@ -1,0 +1,55 @@
+# Provider Configuration
+# API keys are referenced via environment variables.
+# DeepSeek is the primary provider; OpenAI is configured as fallback.
+
+providers:
+  deepseek:
+    type: openai-compatible
+    base_url: https://api.deepseek.com/chat/completions
+    api_key: ${DEEPSEEK_API_KEY}
+    models:
+      - name: deepseek-v4-pro
+        context_window: 65536
+        default_temperature: 0.3
+      - name: deepseek-v4-flash
+        context_window: 65536
+        default_temperature: 0.5
+      - name: deepseek-chat
+        context_window: 65536
+        default_temperature: 0.5
+      - name: deepseek-reasoner
+        context_window: 65536
+        default_temperature: 0.3
+
+  openai:
+    type: openai-compatible
+    base_url: https://api.openai.com/v1/chat/completions
+    api_key: ${OPENAI_API_KEY}
+    models:
+      - name: gpt-4o
+        context_window: 128000
+        default_temperature: 0.3
+      - name: gpt-4o-mini
+        context_window: 128000
+        default_temperature: 0.5
+
+# Which provider to use for which agent roles
+agent_providers:
+  default:
+    backend: api
+    provider: deepseek
+    model: deepseek-v4-pro
+  fallback:
+    backend: api
+    provider: openai
+    model: gpt-4o-mini
+  architect: deepseek-v4-pro
+  coder: deepseek-v4-flash
+  reviewer: deepseek-v4-pro
+
+# Fallback chain (tried in order when primary fails)
+fallbacks:
+  - backend: api
+    model: deepseek-chat
+  - backend: api
+    model: gpt-4o-mini

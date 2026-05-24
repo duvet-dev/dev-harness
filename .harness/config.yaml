@@ -1,0 +1,38 @@
+# Dev Harness – Project Configuration
+# See .harness/providers.yaml for LLM provider settings.
+# Agent definitions in .harness/agents/
+
+default_backend: api
+default_model: deepseek-v4-pro
+cleanup_temp_dirs: true
+temp_dir_prefix: harness_agent_
+max_fallbacks: 3
+timeout_seconds: 600
+
+# Default gate mode for new engagements
+# Options: auto | manual | disabled
+default_gate_mode: auto
+
+# Git branch watched for external changes
+watched_branch: main
+
+# Engagement defaults
+engagements:
+  default_phase_count: 3
+  require_architecture_goal: true
+  auto_plan_on_create: true
+
+# Agent defaults
+agents:
+  default_role: coder
+  default_timeout: 300
+  enable_repo_tool: true
+
+# Analysis defaults
+analysis:
+  fast_scan_depth: 1
+  enable_observer: true
+  enable_assessment: true
+  assessment_timeout: 600
+  include_dead_code_analysis: true
+  include_coverage_analysis: true

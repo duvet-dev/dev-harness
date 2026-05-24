@@ -8,7 +8,7 @@ _A lifecycle for using the harness to refactor code — going from current state
 
 Building new features and refactoring existing code are fundamentally different kinds of work. Feature building starts from a **requirements gap** (what users need but don't have). Refactoring starts from a **quality gap** (what the codebase is vs what it should be).
 
-The observer (`harness observe --deep .`) measures the quality gap. The refactoring engagement closes it.
+The observer (`harness inspect --deep .`) measures the quality gap. The refactoring engagement closes it.
 
 ```
 Current State                    Target State
@@ -46,7 +46,7 @@ The standard harness phase model is built around feature delivery. Refactoring n
 
 #### 1. Assessment Review (replaces Requirements)
 
-**Input:** Observer report from `harness observe --deep . --report baseline.md`
+**Input:** Observer report from `harness inspect --deep . --report baseline.md`
 
 **Activity:** Review the findings and categorise them:
 
@@ -127,7 +127,7 @@ python3 -m pytest -x -q
 
 **Layer 2: Observer re-run confirms the finding is gone**
 ```bash
-harness observe --deep . --report verify-<wave>.md
+harness inspect --deep . --report verify-<wave>.md
 
 # Compare to baseline:
 # - The specific finding should be missing from the new report

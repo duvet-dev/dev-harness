@@ -8,7 +8,7 @@ _A pattern for using the harness to audit, design, and improve itself — no pri
 
 The harness can analyse its own codebase, identify issues, create waves to fix them, verify the fixes, then repeat. Each cycle raises the bar.
 
-You don't need external tools, reviewers, or prior analysis. The observer (`harness observe --deep .`) is the entry point. It produces a comprehensive report identifying bugs, architectural debt, test gaps, and refactoring opportunities. You then use the harness engagement lifecycle to fix them.
+You don't need external tools, reviewers, or prior analysis. The observer (`harness inspect --deep .`) is the entry point. It produces a comprehensive report identifying bugs, architectural debt, test gaps, and refactoring opportunities. You then use the harness engagement lifecycle to fix them.
 
 ---
 
@@ -68,7 +68,7 @@ You don't need external tools, reviewers, or prior analysis. The observer (`harn
 # 1. Run the observer (no prior knowledge needed)
 cd /path/to/repo
 harness assess . --report baseline-assessment.md
-# (assess is an alias for observe --deep)
+# (assess runs the full deep analysis with structured findings)
 
 # 2. Read the report — it tells you what's wrong
 #    The report includes:

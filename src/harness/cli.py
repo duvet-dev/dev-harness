@@ -2278,14 +2278,24 @@ def shell():
 
 
 @main.command()
-def finish():
+@click.option("--re-assess", is_flag=True,
+              help="Re-run assessment and compare to baseline on finish")
+def finish(re_assess):
     """Complete the current engagement with a commit.
 
     Stages all changes, opens git commit editor (user writes message),
     and updates the harness summary. Designed for the squash+rebase
     workflow (R15.3).
 
+    When --re-assess is set, runs the observer after committing,
+    compares findings to the baseline stored at engagement creation,
+    and updates the project's assessment history.
+
     Run `harness catchup` first if state may be stale.
+
+    Examples:
+        harness finish
+        harness finish --re-assess
     """
     try:
         from harness.state.freshness import (
@@ -2337,12 +2347,145 @@ def finish():
         # Update snapshot status
         snapshot_path = get_harness_state_path(root)
         snapshot = _load_project_snapshot(snapshot_path)
+        completed_engagement_id = None
         for eng in snapshot.engagements:
             if eng.id == snapshot.current_engagement:
                 eng.status = "complete"
+                completed_engagement_id = eng.id
         SnapshotWriter.write(snapshot, snapshot_path)
 
         click.echo(f"Engagement finished @ {head_after[:8]} on {current_branch}.")
+
+        # --re-assess: run observer and compare to baseline
+        if re_assess:
+            click.echo()
+            click.echo("Running post-engagement re-assessment...")
+
+            # Determine the active slug from the current branch pattern
+            slug = None
+            if current_branch.startswith("eng/"):
+                slug = current_branch[4:]
+
+            if not slug:
+                click.echo(
+                    "  Skipping re-assessment (not on an eng/ branch).",
+                )
+            else:
+                from harness.analysis.observer import analyse
+
+                # Determine the engagement's assessments dir
+                from harness.paths import get_engagement_dir
+                eng_dir = get_engagement_dir(root, slug)
+                assess_dir = eng_dir / "assessments"
+
+                if not assess_dir.is_dir():
+                    assess_dir.mkdir(parents=True, exist_ok=True)
+
+                # Run the observer
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                timestamp = now.strftime("%Y%m%d-%H%M%S")
+
+                result = analyse(
+                    path=root,
+                    deep=True,
+                )
+
+                if result["status"] == "error":
+                    click.echo(f"  Re-assessment failed: {result['message']}")
+                else:
+                    import json as _json
+
+                    # Write report to engagement
+                    report_path = assess_dir / f"{timestamp}-assessment.md"
+                    report_path.write_text(result["report"])
+
+                    # Build closure metrics
+                    assessment_dict = result.get("assessment")
+                    current_findings_count = 0
+                    if assessment_dict:
+                        current_findings_count = len(
+                            assessment_dict.get("assessment", {}).get("findings", [])
+                        )
+
+                    # Write manifest with findings
+                    from harness.cli import _write_assessment_report  # noqa
+                    written = _write_assessment_report(
+                        report_text=result["report"],
+                        repo_path=str(root),
+                        assessment_dict=assessment_dict,
+                    )
+
+                    # Load baseline from engagement.yaml for comparison
+                    eng_yaml_path = eng_dir / "engagement.yaml"
+                    baseline_findings = None
+                    baseline_count = "?"
+                    if eng_yaml_path.is_file():
+                        import yaml as _yaml
+                        with open(eng_yaml_path) as f:
+                            yaml_data = _yaml.safe_load(f) or {}
+                        baseline_count = yaml_data.get("baseline_finding_count", "?")
+
+                        # Load baseline manifest for detailed comparison
+                        baseline_manifest_path = yaml_data.get("baseline_manifest")
+                        if baseline_manifest_path:
+                            bp = eng_dir / baseline_manifest_path
+                            if bp.is_file():
+                                baseline_manifest = _json.loads(bp.read_text())
+                                baseline_findings = baseline_manifest.get("findings", [])
+
+                    # Compute closure stats
+                    closed_count = "?"
+                    if baseline_findings is not None:
+                        # A finding is 'closed' if its message is not present in current
+                        current_messages = set(
+                            f.get("message", "")[:80]
+                            for f in (assessment_dict.get("assessment", {}).get("findings", []) if assessment_dict else [])
+                        )
+                        closed_in_baseline = [
+                            f for f in baseline_findings
+                            if f.get("message", "")[:80] not in current_messages
+                        ]
+                        closed_count = len(closed_in_baseline)
+
+                    click.echo()
+                    click.echo("  ┌─ Re-Assessment Results ──────────────────────")
+                    click.echo(f"  │ Baseline findings:  {baseline_count}")
+                    click.echo(f"  │ Current findings:   {current_findings_count}")
+                    if isinstance(closed_count, int):
+                        click.echo(f"  │ Findings closed:    {closed_count}")
+                        pct = (
+                            round(closed_count / len(baseline_findings) * 100)
+                            if baseline_findings else 0
+                        )
+                        click.echo(f"  │ Closure rate:       {pct}%")
+                    click.echo(f"  │ Report:            {report_path.name}")
+                    click.echo("  └───────────────────────────────────────────────")
+                    click.echo()
+                    click.echo(f"  See: cat {report_path}")
+
+                # Update assessment history in .harness/config.yaml
+                config_path = root / ".harness" / "config.yaml"
+                if config_path.is_file():
+                    import yaml as _yaml
+                    with open(config_path) as f:
+                        config = _yaml.safe_load(f) or {}
+
+                    history = config.setdefault("assessment_history", [])
+                    entry = {
+                        "date": now.strftime("%Y-%m-%d"),
+                        "engagement": slug,
+                        "findings": current_findings_count,
+                        "report": f"assessments/{timestamp}-assessment.md",
+                    }
+                    if isinstance(closed_count, int):
+                        entry["closed"] = closed_count
+                    history.append(entry)
+
+                    with open(config_path, "w") as f:
+                        _yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        click.echo()
         click.echo("Tip: Use `harness summary` to view the final state.")
 
     except Exception as exc:
@@ -2925,6 +3068,149 @@ def close(slug):
     except Exception as exc:
         click.echo(f"Failed to close engagement: {exc}", err=True)
         raise click.Abort()
+
+
+@engagement.command()
+@click.option("--engagement", "slug", help="Engagement slug (default: active)")
+def diff(slug):
+    """Compare baseline assessment to current state.
+
+    Loads the baseline assessment from the engagement's metadata,
+    runs a fresh assessment, and compares findings to show what has
+    been closed, what remains, and any new findings.
+
+    Examples:
+
+        harness engagement diff
+
+        harness engagement diff --engagement my-engagement
+    """
+    import json as _json
+
+    root = _require_project_root()
+
+    if not slug:
+        from harness.engagement.resolver import resolve_active_engagement
+        slug = resolve_active_engagement(root)
+
+    if not slug:
+        click.echo(
+            "No active engagement. Specify one with --engagement.",
+            err=True,
+        )
+        raise click.Abort()
+
+    from harness.paths import get_engagement_dir
+    eng_dir = get_engagement_dir(root, slug)
+    eng_yaml_path = eng_dir / "engagement.yaml"
+
+    if not eng_yaml_path.is_file():
+        click.echo(f"Engagement '{slug}' has no metadata file.", err=True)
+        raise click.Abort()
+
+    import yaml as _yaml
+    with open(eng_yaml_path) as f:
+        yaml_data = _yaml.safe_load(f) or {}
+
+    baseline_manifest_path = yaml_data.get("baseline_manifest")
+    if not baseline_manifest_path:
+        click.echo(
+            f"Engagement '{slug}' has no baseline assessment.\n"
+            f"This engagement was not created with --refactoring, so there "
+            f"is no baseline to compare against.",
+            err=True,
+        )
+        raise click.Abort()
+
+    from harness.analysis.observer import analyse
+
+    click.echo("Running fresh assessment for comparison...")
+    result = analyse(path=root, deep=True)
+
+    if result["status"] == "error":
+        click.echo(f"Assessment failed: {result['message']}", err=True)
+        return
+
+    # Load baseline
+    bp = eng_dir / baseline_manifest_path
+    if not bp.is_file():
+        click.echo(f"Baseline manifest not found: {bp}", err=True)
+        return
+
+    baseline = _json.loads(bp.read_text())
+    baseline_findings = baseline.get("findings", [])
+
+    # Get current findings
+    assessment_dict = result.get("assessment")
+    current_findings = (
+        assessment_dict.get("assessment", {}).get("findings", [])
+        if assessment_dict else []
+    )
+
+    # Build lookup sets by message signature
+    baseline_messages: dict[str, dict] = {}
+    for f in baseline_findings:
+        sig = f.get("message", "")[:80]
+        baseline_messages[sig] = f
+
+    current_messages: set[str] = set()
+    for f in current_findings:
+        sig = f.get("message", "")[:80]
+        current_messages.add(sig)
+
+    # Categorise
+    closed = []
+    remaining = []
+    for sig, f in baseline_messages.items():
+        if sig in current_messages:
+            remaining.append(f)
+        else:
+            closed.append(f)
+
+    new_findings = [
+        f for f in current_findings
+        if f.get("message", "")[:80] not in baseline_messages
+    ]
+
+    # Display
+    total_baseline = len(baseline_findings)
+    total_current = len(current_findings)
+    closure = round(len(closed) / total_baseline * 100) if total_baseline else 0
+
+    click.echo()
+    click.echo(f"  Engagement: {slug}")
+    click.echo(f"  {'─' * 45}")
+    click.echo(f"  Baseline findings: {total_baseline}")
+    click.echo(f"  Current findings:  {total_current}")
+    click.echo()
+    click.echo(f"  CLOSED: {len(closed)} findings")
+    for f in closed[:10]:
+        click.echo(f"    ✓ {f.get('id', '?')}: {f.get('message', '')[:60]}")
+    if len(closed) > 10:
+        click.echo(f"    ... and {len(closed) - 10} more")
+
+    click.echo()
+    click.echo(f"  REMAINING: {len(remaining)} findings")
+    for f in remaining[:10]:
+        click.echo(f"    ○ {f.get('id', '?')}: {f.get('message', '')[:60]}")
+    if len(remaining) > 10:
+        click.echo(f"    ... and {len(remaining) - 10} more")
+
+    click.echo()
+    click.echo(f"  NEW: {len(new_findings)} findings (regressions)")
+    alert = "✅" if len(new_findings) == 0 else "⚠️"
+    for f in new_findings[:5]:
+        click.echo(f"    + [{f.get('severity', '?')}] {f.get('message', '')[:60]}")
+    if len(new_findings) > 5:
+        click.echo(f"    ... and {len(new_findings) - 5} more")
+
+    click.echo()
+    click.echo(f"  ──────────────────────────────")
+    click.echo(f"  Closure rate: {closure}% {alert}")
+
+    if new_findings:
+        click.echo()
+        click.echo("  ⚠️  New findings detected. Review before proceeding.")
 
 
 # ---------------------------------------------------------------------------

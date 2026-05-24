@@ -61,11 +61,28 @@ def resolve_value(value: str) -> str:
 
 
 @dataclass
-class ModelEntry:
-    """A single model key → model name mapping within a provider."""
+class ModelDef:
+    """A model definition within a provider configuration.
 
-    key: str
-    model: str
+    Maps a model name to its capabilities and default settings.
+    Mirrors the model entries in .harness/providers.yaml.
+
+    Example YAML::
+
+        models:
+          - name: deepseek-v4-pro
+            context_window: 65536
+            default_temperature: 0.3
+    """
+
+    name: str
+    """Model identifier sent to the API (e.g. ``deepseek-v4-pro``)."""
+
+    context_window: int = 4096
+    """Maximum context window in tokens."""
+
+    default_temperature: float = 0.3
+    """Default temperature for this model."""
 
 
 @dataclass
@@ -88,7 +105,7 @@ class ProviderConfig:
     base_url: str = ""
     """Base URL for API providers. Required for ``openai-compatible`` type."""
 
-    models: list[dict[str, Any]] = field(default_factory=list)
+    models: list[ModelDef] = field(default_factory=list)
     """Map of model keys to model names (e.g. ``default`` → ``gpt-4o``)."""
 
     command: str = ""
@@ -96,6 +113,24 @@ class ProviderConfig:
 
     description: str = ""
     """Human-readable description of this provider."""
+
+    def __post_init__(self) -> None:
+        """Normalize models to list[ModelDef] on construction."""
+        raw = self.models
+        if isinstance(raw, str):
+            self.models = [ModelDef(name=raw)]
+        elif isinstance(raw, dict):
+            self.models = [
+                ModelDef(name=v if isinstance(v, str) else str(v))
+                for k, v in raw.items()
+            ]
+        elif isinstance(raw, (list, tuple)):
+            self.models = [
+                ModelDef(**m) if isinstance(m, dict) else m
+                for m in raw
+            ]
+        else:
+            self.models = list(raw) if raw else []
 
     # ── resolved helpers ─────────────────────────────────────
 
@@ -123,22 +158,10 @@ class ProviderConfig:
         Raises:
             ProviderError: If the model key is not found.
         """
-        # Models can be a name→alias dict or a list of model objects
-        if isinstance(self.models, dict):
-            if model_key in self.models:
-                return self.models[model_key]
-            if self.models:
-                raise ProviderError(
-                    f"Model key '{model_key}' not found in provider '{self.name}'. "
-                    f"Available keys: {', '.join(self.models) or '(none)'}"
-                )
-        elif isinstance(self.models, list):
-            names = [m.get("name", "") for m in self.models if isinstance(m, dict)]
-            if model_key in names:
+        # Look up model by name in the typed ModelDef list
+        for m in self.models:
+            if isinstance(m, ModelDef) and m.name == model_key:
                 return model_key
-            if names:
-                # Try using the key directly as a model name
-                pass
         return model_key
 
     def validate(self) -> list[str]:
@@ -179,10 +202,9 @@ class ProviderConfig:
             "type": self.type,
             "api_key": self.resolve_api_key(),
             "base_url": self.resolve_base_url(),
-            "models": (
-                dict(self.models) if isinstance(self.models, dict)
-                else self.models
-            ),
+            "models": [{"name": m.name, "context_window": m.context_window,
+                           "default_temperature": m.default_temperature}
+                          for m in self.models],
             "command": self.resolve_command(),
             "description": self.description,
         }
@@ -261,7 +283,7 @@ def provider_config_from_dict(
         type=data.get("type", "openai-compatible"),
         api_key=data.get("api_key", ""),
         base_url=data.get("base_url", ""),
-        models=data.get("models", {}),
+        models=data.get("models", []),
         command=data.get("command", ""),
         description=data.get("description", ""),
     )

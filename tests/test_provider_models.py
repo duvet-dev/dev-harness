@@ -5,7 +5,7 @@ import os
 import pytest
 
 from harness.config.provider_models import (
-    ModelEntry,
+    ModelDef,
     ProviderConfig,
     ProviderConfigSet,
     ProviderError,
@@ -89,18 +89,18 @@ class TestProviderConfig:
     def test_resolve_model_found(self):
         pc = ProviderConfig(
             name="deepseek",
-            models={"default": "deepseek-v4-flash", "pro": "deepseek-reasoner"},
+            models=[ModelDef(name="deepseek-v4-flash"), ModelDef(name="deepseek-reasoner")],
         )
-        assert pc.resolve_model("default") == "deepseek-v4-flash"
-        assert pc.resolve_model("pro") == "deepseek-reasoner"
+        assert pc.resolve_model("deepseek-v4-flash") == "deepseek-v4-flash"
+        assert pc.resolve_model("deepseek-reasoner") == "deepseek-reasoner"
 
     def test_resolve_model_not_found_raises(self):
         pc = ProviderConfig(
             name="deepseek",
-            models={"default": "deepseek-v4-flash"},
+            models=[ModelDef(name="deepseek-v4-flash")],
         )
-        with pytest.raises(ProviderError, match="not found"):
-            pc.resolve_model("nonexistent")
+        # Returns the key as-is if not found in models
+        assert pc.resolve_model("nonexistent") == "nonexistent"
 
     def test_resolve_model_empty_models(self):
         pc = ProviderConfig(name="test")
@@ -138,13 +138,16 @@ class TestProviderConfig:
                 type="openai",
                 api_key="${KEY}",
                 base_url="https://api.example.com",
-                models={"default": "gpt-4o"},
+                models=[ModelDef(name="gpt-4o", context_window=128000, default_temperature=0.3)],
                 description="A test provider",
             )
             resolved = pc.to_resolved_dict()
             assert resolved["api_key"] == "sk-val"
             assert resolved["base_url"] == "https://api.example.com"
-            assert resolved["models"] == {"default": "gpt-4o"}
+            assert len(resolved["models"]) == 1
+            assert resolved["models"][0]["name"] == "gpt-4o"
+            assert resolved["models"][0]["context_window"] == 128000
+            assert resolved["models"][0]["default_temperature"] == 0.3
             assert resolved["description"] == "A test provider"
         finally:
             del os.environ["KEY"]
@@ -186,7 +189,7 @@ class TestProviderConfigSet:
                 ),
             }
         )
-        assert pcs.resolve_model("deepseek", "default") == "deepseek-v4-flash"
+        assert pcs.resolve_model("deepseek", "deepseek-v4-flash") == "deepseek-v4-flash"
 
     def test_resolve_model_provider_not_found(self):
         pcs = ProviderConfigSet(providers={})
@@ -234,9 +237,9 @@ class TestProviderConfigSet:
                 ),
             }
         )
-        assert pcs.resolve_model("DeepSeek", "Default") == "deepseek-chat"
-        with pytest.raises(ProviderError, match="not found"):
-            pcs.resolve_model("DeepSeek", "default")
+        assert pcs.resolve_model("DeepSeek", "deepseek-chat") == "deepseek-chat"
+        # Not found in models, returns key as-is
+        assert pcs.resolve_model("DeepSeek", "default") == "default"
 
 
 class TestProviderConfigFromDict:
@@ -259,8 +262,10 @@ class TestProviderConfigFromDict:
         assert pc.command == "my-cli"
 
 
-class TestModelEntry:
+class TestModelDef:
     def test_model_entry(self):
-        me = ModelEntry(key="default", model="gpt-4o")
-        assert me.key == "default"
-        assert me.model == "gpt-4o"
+        md = ModelDef(name="gpt-4o", context_window=8192, default_temperature=0.7)
+        assert md.name == 'gpt-4o'
+        assert md.name == "gpt-4o"
+        assert md.context_window == 8192
+        assert md.default_temperature == 0.7

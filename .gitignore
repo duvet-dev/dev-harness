@@ -34,6 +34,9 @@ scripts/_temporal/
 # Local build counter (monotonic, not in git)
 BUILD_NUMBER
 
+# Generated documentation output
+docs/
+
 # Coverage reports
 coverage/
 .coverage

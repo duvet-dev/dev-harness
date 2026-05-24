@@ -63,7 +63,7 @@ You don't need external tools, reviewers, or prior analysis. The observer (`harn
 ```bash
 # 1. Run the observer (no prior knowledge needed)
 cd /path/to/repo
-harness observe --deep . --output baseline-assessment.md
+harness observe --deep . --report baseline-assessment.md
 
 # 2. Read the report — it tells you what's wrong
 #    The report includes:
@@ -151,7 +151,7 @@ After each wave (or the full engagement), re-run the observer and compare:
 
 ```bash
 # Run after fixing one wave's findings
-harness observe --deep . --output wave-verification.md
+harness observe --deep . --report wave-verification.md
 
 # Compare: findings count should be LOWER than baseline
 # Compare: specific finding should be GONE
@@ -307,7 +307,7 @@ Use `harness status` and `harness engagement list` to check progress at any time
 
 ```bash
 # 1. Baseline
-harness observe --deep . --output baseline.md
+harness observe --deep . --report baseline.md
 
 # 2. Read findings, pick the critical ones
 
@@ -319,13 +319,13 @@ harness wave create add-e2e-tests
 
 # 4. Execute each wave (or run full session for all)
 harness wave run fix-phantom-roles
-harness observe --deep . --output verify-1.md
+harness observe --deep . --report verify-1.md
 
 harness wave run fix-env-vars
-harness observe --deep . --output verify-2.md
+harness observe --deep . --report verify-2.md
 
 harness wave run add-e2e-tests
-harness observe --deep . --output verify-3.md
+harness observe --deep . --report verify-3.md
 
 # 5. Review and close
 harness review

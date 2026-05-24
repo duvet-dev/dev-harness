@@ -142,7 +142,7 @@ def debt_section(
         lines.append("")
         lines.append(
             f"*...and {remaining} more violation(s). "
-            f"Run `harness observe` for the full report.*"
+            f"Run `harness inspect` for the full report.*"
         )
 
     lines.append("")

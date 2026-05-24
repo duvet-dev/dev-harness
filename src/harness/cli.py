@@ -128,12 +128,14 @@ WORKFLOWS_EPILOG = """
                 findings, and overall progress. Use when you need a comprehensive
                 picture of where the project stands.
 
-  observe       Analyse a codebase as an external observer. Measures conformance,
-                health, and generates a structured report. Best for: CI pipelines,
-                pre-review checks, or getting an independent assessment of code quality.
+  inspect       Analyse any codebase without harness initialisation. Point at any
+                directory and get fast structure, conformance, and health metrics.
+                Use --deep to run the full LLM-based analysis. Best for: CI pipelines,
+                pre-review checks, or evaluating an external project.
 
-  assess        Alias for ``observe --deep``. Full LLM-based analysis including P1-P5
-                risk assessment. Best for: deep-dive audits before major releases.
+  assess        Run the full assessment on the current project. Produces structured
+                findings for use in engagement planning and refactoring. Best for:
+                establishing baselines and driving self-improvement workflows.
 
 {state_mgmt}
   catchup       Reconcile harness state with current git state. Run this if you've
@@ -1806,7 +1808,7 @@ def _write_assessment_report(
 @click.option("--deep", is_flag=True, help="Run full deep analysis + LLM-based assessment (P1-P5)")
 @click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
 @click.option("--project-type", default="python", help="Project archetype for conformance")
-def observe(repo_path, report_file, deep, verbose, project_type):
+def inspect(repo_path, report_file, deep, verbose, project_type):
     """Analyse a codebase as an external observer.
 
     Pure analysis mode — never writes state, never modifies the repo,
@@ -1861,7 +1863,7 @@ def observe(repo_path, report_file, deep, verbose, project_type):
             click.echo(f"Report written to: {written}")
 
     except Exception as exc:
-        click.echo(f"Observer analysis failed: {exc}", err=True)
+        click.echo(f"Inspect analysis failed: {exc}", err=True)
         raise click.Abort()
 
 
@@ -1870,25 +1872,31 @@ def observe(repo_path, report_file, deep, verbose, project_type):
 @click.option("--report", "report_file", default=None, help="Write report to file")
 @click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
 def assess(repo_path, report_file, verbose):
-    """Alias for `harness observe <path> --deep`.
+    """Run the full assessment on the current project.
 
-    Runs the full independent assessment (P1-P5) on any repository,
-    including the LLM-based analysis agents.
+    Runs the observer (P1-P11 + P9 synthesis) on the current directory,
+    produces structured findings with IDs, and writes them to the
+    engagement's assessments directory when inside an active engagement.
+
+    Use this to establish baselines, drive refactoring engagements,
+    and track improvement over time. Findings from this command are
+    consumed by:
+      - ``harness engagement create --refactoring`` (auto-waves)
+      - ``harness wave create-from-finding`` (per-finding waves)
+      - ``harness engagement diff`` (baseline comparison)
 
     By default, only a summary is shown. Use --verbose to print the
-    full report to the terminal. The report is always written to file
-    when --report is specified or when inside an active engagement.
+    full report to the terminal.
 
     Examples:
 
         harness assess .
 
-        harness assess /path/to/project --report analysis.md
-
         harness assess . --verbose
+
+        harness assess . --report baseline.md
     """
     try:
-        # Delegate to observe with --deep always enabled
         from harness.analysis.observer import analyse
 
         result = analyse(
@@ -2305,7 +2313,7 @@ def shell():
           > /init
           > /work "Add user authentication"
           > /engagement create "Fix billing bug"
-          > /observe .
+          > /inspect .
           > /exit
     """
     root = _require_project_root(command_name="shell")

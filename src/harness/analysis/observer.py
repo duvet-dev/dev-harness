@@ -2,7 +2,7 @@
 
 Runs fast scan (and optionally deep analysis) on any directory, with
 no dependency on harness state or constitution. Pure filesystem analysis.
-Designed for the `harness observe <path>` command.
+Designed for the `harness inspect <path>` command.
 
 R22 — when --deep is used, also runs the LLM-based independent assessment
 (P1-P5 analysis agents) for a comprehensive codebase evaluation.

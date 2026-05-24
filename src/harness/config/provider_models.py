@@ -88,7 +88,7 @@ class ProviderConfig:
     base_url: str = ""
     """Base URL for API providers. Required for ``openai-compatible`` type."""
 
-    models: dict[str, str] = field(default_factory=dict)
+    models: list[dict[str, Any]] = field(default_factory=list)
     """Map of model keys to model names (e.g. ``default`` → ``gpt-4o``)."""
 
     command: str = ""
@@ -123,14 +123,22 @@ class ProviderConfig:
         Raises:
             ProviderError: If the model key is not found.
         """
-        if model_key in self.models:
-            return self.models[model_key]
-        # If not in models dict, try using the key directly as a model name
-        if self.models and model_key not in self.models:
-            raise ProviderError(
-                f"Model key '{model_key}' not found in provider '{self.name}'. "
-                f"Available keys: {', '.join(self.models) or '(none)'}"
-            )
+        # Models can be a name→alias dict or a list of model objects
+        if isinstance(self.models, dict):
+            if model_key in self.models:
+                return self.models[model_key]
+            if self.models:
+                raise ProviderError(
+                    f"Model key '{model_key}' not found in provider '{self.name}'. "
+                    f"Available keys: {', '.join(self.models) or '(none)'}"
+                )
+        elif isinstance(self.models, list):
+            names = [m.get("name", "") for m in self.models if isinstance(m, dict)]
+            if model_key in names:
+                return model_key
+            if names:
+                # Try using the key directly as a model name
+                pass
         return model_key
 
     def validate(self) -> list[str]:
@@ -171,7 +179,10 @@ class ProviderConfig:
             "type": self.type,
             "api_key": self.resolve_api_key(),
             "base_url": self.resolve_base_url(),
-            "models": dict(self.models),
+            "models": (
+                dict(self.models) if isinstance(self.models, dict)
+                else self.models
+            ),
             "command": self.resolve_command(),
             "description": self.description,
         }

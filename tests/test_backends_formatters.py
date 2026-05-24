@@ -81,6 +81,13 @@ class TestGetFormatter:
         f = get_formatter()
         assert isinstance(f, OpenAIFormatter)
 
+    def test_openai_compatible_with_deepseek_model(self):
+        """Exact scenario: provider type is 'openai-compatible' but model is DeepSeek.
+        Model name should take precedence over generic provider type."""
+        f = get_formatter(provider_type="openai-compatible", model="deepseek-v4-pro")
+        assert isinstance(f, DeepSeekFormatter), \
+            "DeepSeek model should select DeepSeekFormatter even with openai-compatible type"
+
     def test_unknown_falls_to_openai(self):
         f = get_formatter("unknown-provider")
         assert isinstance(f, OpenAIFormatter)

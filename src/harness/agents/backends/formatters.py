@@ -478,30 +478,25 @@ def get_formatter(
 ) -> MessageFormatter:
     """Get the appropriate formatter for a provider type or model.
 
+    Detection order:
+    1. Model name (takes precedence — catches provider-specific quirks
+       even when the provider is labelled as "openai-compatible")
+    2. Provider type exact match (``"deepseek"``, ``"anthropic"``, etc.)
+    3. Provider type generic heuristics (``"claude"`` → anthropic)
+    4. Default to OpenAI-compatible
+
     Args:
         provider_type: Provider type string, e.g. ``"openai-compatible"``,
             ``"deepseek"``, ``"anthropic"``, ``"google"``, ``"gemini"``.
-        model: Model name, used as fallback when ``provider_type`` is empty.
+        model: Model name, used as primary detection signal.
             e.g. ``"deepseek-v4-pro"`` → DeepSeekFormatter.
+            This catches cases where the provider type is generic
+            ("openai-compatible") but the model is DeepSeek-specific.
 
     Returns:
         A ``MessageFormatter`` instance.
     """
-    key = provider_type.lower().strip() if provider_type else ""
-    # Try exact match first
-    if key in _FORMATTERS:
-        return _FORMATTERS[key]()
-
-    # Fall back to generic heuristics from provider_type
-    if key:
-        if "anthropic" in key or "claude" in key:
-            return _FORMATTERS["anthropic"]()
-        if "google" in key or "gemini" in key:
-            return _FORMATTERS["google"]()
-        if "deepseek" in key:
-            return _FORMATTERS["deepseek"]()
-
-    # Fall back to detecting from model name
+    # 1. Detect from model name (takes precedence)
     model_lower = model.lower() if model else ""
     if model_lower:
         if "deepseek" in model_lower:
@@ -511,5 +506,19 @@ def get_formatter(
         if "gemini" in model_lower:
             return _FORMATTERS["google"]()
 
-    # Default to OpenAI-compatible
+    # 2. Try exact match from provider type
+    key = provider_type.lower().strip() if provider_type else ""
+    if key in _FORMATTERS:
+        return _FORMATTERS[key]()
+
+    # 3. Heuristics from provider type string
+    if key:
+        if "anthropic" in key or "claude" in key:
+            return _FORMATTERS["anthropic"]()
+        if "google" in key or "gemini" in key:
+            return _FORMATTERS["google"]()
+        if "deepseek" in key:
+            return _FORMATTERS["deepseek"]()
+
+    # 4. Default to OpenAI-compatible
     return _FORMATTERS["openai-compatible"]()

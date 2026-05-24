@@ -1,0 +1,7 @@
+project:
+  name: dev-harness
+  template: none
+  description: ''
+gates:
+  default_mode: wild
+agents: []

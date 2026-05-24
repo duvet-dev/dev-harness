@@ -1804,8 +1804,9 @@ def _write_assessment_report(
 @click.argument("repo_path", default=".")
 @click.option("--report", "report_file", default=None, help="Write report to file")
 @click.option("--deep", is_flag=True, help="Run full deep analysis + LLM-based assessment (P1-P5)")
+@click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
 @click.option("--project-type", default="python", help="Project archetype for conformance")
-def observe(repo_path, report_file, deep, project_type):
+def observe(repo_path, report_file, deep, verbose, project_type):
     """Analyse a codebase as an external observer.
 
     Pure analysis mode — never writes state, never modifies the repo,
@@ -1813,11 +1814,17 @@ def observe(repo_path, report_file, deep, project_type):
     the LLM-based independent assessment (P1-P5) for comprehensive
     codebase evaluation.
 
+    By default, only a summary is shown. Use --verbose to print the
+    full report to the terminal. The report is always written to file
+    when --report is specified or when inside an active engagement.
+
     Examples:
 
         harness observe .
 
         harness observe /path/to/project --deep --report analysis.md
+
+        harness observe . --deep --verbose
     """
     try:
         from harness.analysis.observer import analyse
@@ -1832,15 +1839,26 @@ def observe(repo_path, report_file, deep, project_type):
             click.echo(f"Error: {result['message']}", err=True)
             return
 
-        click.echo(result["report"])
-
+        # Print summary by default; full report only with --verbose
         assessment_dict = result.get("assessment")
+        if verbose:
+            click.echo(result["report"])
+        else:
+            # Show a brief summary
+            score = "?"
+            findings = "?"
+            if assessment_dict:
+                ad = assessment_dict.get("assessment", {})
+                score = ad.get("score", "?")
+                findings = len(ad.get("findings", []))
+            click.echo(f"Assessment complete: {findings} findings, score: {score}")
+
         written = _write_assessment_report(
             result["report"], repo_path, report_file,
             assessment_dict=assessment_dict,
         )
         if written:
-            click.echo(f"\nReport written to: {written}")
+            click.echo(f"Report written to: {written}")
 
     except Exception as exc:
         click.echo(f"Observer analysis failed: {exc}", err=True)
@@ -1850,17 +1868,24 @@ def observe(repo_path, report_file, deep, project_type):
 @main.command()
 @click.argument("repo_path", default=".")
 @click.option("--report", "report_file", default=None, help="Write report to file")
-def assess(repo_path, report_file):
+@click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
+def assess(repo_path, report_file, verbose):
     """Alias for `harness observe <path> --deep`.
 
     Runs the full independent assessment (P1-P5) on any repository,
     including the LLM-based analysis agents.
+
+    By default, only a summary is shown. Use --verbose to print the
+    full report to the terminal. The report is always written to file
+    when --report is specified or when inside an active engagement.
 
     Examples:
 
         harness assess .
 
         harness assess /path/to/project --report analysis.md
+
+        harness assess . --verbose
     """
     try:
         # Delegate to observe with --deep always enabled
@@ -1876,15 +1901,26 @@ def assess(repo_path, report_file):
             click.echo(f"Error: {result['message']}", err=True)
             return
 
-        click.echo(result["report"])
-
+        # Print summary by default; full report only with --verbose
         assessment_dict = result.get("assessment")
+        if verbose:
+            click.echo(result["report"])
+        else:
+            # Show a brief summary
+            score = "?"
+            findings = "?"
+            if assessment_dict:
+                ad = assessment_dict.get("assessment", {})
+                score = ad.get("score", "?")
+                findings = len(ad.get("findings", []))
+            click.echo(f"Assessment complete: {findings} findings, score: {score}")
+
         written = _write_assessment_report(
             result["report"], repo_path, report_file,
             assessment_dict=assessment_dict,
         )
         if written:
-            click.echo(f"\nReport written to: {written}")
+            click.echo(f"Report written to: {written}")
 
     except Exception as exc:
         click.echo(f"Assessment failed: {exc}", err=True)

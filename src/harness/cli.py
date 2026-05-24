@@ -1576,6 +1576,76 @@ def status(engagement, force):
         click.echo(f"Status check failed: {exc}", err=True)
 
 
+def _write_assessment_report(
+    report_text: str,
+    repo_path: str,
+    report_file=None,
+) :
+    """Write an assessment report, optionally to the engagement space.
+
+    If inside a harness project with an active engagement, writes to:
+        .harness/engagements/<slug>/assessments/<timestamp>-assessment.md
+
+    Also writes to ``report_file`` if provided.
+
+    Args:
+        report_text: The full report text.
+        repo_path: The analysed repository path.
+        report_file: Optional explicit file path.
+
+    Returns:
+        The path the report was written to, or ``None``.
+    """
+    import json
+    from datetime import datetime, timezone
+    from harness.paths import get_harness_dir, get_engagements_dir
+    from harness.engagement.lifecycle import read_active_engagement
+
+    written_to: str | None = None
+    now = datetime.now(timezone.utc)
+    timestamp = now.strftime("%Y%m%d-%H%M%S")
+
+    # Always write to explicit report file if provided
+    if report_file:
+        Path(report_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(report_file).write_text(report_text)
+        written_to = report_file
+
+    # If inside a harness project with an active engagement, write there too
+    try:
+        root = _find_project_root(Path(repo_path)) if Path(repo_path).is_dir() else None
+        if root:
+            active = read_active_engagement(root)
+            if active:
+                slug = active.get("slug") if isinstance(active, dict) else str(active)
+                if slug:
+                    assess_dir = (
+                        get_engagements_dir(root) / slug / "assessments"
+                    )
+                    assess_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Write report
+                    report_path = assess_dir / f"{timestamp}-assessment.md"
+                    report_path.write_text(report_text)
+
+                    # Write structured findings (minimal JSON manifest)
+                    manifest = {
+                        "timestamp": now.isoformat(),
+                        "repository": str(Path(repo_path).resolve()),
+                        "report_file": str(report_path),
+                        "type": "full-assessment",
+                    }
+                    manifest_path = assess_dir / f"{timestamp}-manifest.json"
+                    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+                    written_to = str(report_path)
+                    click.echo(f"\nAssessment saved to engagement: {slug}")
+
+    except Exception:
+        pass  # Non-critical — engagement space may not exist
+
+    return written_to
+
 @main.command()
 @click.argument("repo_path", default=".")
 @click.option("--report", "report_file", default=None, help="Write report to file")
@@ -1602,7 +1672,6 @@ def observe(repo_path, report_file, deep, project_type):
             path=repo_path,
             deep=deep,
             project_type=project_type,
-            report_file=report_file,
         )
 
         if result["status"] == "error":
@@ -1611,8 +1680,11 @@ def observe(repo_path, report_file, deep, project_type):
 
         click.echo(result["report"])
 
-        if report_file:
-            click.echo(f"\nReport written to: {report_file}")
+        written = _write_assessment_report(
+            result["report"], repo_path, report_file
+        )
+        if written:
+            click.echo(f"\nReport written to: {written}")
 
     except Exception as exc:
         click.echo(f"Observer analysis failed: {exc}", err=True)
@@ -1642,7 +1714,6 @@ def assess(repo_path, report_file):
             path=repo_path,
             deep=True,
             project_type="python",
-            report_file=report_file,
         )
 
         if result["status"] == "error":
@@ -1651,8 +1722,11 @@ def assess(repo_path, report_file):
 
         click.echo(result["report"])
 
-        if report_file:
-            click.echo(f"\nReport written to: {report_file}")
+        written = _write_assessment_report(
+            result["report"], repo_path, report_file
+        )
+        if written:
+            click.echo(f"\nReport written to: {written}")
 
     except Exception as exc:
         click.echo(f"Assessment failed: {exc}", err=True)

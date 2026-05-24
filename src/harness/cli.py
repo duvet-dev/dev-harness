@@ -1295,6 +1295,130 @@ def status(slug):
     click.echo(pm.summary())
 
 
+@wave.command(name="create-from-finding")
+@click.argument("finding_id")
+@click.option("--engagement", "slug", help="Engagement slug (default: active)")
+def create_wave_from_finding(finding_id, slug):
+    """Create a wave from an assessment finding.
+
+    Reads the latest assessment manifest for the active engagement,
+    finds the specified finding by ID, and creates a wave with its
+    description as the wave spec.
+
+    Usage:
+        harness wave create-from-finding finding-001
+        harness wave create-from-finding finding-001 --engagement my-engagement
+    """
+    import json
+    from harness.plan.plan_manager import PlanManager
+
+    root = _require_project_root()
+
+    if not slug:
+        from harness.engagement.resolver import resolve_active_engagement
+        slug = resolve_active_engagement(root)
+
+    if not slug:
+        click.echo(
+            "No active engagement. Create one with:\n"
+            "  harness engagement create \"your task\"",
+            err=True,
+        )
+        raise click.Abort()
+
+    # Find the latest assessment manifest
+    from harness.paths import get_engagements_dir
+    assess_dir = get_engagements_dir(root) / slug / "assessments"
+    if not assess_dir.is_dir():
+        click.echo(
+            f"No assessments found for engagement '{slug}'.\n"
+            f"Run an assessment first:\n"
+            f"  harness assess . --deep",
+            err=True,
+        )
+        raise click.Abort()
+
+    # Scan manifests in descending order (newest first)
+    manifests = sorted(
+        assess_dir.glob("*-manifest.json"),
+        reverse=True,
+    )
+    if not manifests:
+        click.echo(
+            f"No assessment manifests found in {assess_dir}.",
+            err=True,
+        )
+        raise click.Abort()
+
+    # Load the latest manifest
+    manifest = json.loads(manifests[0].read_text())
+    findings = manifest.get("findings", [])
+
+    if not findings:
+        click.echo(
+            "The latest assessment does not contain structured findings.\n"
+            "Re-run the assessment with --deep to get structured findings:\n"
+            f"  harness assess . --deep",
+            err=True,
+        )
+        raise click.Abort()
+
+    # Find the requested finding
+    target = None
+    for f in findings:
+        if f.get("id") == finding_id:
+            target = f
+            break
+
+    if target is None:
+        available = [f.get("id", "?") for f in findings]
+        click.echo(
+            f"Finding '{finding_id}' not found in the latest assessment.\n"
+            f"Available findings: {', '.join(available[:20])}",
+            err=True,
+        )
+        raise click.Abort()
+
+    if target.get("wave_slug"):
+        click.echo(
+            f"Finding '{finding_id}' already has a wave "
+            f"({target['wave_slug']}). Skipping."
+        )
+        return
+
+    # Build the wave title from the finding
+    category = target.get("category", "other")
+    message = target.get("message", "")
+    severity = target.get("severity", "info")
+
+    # Truncate the message to a reasonable title (first 50 chars)
+    title = message[:72] + ("..." if len(message) > 72 else "")
+
+    # Create the wave via PlanManager
+    pm = PlanManager(root, slug)
+    wave = pm.add_wave(
+        title=title,
+        wave_type="refactor",  # Refactoring type
+        trigger_phase="assessment",
+        trigger_reason=(
+            f"Finding {finding_id}: [{severity}] {category} — {message[:100]}"
+        ),
+    )
+
+    # Update the manifest to record the wave association
+    target["wave_slug"] = wave.id
+    target["wave_status"] = "open"
+    manifests[0].write_text(json.dumps(manifest, indent=2))
+
+    click.echo()
+    click.echo(f"  Created wave '{wave.id}' from finding '{finding_id}'")
+    click.echo(f"  Title: {title}")
+    click.echo(f"  Severity: {severity}, Category: {category}")
+    click.echo()
+    click.echo(f"  Run it with:  harness wave run {wave.id}")
+    click.echo(f"  See plan:     harness wave list")
+
+
 @main.command()
 @click.argument("prompt_text", required=False, default=None)
 @click.option("--engagement", "engagement_slug", help="Engagement slug (default: active)")
@@ -1580,6 +1704,7 @@ def _write_assessment_report(
     report_text: str,
     repo_path: str,
     report_file=None,
+    assessment_dict=None,
 ) :
     """Write an assessment report, optionally to the engagement space.
 
@@ -1591,6 +1716,10 @@ def _write_assessment_report(
     Args:
         report_text: The full report text.
         repo_path: The analysed repository path.
+        assessment_dict: Optional dict from ``AssessmentReport.to_dict()``
+            containing findings, score, and recommendations. When provided,
+            the manifest will include per-finding entries for later reference
+            (e.g. by ``harness wave create-from-finding``).
         report_file: Optional explicit file path.
 
     Returns:
@@ -1628,13 +1757,38 @@ def _write_assessment_report(
                     report_path = assess_dir / f"{timestamp}-assessment.md"
                     report_path.write_text(report_text)
 
-                    # Write structured findings (minimal JSON manifest)
+                    # Write structured findings (JSON manifest)
                     manifest = {
                         "timestamp": now.isoformat(),
                         "repository": str(Path(repo_path).resolve()),
                         "report_file": str(report_path),
                         "type": "full-assessment",
                     }
+
+                    # Include findings from assessment if available
+                    if assessment_dict:
+                        assessment_data = assessment_dict.get("assessment", {})
+                        raw_findings = assessment_data.get("findings", [])
+                        manifest["score"] = assessment_data.get("score", "unknown")
+                        manifest["finding_count"] = len(raw_findings)
+                        manifest["recommendations"] = assessment_data.get(
+                            "recommendations", []
+                        )
+
+                        # Add structured findings with unique IDs
+                        manifest["findings"] = []
+                        for idx, f in enumerate(raw_findings):
+                            finding_id = f"finding-{idx+1:03d}"
+                            manifest["findings"].append({
+                                "id": finding_id,
+                                "severity": f.get("severity", "info"),
+                                "category": f.get("category", ""),
+                                "message": f.get("message", ""),
+                                "file": f.get("file", ""),
+                                "wave_slug": None,  # Set when create-from-finding runs
+                                "wave_status": "unassigned",
+                            })
+
                     manifest_path = assess_dir / f"{timestamp}-manifest.json"
                     manifest_path.write_text(json.dumps(manifest, indent=2))
 
@@ -1680,8 +1834,10 @@ def observe(repo_path, report_file, deep, project_type):
 
         click.echo(result["report"])
 
+        assessment_dict = result.get("assessment")
         written = _write_assessment_report(
-            result["report"], repo_path, report_file
+            result["report"], repo_path, report_file,
+            assessment_dict=assessment_dict,
         )
         if written:
             click.echo(f"\nReport written to: {written}")
@@ -1722,8 +1878,10 @@ def assess(repo_path, report_file):
 
         click.echo(result["report"])
 
+        assessment_dict = result.get("assessment")
         written = _write_assessment_report(
-            result["report"], repo_path, report_file
+            result["report"], repo_path, report_file,
+            assessment_dict=assessment_dict,
         )
         if written:
             click.echo(f"\nReport written to: {written}")

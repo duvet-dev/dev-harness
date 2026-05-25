@@ -267,6 +267,33 @@ class HarnessREPL:
         )
         click.echo("")
 
+        # Run health checks (non-blocking, warnings only)
+        if self.root:
+            try:
+                from harness.health import run_health_checks
+                report = run_health_checks(self.root)
+                if report.status != "pass":
+                    warnings = [
+                        c for c in report.checks
+                        if c.status != "pass"
+                        and c.severity in ("CRITICAL", "BRANCH", "WARN")
+                    ]
+                    if warnings:
+                        for c in warnings[:5]:
+                            icon = "✗" if c.status == "fail" else "⚠"
+                            click.echo(f"  {icon} {c.message}")
+                            if c.fix:
+                                click.echo(f"     → Fix: {c.fix}")
+                        click.echo(
+                            "  ──────────────────────────────"
+                        )
+                        click.echo(
+                            "  Run 'harness health' for full details."
+                        )
+                        click.echo("")
+            except Exception:
+                pass  # Non-critical — don't block shell start
+
         while True:
             try:
                 line = input(self._prompt())

@@ -2497,6 +2497,33 @@ def shell():
 
 
 @main.command()
+@click.option("--verbose", "verbose", is_flag=True, help="Include INFO-level checks in output")
+def health(verbose):
+    """Run configuration and state validation checks.
+
+    Validates the harness setup, configuration, and environment. Reports
+    any issues categorised by severity: CRITICAL (must fix), BRANCH
+    (wrong branch warning), WARN (potential issues), INFO (silent unless
+    --verbose).
+
+    Examples:
+
+        harness health
+        harness health --verbose
+    """
+    try:
+        root = _require_project_root()
+        from harness.health import run_health_checks, format_health_report
+        report = run_health_checks(root)
+        click.echo(format_health_report(report, verbose=verbose))
+    except SystemExit:
+        raise
+    except Exception as exc:
+        click.echo(f"Health check failed: {exc}", err=True)
+        raise click.Abort()
+
+
+@main.command()
 @click.option("--re-assess", is_flag=True,
               help="Re-run assessment and compare to baseline on finish")
 def finish(re_assess):
@@ -3431,6 +3458,52 @@ def diff(slug):
     if new_findings:
         click.echo()
         click.echo("  ⚠️  New findings detected. Review before proceeding.")
+
+@engagement.command()
+@click.argument("slug")
+@click.argument("branch")
+def set_branch(slug, branch):
+    """Set the branch for an engagement (explicit repoint).
+
+    Updates the engagement's stored branch reference in engagement.yaml.
+    Use this when working on a different branch intentionally (e.g.,
+    after a rebase or merge).
+
+    Examples:
+
+        harness engagement set-branch my-engagement eng/my-engagement
+
+        harness engagement set-branch bug-fixes main
+    """
+    try:
+        root = _require_project_root()
+        from harness.paths import get_engagement_dir
+
+        eng_dir = get_engagement_dir(root, slug)
+        eng_yaml_path = eng_dir / "engagement.yaml"
+
+        if not eng_yaml_path.is_file():
+            click.echo(f"Engagement '{slug}' has no engagement.yaml.", err=True)
+            raise click.Abort()
+
+        import yaml
+        with open(eng_yaml_path) as f:
+            yaml_data = yaml.safe_load(f) or {}
+
+        old_branch = yaml_data.get("branch", "(not set)")
+        yaml_data["branch"] = branch
+
+        with open(eng_yaml_path, "w") as f:
+            yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
+
+        click.echo(f"Engagement '{slug}' branch updated:")
+        click.echo(f"  {old_branch} → {branch}")
+
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Failed to set branch: {exc}", err=True)
+        raise click.Abort()
 
 
 # ---------------------------------------------------------------------------

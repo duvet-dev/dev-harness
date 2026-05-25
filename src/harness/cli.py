@@ -2498,7 +2498,8 @@ def shell():
 
 @main.command()
 @click.option("--verbose", "verbose", is_flag=True, help="Include INFO-level checks in output")
-def health(verbose):
+@click.option("--fix", is_flag=True, help="Attempt to auto-fix engagement metadata issues")
+def health(verbose, fix):
     """Run configuration and state validation checks.
 
     Validates the harness setup, configuration, and environment. Reports
@@ -2506,13 +2507,25 @@ def health(verbose):
     (wrong branch warning), WARN (potential issues), INFO (silent unless
     --verbose).
 
+    Use --fix to automatically resolve common issues: missing metadata
+    files, stale state, plan consistency, and branch mismatches.
+
     Examples:
 
         harness health
         harness health --verbose
+        harness health --fix
     """
     try:
         root = _require_project_root()
+
+        if fix:
+            from harness.health import run_fixes
+            messages = run_fixes(root)
+            for msg in messages:
+                click.echo(f"  {msg}")
+            return
+
         from harness.health import run_health_checks, format_health_report
         report = run_health_checks(root)
         click.echo(format_health_report(report, verbose=verbose))

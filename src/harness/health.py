@@ -596,3 +596,194 @@ def format_health_report(report: HealthReport, verbose: bool = False) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Auto-fix functions (--fix mode)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def fix_branch_match(root: Path) -> list[str]:
+    """Fix branch mismatch by updating engagement.yaml with the current branch.
+
+    Returns a list of fix messages describing what was changed.
+    """
+    messages: list[str] = []
+    try:
+        from harness.scm.git import GitRepo
+        from harness.engagement.lifecycle import read_active_engagement
+        from harness.paths import get_engagement_dir
+
+        repo = GitRepo(root)
+        current_branch = repo.branch()
+
+        active = read_active_engagement(root)
+        if active is None:
+            messages.append("No active engagement — cannot fix branch.")
+            return messages
+
+        slug = active.get("slug") if isinstance(active, dict) else str(active)
+        eng_yaml_path = get_engagement_dir(root, slug) / "engagement.yaml"
+
+        if not eng_yaml_path.is_file():
+            messages.append(f"Engagement '{slug}' has no engagement.yaml.")
+            return messages
+
+        import yaml
+        with open(eng_yaml_path) as f:
+            yaml_data = yaml.safe_load(f) or {}
+
+        old_branch = yaml_data.get("branch", "(not set)")
+        yaml_data["branch"] = current_branch
+
+        with open(eng_yaml_path, "w") as f:
+            yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
+
+        messages.append(f"Branch updated: {old_branch} → {current_branch}")
+    except Exception as exc:
+        messages.append(f"Branch fix failed: {exc}")
+
+    return messages
+
+
+def fix_plan_consistency(root: Path) -> list[str]:
+    """Fix plan.md by syncing it from plan.yaml via PlanManager."""
+    messages: list[str] = []
+    try:
+        from harness.engagement.lifecycle import read_active_engagement
+        slug = read_active_engagement(root)
+        if slug is None:
+            messages.append("No active engagement — cannot fix plan.")
+            return messages
+
+        slug_str = slug.get("slug") if isinstance(slug, dict) else str(slug)
+        from harness.plan.plan_manager import PlanManager
+        pm = PlanManager(root, slug_str)
+        plan = pm.load()
+        if plan is None or not plan.waves:
+            from harness.paths import get_engagement_plan_yaml
+            plan_yaml = get_engagement_plan_yaml(root, slug_str)
+            if not plan_yaml.is_file():
+                plan_yaml.write_text("waves: []\n")
+                messages.append("Created empty plan.yaml.")
+
+        pm.sync_to_md()
+        messages.append("plan.md synced from plan.yaml.")
+    except Exception as exc:
+        messages.append(f"Plan fix failed: {exc}")
+
+    return messages
+
+
+def fix_git_state(root: Path) -> list[str]:
+    """Fix stale engagement state by refreshing freshness record."""
+    import subprocess
+
+    messages: list[str] = []
+    try:
+        from harness.state.freshness import (
+            FreshnessRecord, load_freshness, save_freshness,
+        )
+        from harness.scm.git import GitRepo
+
+        repo = GitRepo(root)
+        current_branch = repo.branch()
+
+        # Get HEAD sha via git command
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root, capture_output=True, text=True, timeout=10,
+        )
+        current_head = result.stdout.strip() if result.returncode == 0 else "unknown"
+
+        freshness = load_freshness(root)
+        if freshness and freshness.stale:
+            new_record = FreshnessRecord(
+                branch=current_branch,
+                head_sha=current_head,
+                last_reconciled="",
+                stale=False,
+            ).mark_fresh(current_head)
+            save_freshness(new_record, root)
+            messages.append("Engagement state refreshed (staleness cleared).")
+        else:
+            messages.append("Engagement state is already fresh.")
+    except Exception as exc:
+        messages.append(f"Git state fix failed: {exc}")
+
+    return messages
+
+
+def fix_missing_dir(root: Path) -> list[str]:
+    """Fix missing engagement directories and metadata files."""
+    messages: list[str] = []
+    try:
+        from harness.engagement.lifecycle import (
+            read_active_engagement,
+        )
+
+        active = read_active_engagement(root)
+        if active is None:
+            messages.append("No active engagement — cannot fix metadata.")
+            return messages
+
+        slug = active.get("slug") if isinstance(active, dict) else str(active)
+        eng_dir = root / ".harness" / "engagements" / slug
+
+        if not eng_dir.exists():
+            eng_dir.mkdir(parents=True, exist_ok=True)
+            messages.append(f"Created engagement directory: {eng_dir}")
+
+        eng_yaml = eng_dir / "engagement.yaml"
+        if not eng_yaml.is_file():
+            import yaml
+            with open(eng_yaml, "w") as f:
+                yaml.dump({"slug": slug}, f, default_flow_style=False, sort_keys=False)
+            messages.append(f"Created engagement.yaml for '{slug}'.")
+
+        plan_yaml = eng_dir / "plan.yaml"
+        if not plan_yaml.is_file():
+            plan_yaml.write_text("waves: []\n")
+            messages.append("Created empty plan.yaml.")
+
+        assess_dir = eng_dir / "assessments"
+        if not assess_dir.exists():
+            assess_dir.mkdir(parents=True, exist_ok=True)
+            messages.append("Created assessments directory.")
+
+        if not messages:
+            messages.append("Engagement metadata is already complete.")
+
+    except Exception as exc:
+        messages.append(f"Metadata fix failed: {exc}")
+
+    return messages
+
+
+def run_fixes(root: Path) -> list[str]:
+    """Run all auto-fixes on engagement metadata and state.
+
+    Args:
+        root: Project root directory.
+
+    Returns:
+        List of human-readable fix messages.
+    """
+    messages: list[str] = []
+    messages.append("Attempting auto-fixes...")
+    messages.append("")
+
+    messages.extend(fix_missing_dir(root))
+    messages.append("")
+
+    messages.extend(fix_plan_consistency(root))
+    messages.append("")
+
+    messages.extend(fix_branch_match(root))
+    messages.append("")
+
+    messages.extend(fix_git_state(root))
+    messages.append("")
+
+    messages.append("Auto-fixes complete. Run 'harness health' to verify.")
+    return messages

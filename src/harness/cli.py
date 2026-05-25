@@ -3519,6 +3519,48 @@ def set_branch(slug, branch):
         raise click.Abort()
 
 
+@engagement.command()
+@click.option("--engagement", "slug", help="Engagement slug (default: active)")
+def fix(slug):
+    """Fix missing engagement metadata and state issues.
+
+    Creates missing files and directories needed for the engagement to
+    function: engagement.yaml, engagement.md, plan.yaml, plan.md, and
+    the assessments directory. Also syncs plan state and refreshes
+    freshness records.
+
+    Examples:
+
+        harness engagement fix
+
+        harness engagement fix --engagement my-engagement
+    """
+    try:
+        root = _require_project_root()
+
+        if not slug:
+            from harness.engagement.resolver import resolve_active_engagement
+            slug = resolve_active_engagement(root)
+
+        if not slug:
+            click.echo(
+                "No active engagement. Specify one with --engagement.",
+                err=True,
+            )
+            raise click.Abort()
+
+        from harness.health import fix_engagement
+        messages = fix_engagement(root, slug)
+        for msg in messages:
+            click.echo(f"  {msg}")
+
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Fix failed: {exc}", err=True)
+        raise click.Abort()
+
+
 # ---------------------------------------------------------------------------
 # Doc generation commands
 # ---------------------------------------------------------------------------

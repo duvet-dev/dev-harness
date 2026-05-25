@@ -741,6 +741,25 @@ def fix_missing_dir(root: Path) -> list[str]:
                 yaml.dump({"slug": slug}, f, default_flow_style=False, sort_keys=False)
             messages.append(f"Created engagement.yaml for '{slug}'.")
 
+        # Ensure engagement.md exists (needed by set_active_engagement)
+        eng_md = eng_dir / "engagement.md"
+        if not eng_md.is_file():
+            from harness.scm.git import GitRepo
+            repo = GitRepo(root)
+            branch = repo.branch()
+            # Re-read engagement.yaml to get updated slug/branch
+            import yaml
+            with open(eng_yaml) as f:
+                yaml_data = yaml.safe_load(f) or {}
+            eng_slug = yaml_data.get("slug", slug)
+            eng_branch = yaml_data.get("branch", branch)
+            from harness.engagement.lifecycle import write_engagement_metadata
+            write_engagement_metadata(
+                eng_dir, name=eng_slug.replace("-", " ").title(),
+                slug=eng_slug, branch=eng_branch,
+            )
+            messages.append(f"Created engagement.md for '{slug}'.")
+
         plan_yaml = eng_dir / "plan.yaml"
         if not plan_yaml.is_file():
             plan_yaml.write_text("waves: []\n")
@@ -786,4 +805,82 @@ def run_fixes(root: Path) -> list[str]:
     messages.append("")
 
     messages.append("Auto-fixes complete. Run 'harness health' to verify.")
+    return messages
+
+
+def fix_engagement(root: Path, slug: str) -> list[str]:
+    """Fix engagement metadata and state for a specific engagement.
+
+    Args:
+        root: Project root directory.
+        slug: Engagement slug to fix.
+
+    Returns:
+        List of human-readable fix messages.
+    """
+    messages: list[str] = []
+    messages.append(f"Fixing engagement '{slug}'...")
+    messages.append("")
+
+    eng_dir = root / ".harness" / "engagements" / slug
+
+    if not eng_dir.exists():
+        eng_dir.mkdir(parents=True, exist_ok=True)
+        messages.append(f"Created engagement directory: {eng_dir}")
+
+    import yaml
+    from harness.scm.git import GitRepo
+
+    eng_yaml = eng_dir / "engagement.yaml"
+    if not eng_yaml.is_file():
+        repo = GitRepo(root)
+        with open(eng_yaml, "w") as f:
+            yaml.dump({
+                "slug": slug,
+                "branch": repo.branch(),
+            }, f, default_flow_style=False, sort_keys=False)
+        messages.append(f"Created engagement.yaml for '{slug}'.")
+    else:
+        messages.append(f"engagement.yaml exists.")
+
+    eng_md = eng_dir / "engagement.md"
+    if not eng_md.is_file():
+        repo = GitRepo(root)
+        with open(eng_yaml) as f:
+            yaml_data = yaml.safe_load(f) or {}
+        eng_branch = yaml_data.get("branch", repo.branch())
+        from harness.engagement.lifecycle import write_engagement_metadata
+        write_engagement_metadata(
+            eng_dir, name=slug.replace("-", " ").title(),
+            slug=slug, branch=eng_branch,
+        )
+        messages.append(f"Created engagement.md for '{slug}'.")
+    else:
+        messages.append(f"engagement.md exists.")
+
+    plan_yaml = eng_dir / "plan.yaml"
+    if not plan_yaml.is_file():
+        plan_yaml.write_text("waves: []\n")
+        messages.append("Created empty plan.yaml.")
+    else:
+        messages.append(f"plan.yaml exists.")
+
+    plan_md = eng_dir / "plan.md"
+    if not plan_md.is_file() or plan_md.stat().st_size == 0:
+        from harness.plan.plan_manager import PlanManager
+        pm = PlanManager(root, slug)
+        pm.sync_to_md()
+        messages.append("Created plan.md from plan.yaml.")
+    else:
+        messages.append("plan.md exists.")
+
+    assess_dir = eng_dir / "assessments"
+    if not assess_dir.exists():
+        assess_dir.mkdir(parents=True, exist_ok=True)
+        messages.append("Created assessments directory.")
+    else:
+        messages.append("assessments directory exists.")
+
+    messages.append("")
+    messages.append(f"Fix complete for '{slug}'.")
     return messages

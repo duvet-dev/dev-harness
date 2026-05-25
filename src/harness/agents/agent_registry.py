@@ -97,6 +97,13 @@ class AgentRole(str, Enum):
     DOMAIN_INTERFACE_TESTER = "domain-interface-tester"
     REQUIREMENTS_CONFORMANCE_REVIEWER = "requirements-conformance-reviewer"
 
+    # Short-form role names used by fleet definitions and phase configs
+    RESEARCHER = "researcher"
+    PLANNER = "planner"
+    CODER = "coder"
+    TESTER = "tester"
+    REVIEWER = "reviewer"
+
 
 class CriticLoopState(str, Enum):
     """States for the design-critic multi-agent loop."""
@@ -618,6 +625,73 @@ AGENTS: list[AgentSpec] = [
         ],
         tags=["validation", "quality", "requirements", "testing"],
         tool_permissions=ToolPermissions.read_only(),
+    ),
+    # ── Short-form agent role aliases (used by fleet/phase configs) ────
+    AgentSpec(
+        role=AgentRole.RESEARCHER,
+        name="Researcher",
+        description="Researches and gathers information for the current task.",
+        sop_summary=[
+            "Research the task using available tools and context",
+            "Gather information needed for subsequent phases",
+            "Document findings with sources",
+        ],
+        tags=["research", "analysis"],
+        tool_permissions=ToolPermissions.unrestricted(),
+    ),
+    AgentSpec(
+        role=AgentRole.PLANNER,
+        name="Planner",
+        description="Plans implementation steps based on architecture and requirements.",
+        sop_summary=[
+            "Break design into sequenced implementation tasks",
+            "Identify dependencies between tasks",
+            "Estimate effort per task",
+        ],
+        tags=["planning", "design"],
+        tool_permissions=ToolPermissions.unrestricted(),
+    ),
+    AgentSpec(
+        role=AgentRole.CODER,
+        name="Coder",
+        description=(
+            "Implements code per spec and architecture. Follows SOLID, "
+            "writes clean, testable code."
+        ),
+        sop_summary=[
+            "Implement code per task description and architecture",
+            "Write clean, maintainable code",
+            "Ensure all existing tests still pass",
+        ],
+        tags=["implementation", "core"],
+        tool_permissions=ToolPermissions.unrestricted(),
+    ),
+    AgentSpec(
+        role=AgentRole.TESTER,
+        name="Tester",
+        description=(
+            "Tests code with a behaviour-first philosophy. Tests "
+            "interfaces, not implementations."
+        ),
+        sop_summary=[
+            "Write tests against interfaces (not implementations)",
+            "Test expected behaviour from specifications",
+            "Cover edge cases, boundary conditions, failure modes",
+        ],
+        tags=["testing", "core"],
+        tool_permissions=ToolPermissions.unrestricted(),
+    ),
+    AgentSpec(
+        role=AgentRole.REVIEWER,
+        name="Reviewer",
+        description="Reviews code, design, and documentation for quality and correctness.",
+        sop_summary=[
+            "Review implementation for correctness and style",
+            "Verify tests cover the acceptance criteria",
+            "Check for regressions and edge cases",
+        ],
+        tags=["review", "quality"],
+        tool_permissions=ToolPermissions.unrestricted(),
     ),
 ]
 

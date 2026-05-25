@@ -1427,8 +1427,10 @@ def create_wave_from_finding(finding_id, slug):
               help="Filter findings by severity (default: high-risk)")
 @click.option("--limit", type=int, default=0,
               help="Max waves to create (0 = no limit)")
+@click.option("--refactoring", is_flag=True,
+              help="Mark the engagement as a refactoring engagement")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
-def create_waves_from_assessment(focus, limit, slug):
+def create_waves_from_assessment(focus, limit, slug, refactoring):
     """Create waves from all matching assessment findings.
 
     Reads the latest assessment manifest, filters findings by the
@@ -1439,11 +1441,16 @@ def create_waves_from_assessment(focus, limit, slug):
     Use --limit to cap the number of waves created (useful for
     starting with just the top N findings).
 
+    Use --refactoring to mark the engagement as a refactoring
+    engagement (sets session_type + refactoring flag in
+    engagement.yaml, records baseline reference).
+
     Examples:
 
         harness wave create-from-assessment
         harness wave create-from-assessment --focus medium
         harness wave create-from-assessment --focus all --limit 5
+        harness wave create-from-assessment --refactoring
         harness wave create-from-assessment --engagement my-engagement
     """
     import json
@@ -1558,6 +1565,23 @@ def create_waves_from_assessment(focus, limit, slug):
 
     if manifest_updated:
         manifests[0].write_text(json.dumps(manifest, indent=2))
+
+    # If --refactoring flag is set, update engagement.yaml
+    if refactoring and created > 0:
+        eng_yaml_path = get_engagement_dir(root, slug) / "engagement.yaml"
+        if eng_yaml_path.is_file():
+            import yaml as _yaml
+            with open(eng_yaml_path) as f:
+                yaml_data = _yaml.safe_load(f) or {}
+            yaml_data["refactoring"] = True
+            yaml_data["session_type"] = "refactoring"
+            yaml_data["baseline_manifest"] = str(
+                manifests[0].relative_to(get_engagement_dir(root, slug))
+            )
+            yaml_data["baseline_finding_count"] = len(findings)
+            yaml_data["focus"] = focus
+            with open(eng_yaml_path, "w") as f:
+                _yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
 
     skipped = len(matching) - len(unassigned) - (len(unassigned) - created)
     click.echo()

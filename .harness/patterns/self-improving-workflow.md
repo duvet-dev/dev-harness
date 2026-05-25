@@ -113,25 +113,39 @@ Use `--focus all` to create waves from every finding, or `--focus medium` for er
 
 ### Phase 4: Manual Wave Creation (Optional)
 
-If you need to add a wave for a specific finding that wasn't auto-created:
+If you need to add waves from an assessment into an **existing** engagement:
 
 ```bash
-# Create a wave from a specific assessment finding
-harness wave create-from-finding finding-001
+# Batch-import all high-risk findings as waves
+harness wave create-from-assessment
 
-# This:
-# - Reads the latest assessment manifest
-# - Finds finding-001 by ID
-# - Creates a wave with the finding as the spec
-# - Updates the manifest to track wave→finding association
-# - Prevents duplicates (safe to re-run)
+# Or filter/set limits
+harness wave create-from-assessment --focus medium --limit 5
+
+# Use --refactoring to mark as a refactoring engagement
+# (sets session_type + baseline in engagement.yaml)
+harness wave create-from-assessment --focus high-risk --refactoring
 ```
 
-List all waves to see what was created:
+For a single finding:
+
+```bash
+harness wave create-from-finding finding-001
+```
+
+List all waves:
 
 ```bash
 harness wave list
 ```
+
+**Choosing the right path:**
+
+| If you... | Use... |
+|-----------|--------|
+| Are starting a new engagement from findings | `harness engagement create "..." --refactoring` |
+| Are already in an engagement, want to import findings | `harness wave create-from-assessment --refactoring` |
+| Want one specific finding as a wave | `harness wave create-from-finding finding-001` |
 
 ### Phase 5: Execute the Wave
 

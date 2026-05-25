@@ -232,6 +232,10 @@ For findings that weren't auto-created, create a wave from a specific finding ID
 ```bash
 harness wave create-from-finding finding-004
 # Creates wave with the finding as spec, tracks association in manifest
+
+# Or batch-import all matching findings:
+harness wave create-from-assessment --focus medium --refactoring
+# --refactoring sets session_type + baseline in engagement.yaml
 ```
 
 ---
@@ -378,6 +382,8 @@ harness engagement create "Refactoring: Next" --refactoring --focus high-risk
 | `harness assess . --deep` | Run baseline assessment (produces findings with IDs) |
 | `harness engagement create "..." --refactoring --focus high-risk` | Create engagement with auto-waves from high-risk findings |
 | `harness wave create-from-finding finding-001` | Add a wave for a specific finding manually |
+| `harness wave create-from-assessment --focus medium` | Batch-import all matching findings as waves |
+| `harness wave create-from-assessment --refactoring` | Import findings + mark as refactoring engagement |
 | `harness wave list` | See all waves in the plan |
 | `harness wave run wave-01` | Execute a wave through the full cycle |
 | `harness engagement diff` | Compare baseline to current state |

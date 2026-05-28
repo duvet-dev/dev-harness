@@ -186,6 +186,14 @@ def list_providers(root: Path) -> list[dict[str, Any]]:
 
             }
 
+        elif isinstance(models, list) and models:
+
+            first = models[0]
+
+            if isinstance(first, dict):
+
+                entry["model"] = first.get("name", "")
+
         result.append(entry)
 
 
@@ -244,11 +252,29 @@ def switch_provider(
 
     # Resolve model
 
-    models = prov.get("models", {}) if isinstance(prov.get("models"), dict) else {}
+    raw_models = prov.get("models", {})
 
-    model = models.get("default", "")
+    if isinstance(raw_models, dict):
 
-    if model_alias and model_alias in models:
+        models = raw_models
+
+        model = models.get("default", "")
+
+    elif isinstance(raw_models, list) and raw_models:
+
+        first = raw_models[0]
+
+        models = {}
+
+        model = first.get("name", "") if isinstance(first, dict) else ""
+
+    else:
+
+        models = {}
+
+        model = ""
+
+    if model_alias and isinstance(models, dict) and model_alias in models:
 
         model = models[model_alias]
 
@@ -775,6 +801,107 @@ PHASES = [
 ]
 
 
+
+
+
+# ── Get-Well phases (assessment-driven remediation session) ───────────────
+
+
+
+def _build_get_well_phase_list() -> list[dict]:
+    """Build the phase list for a get-well remediation session.
+
+    Prepends assessment-triage and remediation-design phases to the
+    standard phase pipeline (planning through review for execution).
+    """
+    reph = {
+        "name": "assessment-triage",
+        "title": "Assessment Triage & Finding Prioritisation",
+        "agent": "triage-agent",
+        "fleets": ["discovery"],
+        "artifact": "triage.md",
+        "prompt": (
+            "You are an **Assessment Triage Agent**. You are in the ASSESSMENT TRIAGE "
+            "phase of a get-well remediation session.\n\n"
+            "YOUR JOB:\n"
+            "- Load and review the latest assessment findings\n"
+            "- Categorise findings by effort, impact, and dependency\n"
+            "- Produce a triage table: finding ID, severity, category, "
+            "estimated effort (S/M/L), impact score, dependency order\n"
+            "- Highlight quick wins (low effort, high impact) vs "
+            "multi-wave efforts\n"
+            "- Group related findings into themes or work-streams\n"
+            "- Suggest an execution order \u2014 what to fix first, what can wait\n\n"
+            "YOUR BOUNDARIES:\n"
+            "- Do NOT write any code\n"
+            "- Do NOT design remediation solutions \u2014 only categorise and prioritise\n"
+            "- Do NOT implement fixes \u2014 your output feeds the next phase\n\n"
+            "OUTPUT FORMAT:\n"
+            "Write a structured triage document using the RepoTool. Use sections:\n"
+            "    ## Finding Summary\n"
+            "    ## Themes / Work-Streams\n"
+            "    ## Priority Matrix (Effort vs Impact)\n"
+            "    ## Execution Order Recommendation\n"
+            "    ## Quick Wins\n\n"
+            "Reference findings by their ID (e.g. finding-001) and include "
+            "severity and category in the triage table."
+        ),
+    }
+
+    remph = {
+        "name": "remediation-design",
+        "title": "Remediation Design & Plan",
+        "agent": "architect",
+        "fleets": ["architecture", "planning"],
+        "artifact": "remediation-plan.md",
+        "prompt": (
+            "You are a **Remediation Architect**. You are in the REMEDIATION DESIGN "
+            "phase of a get-well remediation session.\n\n"
+            "YOUR JOB:\n"
+            "- Design a cohesive remediation plan from the triaged assessment findings\n"
+            "- For each finding theme or work-stream, produce:\n"
+            "    * The remediation approach (refactor, rewrite, extract, etc.)\n"
+            "    * Key design decisions (as ADRs where appropriate)\n"
+            "    * Dependencies between remediation work-streams\n"
+            "    * Risk assessment for each approach\n"
+            "- Consider architectural coherence \u2014 don\'t fix findings in isolation;\n"
+            "  ensure the overall architecture improves\n"
+            "- Define acceptance criteria for when a finding is considered resolved\n"
+            "- Decompose the work into waves (PR-sized units) with dependencies\n"
+            "- Assign agent roles to each wave\n\n"
+            "YOUR BOUNDARIES:\n"
+            "- Do NOT implement any code \u2014 design only\n"
+            "- Do NOT write tests \u2014 define testing strategy\n"
+            "- Do NOT re-triage \u2014 use the triage output from the previous phase\n"
+            "- If you discover a new finding, add it to the triage doc instead\n\n"
+            "OUTPUT FORMAT:\n"
+            "Write a structured remediation plan using the RepoTool. Use sections:\n"
+            "    ## Overview & Strategy\n"
+            "    ## Work-Stream: {name}\n"
+            "      ### Approach\n"
+            "      ### Design Decisions\n"
+            "      ### Dependencies\n"
+            "      ### Risk\n"
+            "      ### Acceptance Criteria\n"
+            "    ## Wave Breakdown\n"
+            "      Wave {N}: {title} \u2014 {agent role} \u2014 {est effort}\n"
+            "    ## Execution Order\n"
+            "    ## Testing Strategy\n"
+            "    ## Success Metrics\n\n"
+            "Use ADRs (Architecture Decision Records) in `docs/arch/` to capture "
+            "key design choices."
+        ),
+    }
+
+    # Start with get-well phases, then append standard phases
+    result = [reph, remph]
+
+    # Append standard phases (from PLANNING onward)
+    for p in PHASES:
+        if p["name"] in ("planning", "implementation", "testing", "review"):
+            result.append(p)
+
+    return result
 
 
 
@@ -2264,6 +2391,67 @@ async def chat_loop(
 
     await session.run()
 
+def _load_assessment_findings(root: Path, slug: str) -> str:
+    """Load the latest assessment findings for a get-well session.
+
+    Reads the most recent assessment manifest from the engagement and
+    returns a formatted context string describing the findings. Returns
+    an empty string if no assessment exists.
+    """
+    import json
+    from harness.paths import get_engagements_dir
+
+    assess_dir = get_engagements_dir(root) / slug / "assessments"
+    if not assess_dir.is_dir():
+        return ""
+
+    manifests = sorted(assess_dir.glob("*-manifest.json"), reverse=True)
+    if not manifests:
+        return ""
+
+    try:
+        manifest = json.loads(manifests[0].read_text())
+    except (json.JSONDecodeError, OSError):
+        return ""
+
+    findings = manifest.get("findings", [])
+    if not findings:
+        return ""
+
+    score = manifest.get("score", "unknown")
+    recommendations = manifest.get("recommendations", [])
+
+    lines = [
+        "--- Assessment Findings ---",
+        "Score: " + str(score),
+        "Total findings: " + str(len(findings)),
+        "",
+    ]
+
+    for f in findings:
+        fid = f.get("id", "?")
+        sev = f.get("severity", "info")
+        cat = f.get("category", "")
+        msg = f.get("message", "")
+        filepath = f.get("file", "")
+        lines.append(f"  [{sev:8s}] {fid}: {msg}")
+        if cat:
+            lines.append(f"           Category: {cat}")
+        if filepath:
+            lines.append(f"           File: {filepath}")
+        lines.append("")
+
+    if recommendations:
+        lines.append("Recommendations:")
+        for r in recommendations:
+            lines.append(f"  - {r}")
+        lines.append("")
+
+    lines.append("--- End Assessment Findings ---")
+    return "\n".join(lines)
+
+
+
 
 
 async def session_loop(
@@ -2271,6 +2459,7 @@ async def session_loop(
     engagement_slug: str,
     start_phase: str = "requirements",
     context_tier: int = 2,
+    session_type: str | None = None,
 ) -> None:
     """Run a full session through all phases using InteractiveSession."""
     import click
@@ -2286,12 +2475,35 @@ async def session_loop(
     from harness.engagement.phase_state import PhaseStateManager
     from datetime import datetime, timezone
 
+    # ── Select phase list ─────────────────────────────
+    # Resolve session type from engagement metadata (optional)
+    # CLI-provided session_type takes priority
+    if session_type is None:
+        try:
+            from harness.session.types import read_session_type
+            st = read_session_type(root, engagement_slug)
+            if st:
+                session_type = st.value
+        except Exception:
+            pass
+
+    # Determine effective phase list based on session type
+    is_get_well = session_type == "get-well"
+    if is_get_well:
+        effective_phases: list[dict] = _build_get_well_phase_list()
+        assessment_findings = _load_assessment_findings(root, engagement_slug)
+    else:
+        effective_phases = PHASES
+        assessment_findings = None
+
     # Find starting index
     start_idx = 0
-    for i, p in enumerate(PHASES):
+    for i, p in enumerate(effective_phases):
         if p["name"] == start_phase:
             start_idx = i
             break
+    if start_idx == 0 and start_phase != effective_phases[0]["name"]:
+        start_idx = 0
 
     provider = resolve_provider(root)
     api_key = provider.get("api_key", "")
@@ -2303,18 +2515,8 @@ async def session_loop(
     model = provider.get("model", "deepseek-v4-pro")
     provider_type = provider.get("type", "openai-compatible")
 
-    # Resolve session type from engagement metadata (optional)
-    session_type = None
-    try:
-        from harness.session.types import read_session_type
-        st = read_session_type(root, engagement_slug)
-        if st:
-            session_type = st.value
-    except Exception:
-        pass
-
     _print_header(f"Session -- {engagement_slug}")
-    click.echo(f"Starting from phase: {PHASES[start_idx]['title']}")
+    click.echo(f"Starting from phase: {effective_phases[start_idx]['title']}")
     if session_type:
         click.echo(f"Session type: {session_type}")
     click.echo()
@@ -2338,10 +2540,10 @@ async def session_loop(
     blocking_consults: dict[str, list[ConsultationResult]] = {}
     jump_counts: dict[str, int] = _init_phase_jump_counts()
 
-    # ── Build phase list ────────────────────────────────────────────
+    # ── Build phase list ──────────────────────────
     _phase_list: list[dict] = []
-    for phase_idx in range(start_idx, len(PHASES)):
-        phase_def = PHASES[phase_idx]
+    for phase_idx in range(start_idx, len(effective_phases)):
+        phase_def = effective_phases[phase_idx]
 
         if phase_def["name"] == "implementation":
             from harness.plan.plan_manager import PlanManager
@@ -2352,7 +2554,7 @@ async def session_loop(
 
             if uncommitted:
                 click.echo(
-                    f"\n\U0001f4cb Plan defines {len(uncommitted)} uncommitted wave(s). "
+                    f"\n📋 Plan defines {len(uncommitted)} uncommitted wave(s). "
                     "Running per-wave code+test cycles.\n"
                 )
                 for w in uncommitted:
@@ -2363,12 +2565,12 @@ async def session_loop(
 
         _phase_list.append(phase_def)
 
-    # ── Phase execution loop ────────────────────────────────────────
-    for phase_idx in range(start_idx, len(PHASES)):
-        phase_def = PHASES[phase_idx]
+    # ── Phase execution loop ──────────────────────────
+    for phase_idx in range(start_idx, len(effective_phases)):
+        phase_def = effective_phases[phase_idx]
         click.echo(str(_format_jump_marker(CycleResult(status="complete"))))
 
-        _print_header(f"  Phase {phase_idx + 1 - start_idx}/{len(PHASES) - start_idx}"
+        _print_header(f"  Phase {phase_idx + 1 - start_idx}/{len(effective_phases) - start_idx}"
                        f" -- {phase_def['title']}")
         click.echo()
 
@@ -2377,8 +2579,13 @@ async def session_loop(
         psm.transition(phase_def["name"], PS.ACTIVE)
 
         # Build system prompt
+        # For get-well sessions, inject assessment findings as context
+        gw_context = ""
+        if assessment_findings and phase_def["name"] in ("assessment-triage", "remediation-design"):
+            gw_context = assessment_findings
         system_prompt = _build_system_prompt(
             phase_def, root=root, engagement_slug=engagement_slug,
+            context=gw_context,
         )
 
         phase_done = False

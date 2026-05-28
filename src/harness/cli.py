@@ -1677,7 +1677,9 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
               help="Brownfield session (work within existing code)")
 @click.option("--refactoring", "session_type", flag_value="refactoring",
               help="Refactoring session (restructure existing code)")
-def session(engagement_slug, phase, context_tier, session_type):
+@click.option("--get-well", "get_well", is_flag=True,
+              help="Get-well remediation session (assessment-driven)")
+def session(engagement_slug, phase, context_tier, session_type, get_well):
     """Run a full phase-by-phase session.
 
     Walks through each development phase sequentially:
@@ -1702,6 +1704,7 @@ def session(engagement_slug, phase, context_tier, session_type):
         harness session --greenfield                 # explicit greenfield
         harness session --brownfield                 # explicit brownfield
         harness session --refactoring                # explicit refactoring
+        harness session --get-well                   # assessment-driven remediation
         harness session --phase design               # start from design phase
     """
     try:
@@ -1733,6 +1736,15 @@ def session(engagement_slug, phase, context_tier, session_type):
             raise click.Abort()
 
         session_type_arg = _resolve_session_type_flag(session_type, root, slug)
+
+        # --get-well overrides: forces get-well mode regardless of other flags
+        if get_well:
+            from harness.session.types import SessionType
+            session_type_arg = SessionType.GET_WELL.value
+            # Start from assessment-triage phase when no explicit phase given
+            if not phase:
+                phase = "assessment-triage"
+
         asyncio.run(session_loop(root, slug, start_phase=phase,
                                context_tier=context_tier,
                                session_type=session_type_arg))

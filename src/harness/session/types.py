@@ -23,11 +23,15 @@ class SessionType(str, enum.Enum):
       they are constrained by what already exists and document compromises.
     * **REFACTORING** — Restructure existing code toward an ideal architecture.
       Uses behaviour-preserving boundary tests as guard rails.
+    * **GET_WELL** — Remediation-driven session: loads assessment findings,
+      triages them, designs a cohesive remediation plan, then executes it
+      through the standard phase pipeline.
     """
 
     GREENFIELD = "greenfield"
     BROWNFIELD = "brownfield"
     REFACTORING = "refactoring"
+    GET_WELL = "get-well"
 
 
 # ── Detection constants ────────────────────────────────────────────────────

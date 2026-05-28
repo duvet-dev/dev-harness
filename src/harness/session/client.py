@@ -143,8 +143,15 @@ def resolve_provider(
             resolved[key] = resolve_env_vars(val)
 
     # If models key exists, pick the default model
+    # Handle both dict format {"default": "model-name"} and
+    # list format [{name: "model-name", ...}, ...]
     models = resolved.pop("models", {})
-    resolved.setdefault("model", models.get("default", ""))
+    if isinstance(models, dict):
+        resolved.setdefault("model", models.get("default", ""))
+    elif isinstance(models, list) and models:
+        first = models[0]
+        if isinstance(first, dict):
+            resolved.setdefault("model", first.get("name", ""))
 
     return resolved
 

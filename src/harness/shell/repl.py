@@ -228,6 +228,33 @@ class HarnessREPL:
             click.echo("Already in the REPL.")
             return True
 
+        if cmd_name == "exec":
+            shell_cmd = " ".join(cmd_args) if cmd_args else ""
+            if not shell_cmd:
+                click.echo("Usage: /exec <shell command>")
+                return True
+            import subprocess
+            try:
+                result = subprocess.run(
+                    shell_cmd, shell=True, capture_output=True, text=True, timeout=60,
+                )
+                if result.stdout:
+                    click.echo(result.stdout.rstrip())
+                if result.stderr:
+                    if result.stdout:
+                        click.echo()
+                    click.echo(result.stderr.rstrip(), err=True)
+                if result.returncode != 0:
+                    click.echo()
+                    click.echo(f"\u2716 exit code {result.returncode}")
+                elif not result.stdout and not result.stderr:
+                    click.echo(f"(exit code {result.returncode}, no output)")
+            except subprocess.TimeoutExpired:
+                click.echo(f"Command timed out after 60s: {shell_cmd}", err=True)
+            except Exception as exc:
+                click.echo(f"Error: {exc}", err=True)
+            return True
+
         if cmd_name == "version":
             from harness._version import __version__, __build__, __build_date__, __commit__
             date_str = __build_date__ if __build_date__ else "development"

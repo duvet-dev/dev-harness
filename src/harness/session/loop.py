@@ -1486,6 +1486,8 @@ def _print_help() -> None:
 
     _print_consult_help()
 
+    click.echo("  /exec <cmd>  -- run a shell command and display output")
+    click.echo("  /eval <cmd>  -- alias for /exec")
     click.echo("  /version     -- show version info")
 
     click.echo("  /exit        -- exit session")

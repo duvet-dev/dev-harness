@@ -1,8 +1,29 @@
 """CLI backend — subprocess tool execution.
 
-Runs CLI tools (Claude Code, Aider, etc.) as subprocesses. Each tool has
-a known invocation pattern defined in constitution.yaml. Supports timeout,
-streaming output, and structured result parsing.
+Runs CLI tools (Claude Code, Kiri, OpenCode, Aider, etc.) as subprocesses.
+Each tool has a known invocation pattern defined in ``providers.yaml``.
+Supports timeout, output capture, and structured result parsing.
+
+Example ``~/.harness/providers.yaml`` entry::
+
+    providers:
+      claude-code:
+        type: cli
+        command: claude
+        args:
+          - "-p"
+          - "{spec_file}"
+      kiri:
+        type: cli
+        command: kiri
+        args:
+          - "--spec"
+          - "{spec_file}"
+
+Usage::
+
+    harness wave run wave-01 --backend kiri
+    harness work "Refactor X" --backend claude-code
 
 Backend name: 'cli'
 """
@@ -74,13 +95,13 @@ class CliBackend(AbstractBackend):
         Builds the command line from the spec_content, writing it
         to a temp file if needed, and resolving the tool to use.
         """
-        # Determine which tool to use — from constraint_section or first available
+        # Determine which tool to use — from constraint_section, or first available
         tool_name = packet.constraint_section.get(
             "tool", next(iter(self._config.tools.keys()), "default")
         )
         tool = self._config.tools.get(tool_name)
         if not tool:
-            # Use first available tool
+            # Use first available tool — may be overridden by provider config in run()
             tool = next(
                 iter(self._config.tools.values()), ToolDef(name="default", binary="")
             )
@@ -131,11 +152,19 @@ class CliBackend(AbstractBackend):
         args = invocation.args
         if invocation.resolved_config and invocation.resolved_config.get("type") == "cli":
             cli_command = invocation.resolved_config.get("command", "")
+            cli_args = invocation.resolved_config.get("args", [])
+            work_dir = invocation.work_dir or os.getcwd()
+            spec_file = os.path.join(work_dir, "context.md")
             if cli_command:
                 command = cli_command
-                # When using a configured CLI provider, discard template args
-                # and pass the spec content directly via env or stdin
-                args = []
+                # Use provider-defined args with template expansion
+                if cli_args:
+                    args = [
+                        a.replace("{spec_file}", spec_file)
+                         .replace("{project_dir}", work_dir)
+                        for a in cli_args
+                    ]
+                # If no args from provider, keep invocation.args (from prepare())
 
         cmd = [command] + args
 

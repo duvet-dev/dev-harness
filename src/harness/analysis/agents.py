@@ -194,7 +194,12 @@ P3_ARCHITECTURE_CRITIC = AnalysisAgent(
         "6. Package structure: does the layout match the expected pattern "
         "for the detected project type?\n"
         "7. Module size: overly large modules that should be split\n"
-        "8. Interface segregation: granular enough interfaces or wide-fat patterns?\n\n"
+        "8. Interface segregation: granular enough interfaces or wide-fat patterns?\n"
+        "9. **Future-extensibility (MVP Thinking Trap):** does the architecture only "
+        "address the minimum current requirements, or has it considered the likely "
+        "envelope of future needs? Designs that work for today but are brittle when "
+        "extended are a red flag — flag them explicitly. MVP *doing* is good; "
+        "MVP *thinking* is bad.\n\n"
         "Base your assessment on the actual directory and import structure "
         "provided. Do not guess. If the architecture is unclear, say so."
     ),

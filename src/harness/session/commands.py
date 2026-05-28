@@ -9,6 +9,7 @@ advance, switch phase, etc.) — separating logic from terminal IO.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -141,6 +142,22 @@ def route_chat_command(cmd: str, state: dict[str, Any]) -> CommandResult:
     if cmd.startswith("consult "):
         return _handle_consult(cmd[8:].strip())
 
+    if cmd.startswith("exec "):
+        return _handle_exec(cmd[5:].strip())
+
+    if cmd.startswith("eval "):
+        return _handle_exec(cmd[5:].strip())
+
+    if cmd == "exec":
+        return CommandResult(display_lines=[
+            "Usage: /exec <shell command>"
+        ])
+
+    if cmd == "eval":
+        return CommandResult(display_lines=[
+            "Usage: /eval <shell command>"
+        ])
+
     return CommandResult(display_lines=[
         f"Unknown command: /{cmd}. Type /help for options."
     ])
@@ -224,6 +241,22 @@ def route_session_command(cmd: str, state: dict[str, Any]) -> CommandResult:
 
     if cmd == "consult-resolve" or cmd.startswith("consult-resolve "):
         return _handle_consult_resolve(cmd[16:].strip(), state)
+
+    if cmd.startswith("exec "):
+        return _handle_exec(cmd[5:].strip())
+
+    if cmd.startswith("eval "):
+        return _handle_exec(cmd[5:].strip())
+
+    if cmd == "exec":
+        return CommandResult(display_lines=[
+            "Usage: /exec <shell command>"
+        ])
+
+    if cmd == "eval":
+        return CommandResult(display_lines=[
+            "Usage: /eval <shell command>"
+        ])
 
     return CommandResult(display_lines=[
         f"Unknown command: /{cmd}. Type /help for options."
@@ -450,3 +483,47 @@ def _handle_consult_resolve(arg: str, state: dict[str, Any]) -> CommandResult:
             f"Consult #{idx} resolved."
         ],
     )
+
+
+def _handle_exec(cmd: str) -> CommandResult:
+    """Handle /exec <command> — run a shell command and show output."""
+    if not cmd:
+        return CommandResult(display_lines=[
+            "Usage: /exec <shell command>"
+        ])
+    import subprocess
+    import shlex
+    import shutil
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        lines: list[str] = []
+        if result.stdout:
+            lines.append(result.stdout.rstrip())
+        if result.stderr:
+            if result.stdout:
+                lines.append("")
+            lines.append(result.stderr.rstrip())
+        if result.returncode != 0:
+            lines.append("")
+            lines.append(f"\u2716 exit code {result.returncode}")
+        if not lines:
+            lines.append(f"(exit code {result.returncode}, no output)")
+        return CommandResult(display_lines=lines)
+    except subprocess.TimeoutExpired:
+        return CommandResult(display_lines=[
+            f"Command timed out after 60s: {cmd}"
+        ])
+    except FileNotFoundError as exc:
+        return CommandResult(display_lines=[
+            f"Command not found: {exc}"
+        ])
+    except Exception as exc:
+        return CommandResult(display_lines=[
+            f"Error executing command: {exc}"
+        ])

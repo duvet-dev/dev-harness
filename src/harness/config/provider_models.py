@@ -111,6 +111,13 @@ class ProviderConfig:
     command: str = ""
     """Shell command for ``cli`` type providers (e.g. ``claude``, ``aider``)."""
 
+    args: list[str] = field(default_factory=list)
+    """Template arguments for ``cli`` type providers.
+
+    Supports ``{spec_file}`` and ``{project_dir}`` placeholders.
+    Example: ``["-p", "{spec_file}"]``.
+    """
+
     description: str = ""
     """Human-readable description of this provider."""
 
@@ -145,6 +152,10 @@ class ProviderConfig:
     def resolve_command(self) -> str:
         """Resolve the command, expanding any env-var reference."""
         return resolve_value(self.command) if self.command else ""
+
+    def resolve_args(self) -> list[str]:
+        """Resolve args, expanding any env-var references."""
+        return [resolve_value(a) for a in self.args]
 
     def resolve_model(self, model_key: str) -> str:
         """Resolve a model key to an actual model name.
@@ -206,6 +217,7 @@ class ProviderConfig:
                            "default_temperature": m.default_temperature}
                           for m in self.models],
             "command": self.resolve_command(),
+            "args": self.resolve_args(),
             "description": self.description,
         }
 
@@ -282,6 +294,7 @@ def provider_config_from_dict(
         name=name,
         type=data.get("type", "openai-compatible"),
         api_key=data.get("api_key", ""),
+        args=data.get("args", []),
         base_url=data.get("base_url", ""),
         models=data.get("models", []),
         command=data.get("command", ""),

@@ -34,10 +34,6 @@ scripts/_temporal/
 # Local build counter (monotonic, not in git)
 BUILD_NUMBER
 
-# Generated documentation output
-docs/**
-!docs/examples/
-!docs/examples/*.md
 
 # Coverage reports
 coverage/

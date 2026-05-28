@@ -118,6 +118,92 @@ class TestHarnessREPL:
         result = repl._run_command("/")
         assert result is True
 
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_get_well_no_engagement(self, mock_resolve, mock_echo, tmp_path):
+        """/get-well with no active engagement should print message and continue."""
+        mock_resolve.return_value = None
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/get-well")
+        assert result is True
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_get_well_with_engagement(self, mock_resolve, mock_echo, tmp_path, monkeypatch):
+        """/get-well with active engagement should start a session."""
+        from unittest.mock import AsyncMock
+        mock_session = AsyncMock()
+        monkeypatch.setattr("harness.session.loop.session_loop", mock_session)
+
+        mock_resolve.return_value = "test-eng"
+        eng_dir = tmp_path / ".harness" / "engagements" / "test-eng"
+        eng_dir.mkdir(parents=True)
+
+        import yaml
+        (tmp_path / ".harness" / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai-compatible",
+                    "api_key": "test-key",
+                    "models": [{"name": "test-model"}],
+                }
+            }
+        }))
+
+        (tmp_path / ".harness" / "active-engagements.yaml").write_text(yaml.dump({
+            "branches": {"main": "test-eng"}
+        }))
+
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/get-well")
+        assert result is True
+        mock_session.assert_called_once()
+        _, kwargs = mock_session.call_args
+        assert kwargs.get("session_type") == "get-well"
+        assert kwargs.get("start_phase") == "assessment-triage"
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_get_well_with_custom_phase(self, mock_resolve, mock_echo, tmp_path, monkeypatch):
+        """/get-well architecture-design starts from a specific phase."""
+        from unittest.mock import AsyncMock
+        mock_session = AsyncMock()
+        monkeypatch.setattr("harness.session.loop.session_loop", mock_session)
+
+        mock_resolve.return_value = "test-eng"
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/get-well architecture-design")
+        assert result is True
+        mock_session.assert_called_once()
+        _, kwargs = mock_session.call_args
+        assert kwargs.get("start_phase") == "architecture-design"
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_session_get_well_no_engagement(self, mock_resolve, mock_echo, tmp_path):
+        """/session --get-well with no active engagement should print message."""
+        mock_resolve.return_value = None
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/session --get-well")
+        assert result is True
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_session_get_well_dispatches(self, mock_resolve, mock_echo, tmp_path, monkeypatch):
+        """/session --get-well dispatches to get-well session with correct args."""
+        from unittest.mock import AsyncMock
+        mock_session = AsyncMock()
+        monkeypatch.setattr("harness.session.loop.session_loop", mock_session)
+
+        mock_resolve.return_value = "test-eng"
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/session --get-well")
+        assert result is True
+        mock_session.assert_called_once()
+        _, kwargs = mock_session.call_args
+        assert kwargs.get("session_type") == "get-well"
+
 
 class TestREPLCompleter:
     def test_init(self, tmp_path):

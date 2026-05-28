@@ -116,6 +116,8 @@ class HarnessREPL:
         self._help_lines.append("── Special ──")
         self._help_lines.append("  /help                Show this help")
         self._help_lines.append("  /version             Show version info")
+        self._help_lines.append("  /get-well            Assessment-driven remediation session")
+        self._help_lines.append("  /session --get-well  Alternate: /session --get-well [phase]")
         self._help_lines.append("  /exit                Exit the REPL")
         self._help_lines.append("")
         self._help_lines.append("Tab auto-complete: command names, flags, file paths.")
@@ -265,6 +267,70 @@ class HarnessREPL:
             click.echo(f"date:    {date_str}")
             return True
 
+        if cmd_name == "get-well":
+            """Run a get-well remediation session on the active engagement."""
+            import asyncio
+            from harness.session.loop import session_loop
+            from harness.engagement.resolver import resolve_active_engagement
+            from harness.paths import get_providers_path
+
+            slug = resolve_active_engagement(self.root)
+            if not slug:
+                click.echo("No active engagement. Create one with:")
+                click.echo("  engagement create \"your task\"", err=True)
+                return True
+
+            phase = cmd_args[0] if cmd_args else "assessment-triage"
+            click.echo(f"Starting get-well session on: {slug}")
+            click.echo(f"Starting from phase: {phase}")
+            click.echo()
+
+            try:
+                asyncio.run(session_loop(
+                    self.root, slug,
+                    start_phase=phase,
+                    session_type="get-well",
+                ))
+            except click.Abort:
+                pass
+            except Exception as exc:
+                click.echo(f"Get-well session error: {exc}", err=True)
+
+            return True
+
+        if cmd_name == "session":
+            """Run a full multi-phase session on the active engagement."""
+            # Support --get-well flag directly in REPL
+            if "--get-well" in cmd_args:
+                import asyncio
+                from harness.session.loop import session_loop
+                from harness.engagement.resolver import resolve_active_engagement
+
+                slug = resolve_active_engagement(self.root)
+                if not slug:
+                    click.echo("No active engagement. Create one with:")
+                    click.echo("  engagement create \"your task\"", err=True)
+                    return True
+
+                cleaned = [a for a in cmd_args if a != "--get-well"]
+                phase = cleaned[0] if cleaned else "assessment-triage"
+                click.echo(f"Starting get-well session on: {slug}")
+                click.echo(f"Starting from phase: {phase}")
+                click.echo()
+
+                try:
+                    asyncio.run(session_loop(
+                        self.root, slug,
+                        start_phase=phase,
+                        session_type="get-well",
+                    ))
+                except click.Abort:
+                    pass
+                except Exception as exc:
+                    click.echo(f"Get-well session error: {exc}", err=True)
+
+                return True
+
         # ── Engagement context helpers ───────────────────────────────────
         # If the user types /work /chat /session without being in an
         # engagement, the Click commands will fail gracefully. That's fine.
@@ -351,6 +417,8 @@ class _REPLCompleter:
             self._first_tokens.add(name.split()[0])
         for name in self._group_names:
             self._first_tokens.add(name)
+        # REPL-only commands (not in Click CLI)
+        self._first_tokens.update({"get-well", "session"})
         self._matches: list[str] = []
 
     def complete(self, text: str, state: int) -> Optional[str]:

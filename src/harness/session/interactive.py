@@ -424,8 +424,9 @@ class InteractiveSession:
 
         while not self._done:
             try:
+                phase_tag = f"[{self.phase}]" if self.phase else ""
                 user_input = click.prompt(
-                    "\nYou", prompt_suffix=" > ", default=""
+                    f"\n{phase_tag} You", prompt_suffix=" > ", default=""
                 )
             except (EOFError, KeyboardInterrupt):
                 click.echo()

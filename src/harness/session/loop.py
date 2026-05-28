@@ -1593,92 +1593,38 @@ def _print_header(text: str, char: str = "=") -> None:
 
 def _print_help() -> None:
 
-    """Print available meta-commands."""
+    """Print available meta-commands - grouped by relevance."""
 
     click.echo()
 
-    click.echo("Meta-commands:")
-
-    click.echo("  /help        -- show this help")
-
-    click.echo("  /save        -- save transcript to engagement")
-
-    click.echo("  /write       -- write last response as phase artifact")
-
-    click.echo("  /apply       -- write files from last response (fallback)")
-
-    click.echo("  /models      -- list available providers and models")
-
-    click.echo(
-
-        "  /model <n>   -- switch to a provider by name "
-
-        "(or \"<name> <alias>\" for a specific model alias)"
-
+    in_session = (
+        hasattr(_print_help, "_in_session") and _print_help._in_session
     )
 
-    click.echo(
-
-        "  /phase       -- show phase state diagram "
-
-    )
-
-    click.echo(
-
-        "  /navigate <p>-- jump to a phase with checkpoint "
-
-        "(design, planning, implementation, etc.)"
-
-    )
-
-    click.echo(
-
-        "  /feedback <t> <r> -- send feedback packet to "
-
-        "target phase with reason"
-
-    )
-
-    click.echo("  /resume      -- resume from paused checkpoint")
-
-    click.echo("  /resume-force-- resume even if checkpoint is stale")
-
-    if hasattr(_print_help, "_in_session") and _print_help._in_session:
-
-        click.echo("  /next        -- advance to next phase")
-
-        click.echo("  /approve     -- approve and advance")
-
-        click.echo("  /changes     -- request revisions")
-
-        click.echo(
-
-            "  /consult-resolve <i> <r>"
-
-            " -- resolve blocking consult"
-
-        )
-
-    click.echo("  /new         -- start fresh conversation")
-
-    _print_consult_help()
-
-    click.echo("  /exec <cmd>  -- run a shell command and display output")
-    click.echo("  /eval <cmd>  -- alias for /exec")
-    click.echo("  /version     -- show version info")
-
-    click.echo("  /exit        -- exit session")
-
+    click.echo("Session flow:")
+    if in_session:
+        click.echo("  /next        -- approve and advance to the next phase")
+        click.echo("  /changes     -- request revisions (go back a phase)")
+    click.echo("  /phase       -- show phase state diagram")
+    click.echo("  /exit        -- quit the session (or Ctrl+C)")
     click.echo()
 
-    click.echo("Line editing: use Alt+Left/Right to jump words, Home/End for line ends")
-
+    click.echo("Talking to the agent:")
+    click.echo("  Just type your message - it goes to the agent.")
+    click.echo("  Use ## File: path headings to ask the agent to write files.")
+    click.echo("  Use /save to save the conversation transcript.")
     click.echo()
 
+    click.echo("Power tools:")
+    click.echo("  /model <n>   -- switch provider")
+    click.echo("  /exec <cmd>  -- run a shell command")
+    click.echo("  /navigate <p>-- jump to a specific phase")
+    click.echo("  /resume      -- resume from a paused checkpoint")
+    click.echo("  /consult <q> -- consult a fleet")
+    click.echo()
 
-
-
-
+    click.echo("Line editing: Alt+Left/Right to jump words, Home/End for line ends")
+    click.echo()
 def _format_conversation_for_context(messages: list[dict]) -> str:
 
     """Format recent conversation history as a text block for system prompt."""
@@ -2676,10 +2622,18 @@ async def session_loop(
         )
 
         click.echo(f"Model: {model}")
-        click.echo(
-            "Type /help for commands, /next to advance, "
-            "/changes to request revisions, /exit to quit"
-        )
+        click.echo()
+
+        next_name = effective_phases[phase_idx + 1]["title"] \
+            if phase_idx + 1 < len(effective_phases) else None
+        next_hint = f"Your next step is /next to advance to \"{next_name}\"." \
+            if next_name else "This is the last phase — /next will complete the session."
+
+        click.echo(f"  📝 {phase_def['title']}")
+        if "agent" in phase_def:
+            click.echo(f"     Agent: {phase_def['agent']}")
+        click.echo(f"  {next_hint}")
+        click.echo("  /help shows all commands. Type your prompt to chat with the agent, or use /exit to quit.")
         click.echo()
 
         # Run the interactive session for this phase

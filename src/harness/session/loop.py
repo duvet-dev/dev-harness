@@ -2624,9 +2624,10 @@ async def session_loop(
                        f" -- {phase_def['title']}")
         click.echo()
 
-        # Ensure phase is active
+        # Ensure phase is active (idempotent — skip if already active)
         psm.ensure_phase(phase_def["name"])
-        psm.transition(phase_def["name"], PS.ACTIVE)
+        if psm.get_state(phase_def["name"]) != PS.ACTIVE:
+            psm.transition(phase_def["name"], PS.ACTIVE)
 
         # Build system prompt
         # For get-well sessions, inject assessment findings as context

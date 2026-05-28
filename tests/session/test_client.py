@@ -57,12 +57,12 @@ class TestChatTranscript:
 class TestResolveEnvVars:
     def test_replaces_env_var(self):
         os.environ["_TEST_VAR"] = "secret"
-        result = resolve_env_vars("${{_TEST_VAR}}")
+        result = resolve_env_vars("${_TEST_VAR}")
         assert result == "secret"
 
     def test_leaves_unresolvable(self):
-        result = resolve_env_vars("${{NONEXISTENT_VAR}}")
-        assert "${{NONEXISTENT_VAR}}" in result
+        result = resolve_env_vars("${NONEXISTENT_VAR}")
+        assert "${NONEXISTENT_VAR}" in result
 
     def test_no_match(self):
         result = resolve_env_vars("plain text")

@@ -73,11 +73,11 @@ class ChatTranscript:
 
 # ── Config resolution ──────────────────────────────────────────────────────
 
-_ENV_VAR_RE = re.compile(r"\$\{\{([^}]+)\}\}")
+_ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
 
 
 def resolve_env_vars(value: str) -> str:
-    """Replace ``${{VAR}}`` placeholders with environment variable values.
+    """Replace ``${VAR}`` placeholders with environment variable values.
 
     Leaves unresolvable placeholders in place so the user can see what's
     missing.

@@ -811,10 +811,17 @@ PHASES = [
 def _build_get_well_phase_list() -> list[dict]:
     """Build the phase list for a get-well remediation session.
 
-    Prepends assessment-triage and remediation-design phases to the
-    standard phase pipeline (planning through review for execution).
+    Phase flow:
+    1. assessment-triage \u2014 categorise & prioritise findings
+    2. remediation-requirements \u2014 structured remediation requirements
+    3. architecture-design \u2014 architectural design with codebase analysis
+    4-7. planning \u2192 implementation \u2192 testing \u2192 review (standard)
+
+    The critical analyser loop lives in architecture-design: the agent has
+    the critical-analyser role with full RepoTool access to explore the
+    codebase before making design decisions.
     """
-    reph = {
+    triage = {
         "name": "assessment-triage",
         "title": "Assessment Triage & Finding Prioritisation",
         "agent": "triage-agent",
@@ -848,55 +855,98 @@ def _build_get_well_phase_list() -> list[dict]:
         ),
     }
 
-    remph = {
-        "name": "remediation-design",
-        "title": "Remediation Design & Plan",
-        "agent": "architect",
-        "fleets": ["architecture", "planning"],
-        "artifact": "remediation-plan.md",
+    requirements = {
+        "name": "remediation-requirements",
+        "title": "Remediation Requirements Definition",
+        "agent": "requirements-agent",
+        "fleets": ["requirements"],
+        "artifact": "remediation-requirements.md",
         "prompt": (
-            "You are a **Remediation Architect**. You are in the REMEDIATION DESIGN "
-            "phase of a get-well remediation session.\n\n"
+            "You are a **Remediation Requirements Analyst**. You are in the REMEDIATION "
+            "REQUIREMENTS phase of a get-well remediation session.\n\n"
             "YOUR JOB:\n"
-            "- Design a cohesive remediation plan from the triaged assessment findings\n"
-            "- For each finding theme or work-stream, produce:\n"
-            "    * The remediation approach (refactor, rewrite, extract, etc.)\n"
-            "    * Key design decisions (as ADRs where appropriate)\n"
-            "    * Dependencies between remediation work-streams\n"
-            "    * Risk assessment for each approach\n"
-            "- Consider architectural coherence \u2014 don\'t fix findings in isolation;\n"
-            "  ensure the overall architecture improves\n"
-            "- Define acceptance criteria for when a finding is considered resolved\n"
-            "- Decompose the work into waves (PR-sized units) with dependencies\n"
-            "- Assign agent roles to each wave\n\n"
+            "- Review the triage document from the previous phase\n"
+            "- For each finding or finding theme, write a structured remediation "
+            "requirement\n"
+            "- Each requirement must include:\n"
+            "    * A clear description of what needs to change\n"
+            "    * The source finding ID(s) it addresses\n"
+            "    * Acceptance criteria (how do we know the finding is resolved)\n"
+            "    * Constraints (e.g. must not break existing API contracts)\n"
+            "    * Dependencies on other requirements\n"
+            "    * Estimated effort (S/M/L/XL)\n\n"
             "YOUR BOUNDARIES:\n"
-            "- Do NOT implement any code \u2014 design only\n"
-            "- Do NOT write tests \u2014 define testing strategy\n"
-            "- Do NOT re-triage \u2014 use the triage output from the previous phase\n"
-            "- If you discover a new finding, add it to the triage doc instead\n\n"
+            "- Define WHAT needs to be done, not HOW\n"
+            "- Do NOT design architecture or produce technical solutions\n"
+            "- Do NOT break into implementation tasks or waves\n"
+            "- Quick wins can be written as single requirements; "
+            "complex work-streams may need multiple requirements\n\n"
             "OUTPUT FORMAT:\n"
-            "Write a structured remediation plan using the RepoTool. Use sections:\n"
-            "    ## Overview & Strategy\n"
-            "    ## Work-Stream: {name}\n"
-            "      ### Approach\n"
-            "      ### Design Decisions\n"
-            "      ### Dependencies\n"
-            "      ### Risk\n"
+            "Write a structured requirements document using the RepoTool. Use sections:\n"
+            "    ## Overview\n"
+            "    ## Requirement R-{N}: {title}\n"
+            "      ### Description\n"
+            "      ### Source Findings\n"
             "      ### Acceptance Criteria\n"
-            "    ## Wave Breakdown\n"
-            "      Wave {N}: {title} \u2014 {agent role} \u2014 {est effort}\n"
-            "    ## Execution Order\n"
-            "    ## Testing Strategy\n"
-            "    ## Success Metrics\n\n"
-            "Use ADRs (Architecture Decision Records) in `docs/arch/` to capture "
-            "key design choices."
+            "      ### Constraints\n"
+            "      ### Dependencies\n"
+            "      ### Effort Estimate\n"
+            "    ## Requirement Dependency Graph\n"
+            "    ## Quick Wins Summary\n\n"
+            "Number requirements sequentially starting from R-1."
         ),
     }
 
-    # Start with get-well phases, then append standard phases
-    result = [reph, remph]
+    design = {
+        "name": "architecture-design",
+        "title": "Architecture Design & Critical Analysis",
+        "agent": "critical-analyser",
+        "fleets": ["architecture", "analysis"],
+        "artifact": "remediation-design.md",
+        "prompt": (
+            "You are a **Remediation Architect** with full codebase access via RepoTool. "
+            "You are in the ARCHITECTURE DESIGN phase of a get-well remediation "
+            "session.\n\n"
+            "YOUR JOB:\n"
+            "- Review the remediation requirements from the previous phase\n"
+            "- Explore the codebase \u2014 use RepoTool to read key files and "
+            "understand the current architecture\n"
+            "- For each requirement that requires architectural changes, produce:\n"
+            "    * The proposed approach (refactor, extract, rewrite, etc.)\n"
+            "    * ADRs (Architecture Decision Records) for significant decisions\n"
+            "    * File/component impact assessment \u2014 what changes and how\n"
+            "    * Risk assessment for each design choice\n"
+            "- Consider overall architectural coherence \u2014 don\'t fix "
+            "requirements in isolation; ensure the architecture improves "
+            "holistically\n"
+            "- Flag requirements that have no architectural impact (safe to "
+            "implement without design review)\n\n"
+            "YOUR ACCESS:\n"
+            "- You have full read access to the codebase via RepoTool\n"
+            "- You can read any file, list directories, and understand code "
+            "structure\n"
+            "- This is the CRITICAL ANALYSIS loop \u2014 your design decisions "
+            "must be informed by the actual code, not assumptions\n"
+            "- If you need to validate a design hypothesis, read the relevant "
+            "files and verify the current implementation before deciding\n\n"
+            "OUTPUT FORMAT:\n"
+            "Write a structured design document using the RepoTool. Use sections:\n"
+            "    ## Design Overview & Strategy\n"
+            "    ## Architecture Decision Records\n"
+            "      ADR-{N}: {title} \u2014 Status: Proposed/Accepted/Deprecated\n"
+            "        Context, Decision, Consequences\n"
+            "    ## Impact Assessment\n"
+            "    ## Risk Register\n"
+            "    ## Requirements Without Architectural Impact\n\n"
+            "For each ADR, write a standalone file in `docs/arch/adr-{N}-{slug}.md` "
+            "using RepoTool."
+        ),
+    }
 
-    # Append standard phases (from PLANNING onward)
+    # Start with get-well prefix phases
+    result = [triage, requirements, design]
+
+    # Append standard phases (planning through review)
     for p in PHASES:
         if p["name"] in ("planning", "implementation", "testing", "review"):
             result.append(p)
@@ -2581,7 +2631,7 @@ async def session_loop(
         # Build system prompt
         # For get-well sessions, inject assessment findings as context
         gw_context = ""
-        if assessment_findings and phase_def["name"] in ("assessment-triage", "remediation-design"):
+        if assessment_findings and phase_def["name"] in ("assessment-triage", "remediation-requirements", "architecture-design"):
             gw_context = assessment_findings
         system_prompt = _build_system_prompt(
             phase_def, root=root, engagement_slug=engagement_slug,

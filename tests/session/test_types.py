@@ -20,6 +20,12 @@ class TestSessionType:
         assert SessionType.GREENFIELD.value == "greenfield"
         assert SessionType.BROWNFIELD.value == "brownfield"
         assert SessionType.REFACTORING.value == "refactoring"
+        assert SessionType.GET_WELL.value == "get-well"
+
+    def test_get_well_is_enum_member(self):
+        assert SessionType.GET_WELL is not None
+        assert SessionType.GET_WELL.value == "get-well"
+        assert isinstance(SessionType.GET_WELL, str)
 
 
 class TestDetectSessionType:

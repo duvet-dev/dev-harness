@@ -12,6 +12,7 @@ import pytest
 from harness.session.loop import (
     PHASES,
     _apply_file_blocks,
+    _build_get_well_phase_list,
     _check_for_phase_jump_from_content,
     _check_phase_jump_limit,
     _extract_file_blocks,
@@ -20,6 +21,7 @@ from harness.session.loop import (
     _format_jump_marker,
     _format_consult_result,
     _init_phase_jump_counts,
+    _load_assessment_findings,
     _load_engagement_context,
     _parse_consult_flags,
     _parse_waves,
@@ -33,6 +35,252 @@ from harness.session.loop import (
     switch_provider,
 )
 from harness.agents.consultation import ConsultationResult
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Get-well session phases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBuildGetWellPhaseList:
+    """Tests for _build_get_well_phase_list()."""
+
+    def test_returns_seven_phases(self):
+        phases = _build_get_well_phase_list()
+        assert len(phases) == 7
+
+    def test_first_phase_is_assessment_triage(self):
+        phases = _build_get_well_phase_list()
+        assert phases[0]["name"] == "assessment-triage"
+
+    def test_second_phase_is_remediation_requirements(self):
+        phases = _build_get_well_phase_list()
+        assert phases[1]["name"] == "remediation-requirements"
+
+    def test_third_phase_is_architecture_design(self):
+        phases = _build_get_well_phase_list()
+        assert phases[2]["name"] == "architecture-design"
+
+    def test_fourth_phase_is_planning(self):
+        phases = _build_get_well_phase_list()
+        assert phases[3]["name"] == "planning"
+
+    def test_fifth_phase_is_implementation(self):
+        phases = _build_get_well_phase_list()
+        assert phases[4]["name"] == "implementation"
+
+    def test_sixth_phase_is_testing(self):
+        phases = _build_get_well_phase_list()
+        assert phases[5]["name"] == "testing"
+
+    def test_seventh_phase_is_review(self):
+        phases = _build_get_well_phase_list()
+        assert phases[6]["name"] == "review"
+
+    def test_architecture_design_uses_critical_analyser(self):
+        phases = _build_get_well_phase_list()
+        assert phases[2]["agent"] == "critical-analyser"
+
+    def test_each_phase_has_required_keys(self):
+        required = {"name", "title", "agent", "fleets", "artifact", "prompt"}
+        for i, p in enumerate(_build_get_well_phase_list()):
+            missing = required - set(p.keys())
+            assert not missing, f"Phase {i} ({p.get('name', '?')}) missing keys: {missing}"
+
+    def test_standard_phases_keep_original_prompts(self):
+        phases = _build_get_well_phase_list()
+        std_names = {"planning", "implementation", "testing", "review"}
+        # The planning-through-review phases should reference the PHASES originals
+        for p in phases:
+            if p["name"] in std_names:
+                orig = [x for x in PHASES if x["name"] == p["name"]][0]
+                assert p["prompt"] == orig["prompt"], f"{p['name']} prompt diverged from PHASES"
+
+
+class TestLoadAssessmentFindings:
+    """Tests for _load_assessment_findings()."""
+
+    def test_returns_empty_when_no_assessments_dir(self, tmp_path):
+        result = _load_assessment_findings(tmp_path, "test-eng")
+        assert result == ""
+
+    def test_returns_empty_when_no_manifests(self, tmp_path):
+        assess_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "assessments"
+        assess_dir.mkdir(parents=True)
+        result = _load_assessment_findings(tmp_path, "test-eng")
+        assert result == ""
+
+    def test_returns_empty_when_manifest_is_empty(self, tmp_path):
+        assess_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "assessments"
+        assess_dir.mkdir(parents=True)
+        (assess_dir / "001-manifest.json").write_text("{}")
+        result = _load_assessment_findings(tmp_path, "test-eng")
+        assert result == ""
+
+    def test_formats_findings_correctly(self, tmp_path):
+        import json
+        assess_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "assessments"
+        assess_dir.mkdir(parents=True)
+        manifest = {
+            "score": 72,
+            "findings": [
+                {
+                    "id": "finding-001",
+                    "severity": "critical",
+                    "category": "performance",
+                    "message": "N+1 query in user lookup",
+                    "file": "src/users.py",
+                },
+                {
+                    "id": "finding-002",
+                    "severity": "warning",
+                    "message": "Missing input validation",
+                },
+            ],
+            "recommendations": ["Add rate limiting", "Add request validation"],
+        }
+        (assess_dir / "001-manifest.json").write_text(json.dumps(manifest))
+        result = _load_assessment_findings(tmp_path, "test-eng")
+        assert "score: 72" in result.lower() or "Score: 72" in result
+        assert "finding-001" in result
+        assert "N+1 query" in result
+        assert "critical" in result
+        assert "performance" in result
+        assert "src/users.py" in result
+        assert "finding-002" in result
+        assert "Missing input validation" in result
+        assert "Add rate limiting" in result
+        assert "Add request validation" in result
+
+    def test_picks_latest_manifest(self, tmp_path):
+        import json
+        assess_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "assessments"
+        assess_dir.mkdir(parents=True)
+        # Write two manifests; the first (alphabetically first) is older
+        (assess_dir / "001-manifest.json").write_text(json.dumps({
+            "score": 30,
+            "findings": [{"id": "f-001", "severity": "critical", "message": "Old finding"}],
+        }))
+        (assess_dir / "002-manifest.json").write_text(json.dumps({
+            "score": 85,
+            "findings": [{"id": "f-002", "severity": "warning", "message": "New finding"}],
+        }))
+        result = _load_assessment_findings(tmp_path, "test-eng")
+        assert "New finding" in result
+        assert "Old finding" not in result
+
+    def test_handles_malformed_json(self, tmp_path):
+        assess_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "assessments"
+        assess_dir.mkdir(parents=True)
+        (assess_dir / "001-manifest.json").write_text("not valid json")
+        result = _load_assessment_findings(tmp_path, "test-eng")
+        assert result == ""
+
+    def test_returns_empty_with_findings_key_but_no_entries(self, tmp_path):
+        import json
+        assess_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "assessments"
+        assess_dir.mkdir(parents=True)
+        (assess_dir / "001-manifest.json").write_text(json.dumps({
+            "score": 100,
+            "findings": [],
+        }))
+        result = _load_assessment_findings(tmp_path, "test-eng")
+        assert result == ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Provider functions — list-format models (fix for #/chat error)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestListProvidersListModels:
+    """Tests for list_providers() with list-format models."""
+
+    def test_list_models_extracts_first_name(self, tmp_path):
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai-compatible",
+                    "api_key": "sk-test",
+                    "models": [
+                        {"name": "deepseek-v4-pro", "context_window": 65536},
+                        {"name": "deepseek-v4-flash", "context_window": 65536},
+                    ],
+                }
+            }
+        }))
+        providers = list_providers(tmp_path)
+        dp = [p for p in providers if p["name"] == "dp"][0]
+        assert dp["model"] == "deepseek-v4-pro"
+
+    def test_dict_models_still_works(self, tmp_path):
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai",
+                    "api_key": "sk-test",
+                    "models": {"default": "gpt-4o"},
+                }
+            }
+        }))
+        providers = list_providers(tmp_path)
+        dp = [p for p in providers if p["name"] == "dp"][0]
+        assert dp["model"] == "gpt-4o"
+
+
+class TestSwitchProviderListModels:
+    """Tests for switch_provider() with list-format models."""
+
+    def test_list_models_picks_first_name(self, tmp_path):
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai-compatible",
+                    "api_key": "sk-test",
+                    "models": [
+                        {"name": "deepseek-v4-pro", "context_window": 65536},
+                    ],
+                }
+            }
+        }))
+        result = switch_provider(tmp_path, "dp")
+        assert result["model"] == "deepseek-v4-pro"
+        assert result["name"] == "dp"
+
+    def test_dict_models_still_works(self, tmp_path):
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai",
+                    "api_key": "sk-test",
+                    "models": {"default": "gpt-4o"},
+                }
+            }
+        }))
+        result = switch_provider(tmp_path, "dp")
+        assert result["model"] == "gpt-4o"
+        assert result["name"] == "dp"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Formatting helpers
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 class TestExtractFileBlocks:

@@ -122,6 +122,86 @@ class TestResolveProvider:
         assert isinstance(result, dict)
 
 
+class TestResolveProviderListModels:
+    """Tests for resolve_provider with the list-format models (fix for #/chat error)."""
+
+    def test_list_models_picks_first_name(self, tmp_path):
+        """When models is a list of dicts, pick the first entry's 'name' as model."""
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai-compatible",
+                    "api_key": "sk-test",
+                    "base_url": "https://api.test.com",
+                    "models": [
+                        {"name": "deepseek-v4-pro", "context_window": 65536, "default_temperature": 0.3},
+                        {"name": "deepseek-v4-flash", "context_window": 65536, "default_temperature": 0.3},
+                    ],
+                }
+            }
+        }))
+        result = resolve_provider(tmp_path)
+        assert result["model"] == "deepseek-v4-pro"
+
+    def test_list_models_empty_list(self, tmp_path):
+        """Empty list models => model should be empty string (no crash)."""
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai-compatible",
+                    "api_key": "sk-test",
+                    "models": [],
+                }
+            }
+        }))
+        result = resolve_provider(tmp_path)
+        assert "model" not in result or result["model"] == ""
+
+    def test_list_models_no_name_field(self, tmp_path):
+        """List entries without 'name' => model should be empty string."""
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai-compatible",
+                    "api_key": "sk-test",
+                    "models": [{"context_window": 4096}],
+                }
+            }
+        }))
+        result = resolve_provider(tmp_path)
+        assert "model" not in result or result["model"] == ""
+
+    def test_dict_models_still_works(self, tmp_path):
+        """Regression: dict-format models should still resolve correctly."""
+        import yaml
+        root = tmp_path / ".harness"
+        root.mkdir()
+        (root / "providers.yaml").write_text(yaml.dump({
+            "default_backend": "dp",
+            "providers": {
+                "dp": {
+                    "type": "openai",
+                    "api_key": "sk-test",
+                    "models": {"default": "gpt-4o", "gpt-4": "gpt-4"},
+                }
+            }
+        }))
+        result = resolve_provider(tmp_path)
+        assert result["model"] == "gpt-4o"
+
+
 class TestInteractiveClient:
     def test_init_sets_system_prompt(self):
         client = InteractiveClient(api_key="test-key", system_prompt="You are a test")

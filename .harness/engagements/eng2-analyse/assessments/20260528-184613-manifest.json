@@ -1,0 +1,705 @@
+{
+  "timestamp": "2026-05-28T18:46:13.779835+00:00",
+  "repository": "/Users/claw/Projects/dev-harness",
+  "report_file": "/Users/claw/Projects/dev-harness/.harness/engagements/eng2-analyse/assessments/20260528-184613-assessment.md",
+  "type": "full-assessment",
+  "score": "fair",
+  "finding_count": 73,
+  "recommendations": [
+    "[Architecture] Split cli.py into a command-per-file structure under a cli/ package (e.g., cli/engagement.py, cli/wave.py, cli/analysis.py, cli/fleet.py) with a shared context/registry pattern to reduce the ~2500-line monolith.",
+    "[Architecture] Resolve the runner \u2194 cycle circular dependency by extracting a shared protocol/interface for agent dispatch (e.g., AgentDispatcher protocol) that cycle.py depends on and runner.py implements \u2014 breaking the cycle with dependency inversion.",
+    "[Architecture] Introduce a ProviderResolver abstraction in agents/backends/ that the runner consumes via dependency injection rather than directly importing harness.config.provider_registry and harness.paths.",
+    "[Architecture] Extract the test-command auto-detection from agents/cycle.py into a dedicated TestCommandDetector strategy that can be injected into CycleRunner, removing the direct import from harness.agents.detectors.",
+    "[Architecture] Consolidate provider config resolution: session/client.py, session/loop.py, and config/provider_registry.py each contain overlapping provider-resolution logic. Unify behind config/provider_registry.py as the single source of truth.",
+    "[Architecture] Add an abstraction layer between state/ temporal modules and the temporalio SDK \u2014 an interface that wraps Temporal client operations so the workflow engine can be swapped or mocked without touching state management code.",
+    "[Architecture] Consider extracting a 'core' package for domain types that have zero infrastructure dependencies (AgentRole, AgentSpec, ContextPacket, OutputContract, Fleet, CycleStep, etc.) to establish a clear dependency direction: core \u2190 agents \u2190 session \u2190 CLI.",
+    "[Architecture] session/loop.py should be decomposed: extract consultation logic, phase-jump logic, file-block extraction, and provider listing into separate modules. The remaining session orchestration should use these via composition.",
+    "[Architecture] The project's own architecture-goal.yaml mechanism (harness.config.architecture) should be applied to the harness itself: define allowed layer dependencies between packages and enforce them in CI via a conformance check.",
+    "[Architecture] Address the MVP-thinking pattern: each 'Wave N' annotation in the code suggests features were added incrementally to existing modules rather than extracted. Establish a rule that any new Wave touching cli.py or session/loop.py must extract at least one responsibility to a new module.",
+    "[Code Quality] Split cli.py (~2000+ lines) into per-command-group modules under harness/cli/ to improve maintainability and testability.",
+    "[Code Quality] Extract the shared tool-calling loop logic in api_backend.py (duplicated between run() and run_stream()) into a private _run_tool_loop() method.",
+    "[Code Quality] Replace all bare 'except Exception: pass' blocks with at least logger.debug(..., exc_info=True) to aid production debugging.",
+    "[Code Quality] Create a centralized slug-resolution helper for the CLI to eliminate the ~10 identical 'resolve slug \u2192 verify engagement exists \u2192 error if not' blocks.",
+    "[Code Quality] Extract the test-command auto-detection from cycle.py into its own module (harness/analysis/test_detector.py) to reduce cyclomatic complexity.",
+    "[Code Quality] Add a DRY config base class (e.g., ConfigFromDictMixin) to eliminate the repeated from_dict() boilerplate across ApiBackendConfig, CliBackendConfig, EditorBackendConfig, and RunnerConfig.",
+    "[Code Quality] Move API defaults (model, endpoint URLs, timeouts) into a configuration layer that reads from providers.yaml rather than hardcoding in dataclass defaults.",
+    "[Code Quality] Consider making PluginRegistry instance-based (non-singleton) to improve test isolation, or provide a context-manager for test reset.",
+    "[Tests] Add integration tests for the CLI surface (cli.py at 17% coverage is the #1 risk). Use Click's CliRunner for in-process command testing \u2014 no network needed.",
+    "[Tests] Add integration tests for AgentRunner with a stub backend \u2014 exercise backend resolution, fallback chains, and critic loop orchestration without mocking the runner's own methods.",
+    "[Tests] Add session loop integration tests using a fake backend that returns scripted responses \u2014 covers the main interactive loop without LLM dependencies.",
+    "[Tests] Reduce mocking in pipeline/workflow tests: test_sync_pipeline.py should use real file I/O at minimum; test_workflows_engagement.py could use Temporal's test server for genuine workflow testing.",
+    "[Tests] Add at least one true business-feature test: create a temp project, run `harness init`, create an engagement, run through a phase cycle with a scripted backend.",
+    "[Tests] Increase test depth for high-risk modules: api_backend.py (tool execution loop, retry logic, streaming), cycle.py (CycleRunner execution paths), conformance_reviewer.py (TestScanner with real test directories).",
+    "[Tests] Add property-based tests for parsers (ACParser, _parse_status_porcelain, _parse_numstat) to catch edge cases beyond the current example-driven tests.",
+    "[Tests] Consider adding a 'slow' marker for integration tests that use real subprocess/file I/O but not external services, between the current unit and e2e tiers.",
+    "[Tests] Raise the coverage threshold from 70% to 80% once cli.py and session/loop.py coverage improves \u2014 the 74% number is misleading because large files with low coverage drag down the true picture.",
+    "[Fix Immediately] Serialisation asymmetry (type vs provider key mismatch) \u2014 1.5hr, high risk, silently breaks Anthropic/Google features",
+    "[Fix Immediately] Consultation stub never wired up (__do_consult__) \u2014 1.5hr, high risk, /consult silently does nothing in chat mode",
+    "[Fix Immediately] Phantom role 'architect-critic' \u2014 1hr, medium risk, silently skips RepoTool attachment",
+    "[Fix Soon] Duplicated ACTIVE_ENGAGEMENTS_FILE constants in 3 files \u2014 1hr, medium risk, drift hazard",
+    "[Fix Soon] Concurrency gap in active-engagements.yaml read-modify-write \u2014 2hr, high risk, data loss on concurrent CLI use",
+    "[Fix Soon] Contract violation: run_stream() not on AbstractBackend \u2014 3hr, medium risk, prevents streaming with non-API backends",
+    "[Fix Soon] YAML write safety: comments destroyed, ordering unstable \u2014 3hr, medium risk, noisy diffs",
+    "[Design Debt] Circular dependency detection stub in debt.py \u2014 4hr, medium risk, needs design for import graph analysis",
+    "[Design Debt] Test quality gaps in command routing and provider serialisation \u2014 4hr, medium risk, needs test strategy"
+  ],
+  "findings": [
+    {
+      "id": "finding-001",
+      "severity": "critical",
+      "category": "architecture",
+      "message": "Boundary violation: Monolithic CLI imports directly from 15+ subpackages: agents (registry, fleet, fleet_registry, consultation, governance, cycle), analysis (deep, fast, summary, observer, assessment), config (architecture), constitution (loader, template_registry), engagement (checkpoint, feedback, phase_state, lifecycle, resolver, rename), state (freshness, reconciliation, snapshot, temporal_adapter, temporal_server), scm (git, gitignore), session (loop, types, client, commands, interactive), plan (plan_manager), wave (wave_cycle), docs (generator, changelog), sync (pipeline), health, shell \u2014 no facade or mediator pattern in cli.py",
+      "file": "cli.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-002",
+      "severity": "warning",
+      "category": "architecture",
+      "message": "Boundary violation: Agent orchestration layer imports infrastructure/config concerns: harness.config.provider_registry (provider resolution) and harness.paths (filesystem path resolution). Provider resolution is an infrastructure concern that should be injected, not directly imported by the agent runner. in agents/runner.py",
+      "file": "agents/runner.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-003",
+      "severity": "warning",
+      "category": "architecture",
+      "message": "Boundary violation: Session orchestration module knows about and directly imports plan management (harness.plan.plan_manager), wave execution (harness.wave.wave_cycle), fleet/pattern context building (harness.agents.context_builder, harness.agents.pattern), and all engagement lifecycle modules. It functions as a second 'god orchestrator' alongside cli.py. in session/loop.py",
+      "file": "session/loop.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-004",
+      "severity": "warning",
+      "category": "architecture",
+      "message": "Boundary violation: State management module directly imports from temporalio (third-party workflow engine) without an abstraction layer. Also imports from harness.workflows.activities and harness.workflows.engagement \u2014 crossing from state into workflow definitions. in state/temporal_worker.py",
+      "file": "state/temporal_worker.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-005",
+      "severity": "warning",
+      "category": "architecture",
+      "message": "Boundary violation: Cycle engine imports from harness.agents.detectors for build-system constants (BUILD_PYPROJECT_TOML, etc.) \u2014 test-command auto-detection logic lives in the cycle engine rather than being injected as a strategy/plugin. The module also does lazy imports of AgentRunner to avoid circular imports. in agents/cycle.py",
+      "file": "agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-006",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Structure] cli.py is approximately 2000+ lines with ~20 CLI command groups and handlers mixed together. This violates single-responsibility \u2014 command handlers, helpers, and rendering logic all coexist in one module.",
+      "file": "src/harness/cli.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-007",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Structure] cycle.py is ~600+ lines combining CycleRunner engine, 7+ built-in cycle definitions, test-command auto-detection with 10+ language detectors, and helper functions. The test-command detection logic (~70 lines) should be extracted into its own module.",
+      "file": "src/harness/agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-008",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Error Handling] Bare 'except Exception: pass' in stop_worker() swallows all exceptions during shutdown silently. At minimum, log the exception at debug level.",
+      "file": "src/harness/state/temporal_worker.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-009",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Error Handling] 'except Exception: return None' in read_active_engagement() silently swallows all git errors. This could mask genuine issues like corrupted repos.",
+      "file": "src/harness/engagement/lifecycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-010",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Error Handling] Multiple bare 'except Exception: pass' blocks in the CLI (e.g., _reconcile_before_summary, finish command catch block). These should at minimum log at debug level to aid troubleshooting.",
+      "file": "src/harness/cli.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-011",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Error Handling] The 'data' variable in run() is referenced after the for-loop in metrics without a guaranteed assignment \u2014 uses 'if \"data\" in locals()' which is a fragile pattern. If max_rounds is 0, data is never assigned.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-012",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Complexity] The run() method has a multi-round tool-calling loop with nested try/except, message formatting, tool execution, and metric collection \u2014 cyclomatic complexity is high (~15+ branches). The run_stream() method near-duplicates this logic.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-013",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Complexity] _detect_test_command() contains a cascade of ~12 if/elif blocks checking for different language ecosystems \u2014 deeply nested with file reading and JSON parsing at each level.",
+      "file": "src/harness/agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-014",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Complexity] The 'phase' command handler has 7 mutually exclusive flag branches (--status, --list, --navigate, --feedback-target, --resume, --feedback-list, --advance) each with significant logic, making it hard to test in isolation.",
+      "file": "src/harness/cli.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-015",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Redundancy] The tool-calling loop logic (API key resolution, endpoint resolution, payload building, tool conversion, message formatting, multi-round loop) is substantially duplicated between run() (~150 lines) and run_stream() (~120 lines). These share ~80% of their code.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-016",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Redundancy] The from_dict() pattern is repeated verbatim across ApiBackendConfig, CliBackendConfig, EditorBackendConfig, and RunnerConfig \u2014 each manually checks 'if key in config: c.field = config[key]'. A mixin or decorator could eliminate this boilerplate.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-017",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Redundancy] The slug-resolution + engagement-verification pattern ('if not slug: resolve_active_engagement; if not slug: echo error + raise Abort; verify eng_dir exists') appears ~10+ times across different CLI commands with near-identical code.",
+      "file": "src/harness/cli.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-018",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Magic Values] MAX_TOOL_ROUNDS = 25 is a module-level constant \u2014 good. But default_model='deepseek-v4-pro', default_endpoint='https://api.deepseek.com/chat/completions', timeout_seconds=600, max_retries=3 are hardcoded in ApiBackendConfig dataclass defaults. These should reference a centralized config or be overridable via providers.yaml.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-019",
+      "severity": "warning",
+      "category": "code_quality",
+      "message": "[Magic Values] The convergence check keywords ['converged', 'convergence', 'no new issues', 'design approved', 'no issues found'] are duplicated between _check_agent_judgment() in cycle.py and CriticLoopConfig default in agent_registry.py \u2014 but they differ slightly (cycle.py is missing 'convergence' has 5 keywords vs registry has the same 5 \u2014 actually they match here). However, the hardcoded string 'CONVERGED' and related keywords in _run_step gate instructions are not centralized.",
+      "file": "src/harness/agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-020",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/cli.py \u2014 1299 statements, only ~17% covered. This is the entire CLI surface (Click commands for init, session, engagement, fleet, assess, observe, etc.). Virtually untested.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-021",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/session/loop.py \u2014 680 statements, only ~38% covered. The main interactive session REPL loop. Most IO-bound codepaths untested; only pure functions extracted to test_session_loop_pure.py get coverage.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-022",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/agents/runner.py \u2014 275 statements, only ~36% covered. The central AgentRunner orchestrating backend selection, fallbacks, critic loops, and Temporal integration. Only pure helper functions (test_agent_runner_effects.py) are tested.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-023",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/agents/cycle.py \u2014 366 statements, only ~61% covered. Multi-agent iteration engine; convergence checks are tested but the CycleRunner execution paths are largely uncovered.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-024",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/agents/api_backend.py \u2014 346 statements, ~59% covered. Tool execution loop, retry logic, streaming, anthropic/google format conversion paths all have gaps.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-025",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/docs/generator.py \u2014 273 statements, ~72% covered. Documentation generation pipeline missing several template-rendering paths.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-026",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/session/client.py \u2014 235 statements, ~63% covered. Session client with multiple uncovered code paths.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-027",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/refactor/boundaries.py \u2014 179 statements, ~80% covered. Layer-boundary analysis missing edge-case paths.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-028",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/refactor/debt.py \u2014 230 statements, ~77% covered. Technical debt analysis with uncovered branches.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-029",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/shell/repl.py \u2014 220 statements, ~86% covered. REPL has moderate coverage but several command-handling paths are untested.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-030",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/agents/detectors.py \u2014 70 statements, only ~47% covered. Language/framework detection logic has large gaps.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-031",
+      "severity": "warning",
+      "category": "test_coverage",
+      "message": "Coverage gap: src/harness/agents/fleet_registry.py \u2014 113 statements, ~67% covered. Fleet management registration untested in several branches.",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-032",
+      "severity": "info",
+      "category": "project_profile",
+      "message": "Detected project 'dev-harness' as cli-tool (Python)",
+      "file": "dev-harness",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-033",
+      "severity": "info",
+      "category": "purpose",
+      "message": "Project 'dev-harness' purpose: Agent orchestration for software development \u2014 coordinates AI agents through structured, gated workflows to plan, implement, test, review, and refactor code, with engagement lifecycle management, fleet-based team orchestration, Temporal-backed durability, and LLM-agnostic backend support. (confidence: high)",
+      "file": "dev-harness",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-034",
+      "severity": "info",
+      "category": "architecture",
+      "message": "Architecture pattern: flat (confidence: high)",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-035",
+      "severity": "info",
+      "category": "architecture",
+      "message": "Boundary violation: SessionClient duplicates provider resolution logic (resolve_provider, env var resolution) that also exists in config/provider_registry.py and session/loop.py. Three separate implementations of provider config resolution exist across the codebase. in session/client.py (SessionClient)",
+      "file": "session/client.py (SessionClient)",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-036",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Structure] AgentRunner mixes backend resolution, provider loading, fallback chains, RepoTool attachment, temp-dir management, critic loops, and a safety rmtree guard. At ~500 lines it's borderline but the critic loop logic and safety rmtree could be separate modules.",
+      "file": "src/harness/agents/runner.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-037",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Structure] ApiBackend.run() method is ~150 lines handling API key resolution, endpoint resolution, tool conversion, multi-round tool-calling loop, and artifact extraction. Could be decomposed into smaller private methods for each phase.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-038",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Structure] PluginRegistry uses class-level mutable state (_backends dict, _initialized bool) \u2014 a classic singleton/global pattern. While convenient, this makes testing fragile (requires explicit reset() calls) and prevents multiple independent registry instances.",
+      "file": "src/harness/agents/plugin_registry.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-039",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Structure] Good use of dependency injection: AgentRunner accepts backends via PluginRegistry, and CycleRunner accepts an optional agent_runner parameter. These patterns are well-applied.",
+      "file": "src/harness/agents/runner.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-040",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Naming] Deprecated constants ENGAGEMENTS_DIR and ACTIVE_ENGAGEMENTS_FILE are still defined alongside their replacements \u2014 these should be removed or marked with a deprecation decorator/warning rather than just a comment.",
+      "file": "src/harness/engagement/lifecycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-041",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Naming] The import alias 'from harness.agents.backends.formatters import (InternalMessage, get_formatter)' is clear and consistent. Overall naming is strong: dataclasses use PascalCase, functions use snake_case, constants use UPPER_SNAKE_CASE.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-042",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Naming] Consistent use of snake_case throughout CLI functions (_find_project_root, _require_project_root, _load_project_snapshot). Abbreviations like 'psm', 'fbm', 'ckm' in local scope are reasonable for short-lived variables.",
+      "file": "src/harness/cli.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-043",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Naming] Module-level constants use descriptive names (ARTIFACT_DESIGN, STEP_PRODUCE, CONVERGENCE_AGENT_JUDGMENT) \u2014 no cryptic abbreviations. Strong pattern throughout the file.",
+      "file": "src/harness/agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-044",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Error Handling] Excellent custom exception hierarchy: GitOperationError \u2192 NotAGitRepoError with proper constructor parameter passing. BackendError \u2192 BackendTimeoutError/BackendConfigError in base.py follows the same pattern.",
+      "file": "src/harness/scm/git.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-045",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Error Handling] Good: subprocess calls in _check_test_gate catch specific exceptions (TimeoutExpired, FileNotFoundError) separately from generic Exception, providing specific error messages for each case.",
+      "file": "src/harness/agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-046",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Complexity] AgentRunner.run() method has 5 sequential phases (resolve backend, resolve provider, build fallback chain, run primary, iterate fallbacks), each with configurable branching. The fallback loop is non-trivial with nested try/except for backend resolution and model resolution.",
+      "file": "src/harness/agents/runner.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-047",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Complexity] The AGENTS list has 25+ AgentSpec entries, many with long string descriptions. While this is data rather than logic, it makes the file ~500 lines of mostly data \u2014 consider loading from YAML/JSON.",
+      "file": "src/harness/agents/agent_registry.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-048",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Redundancy] The git subprocess pattern (run with capture_output, check returncode, handle TimeoutExpired/FileNotFoundError) is duplicated between scan_git_diff() in fast.py and the _run_git helper in git.py.",
+      "file": "src/harness/analysis/fast.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-049",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Redundancy] The _safety_rmtree function duplicates the '.git' directory check logic that also appears in _resolve_project_root (cycle.py) and _attach_repo_tool (runner.py).",
+      "file": "src/harness/agents/runner.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-050",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Magic Values] TASK_QUEUE='harness-task-queue', TEMPORAL_HOST='localhost:7233', NAMESPACE='default' are module-level constants \u2014 good pattern. But _WORKER_TIMEOUT=5.0 is a magic number that should reference a config system.",
+      "file": "src/harness/state/temporal_worker.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-051",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Magic Values] _GIT_TIMEOUT = 30 is a module-level constant \u2014 good. However, the 200-char truncation in error messages (e.g., 'response.text[:200]') and the 500-char limit in CLI backends are repeated magic numbers.",
+      "file": "src/harness/scm/git.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-052",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Magic Values] Tool permission write_prefixes use hardcoded paths like '.harness/engagements/<slug>/requirements/' and '.harness/engagements/<slug>/design/' that duplicate the path structure defined in harness.paths.",
+      "file": "src/harness/agents/agent_registry.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-053",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Comments] Excellent module-level docstrings with architecture section references (e.g., 'Architecture \u00a72.3'). Every public method has a docstring with Args/Returns/Raises. Section separator comments (\u2500\u2500) provide clear visual structure.",
+      "file": "src/harness/agents/runner.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-054",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Comments] Dataclass fields have clear docstrings explaining purpose. The AbstractBackend ABC has docstrings on abstract methods explaining the contract (e.g., 'This is the plan step').",
+      "file": "src/harness/agents/backends/base.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-055",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Comments] Deprecated constants have comments saying 'deprecated \u2014 use X instead' which is helpful. However, no DeprecationWarning is raised at runtime, so the deprecation is invisible to consumers.",
+      "file": "src/harness/engagement/lifecycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-056",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Comments] The run_stream() method has a 'Phase 1: Tool-calling loop (non-streaming, silent)' and 'Phase 2: Stream the final response' comment block that clearly explains the two-phase design. This is excellent documentation of non-obvious behavior.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-057",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Comments] The _detect_test_command method has a docstring listing all 10+ detector types (pytest, npm, cargo, go, make, gradle, maven, just, rake, ctest) \u2014 makes the cascade of if-blocks navigable.",
+      "file": "src/harness/agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-058",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Dead Code Signals] Deprecated constants ENGAGEMENTS_DIR and ACTIVE_ENGAGEMENTS_FILE are defined but their docstrings say 'deprecated'. No internal code references them \u2014 they appear to be only for backward compatibility. Should be removed in a breaking-change release.",
+      "file": "src/harness/engagement/lifecycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-059",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Dead Code Signals] The 'import os' inside _detect_test_command is a lazy import, not dead code \u2014 placed there to avoid module-level imports of a stdlib module. Similarly, 'import json' inside scan_git_diff's package.json detection. This is a deliberate pattern to defer imports.",
+      "file": "src/harness/agents/cycle.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-060",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Dead Code Signals] No unused imports detected in the files reviewed. The 'from __future__ import annotations' is consistently used at the top of every module. Lazy imports (e.g., 'from harness.agents.runner import AgentRunner' inside CycleRunner._run_step) are intentional to break circular dependencies.",
+      "file": "src/harness/agents/runner.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-061",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Dead Code Signals] Multiple imports from harness.paths are split across several import statements (e.g., find_project_root, get_engagement_dir imported separately from resolve_explicit_project_root). This is cosmetic but suggests the imports were added incrementally.",
+      "file": "src/harness/cli.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-062",
+      "severity": "info",
+      "category": "code_quality",
+      "message": "[Dead Code Signals] The import of 'asyncio' is used only in _send_request (for asyncio.sleep on retry). No dead imports. The imports of 'AsyncIterator' from collections.abc is used by run_stream's return type annotation.",
+      "file": "src/harness/agents/backends/api_backend.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-063",
+      "severity": "info",
+      "category": "test_coverage",
+      "message": "Coverage: 74.0% (fair)",
+      "file": "",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-064",
+      "severity": "error",
+      "category": "cross-cutting_serialisation-asymmetry",
+      "message": "[serialisation-asymmetry] ProviderConfig.to_resolved_dict() (provider_models.py:215-226) emits the key 'type' for provider type (e.g. 'openai-compatible', 'anthropic'). However, ApiBackend.run() (api_backend.py:215) reads invocation.resolved_config.get('provider', '') \u2014 a different key name. This means the provider type detection for tool-format conversion and formatter selection silently fails, always falling back to the default (OpenAI) path. Similarly, SessionClient._resolve_provider_config() (client.py:284) calls resolve_provider() which returns a dict with key 'type', but the streaming path in SessionClient.stream() constructs resolved_config differently. This asymmetry means Anthropic and Google provider features (tool format conversion, message formatters) are never activated through the resolved_config path. The baseline assessment report mentions this in passing, but it warrants direct attention \u2014 it's a silent runtime bug, not just a documentation issue. (effort: 1.5h, risk: high)",
+      "file": "src/harness/config/provider_models.py, src/harness/agents/backends/api_backend.py, src/harness/session/client.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-065",
+      "severity": "warning",
+      "category": "cross-cutting_phantom-roles",
+      "message": "[phantom-roles] cycle.py line ~90 defines AGENT_ARCHITECT_CRITIC = 'architect-critic' but this role string does not exist as any AgentRole enum member in agent_registry.py. The AgentRole enum (agent_registry.py:78-112) has: ARCHITECT, ARCHITECTURE_ANALYSER, CRITICAL_ANALYSER, etc. \u2014 but no 'architect-critic'. When the cycle engine dispatches a step with agent='architect-critic', the AgentRunner._attach_repo_tool() method (runner.py:385) calls AgentRole('architect-critic') which raises ValueError, causing a silent skip of RepoTool attachment for that agent. The role string is used in the fleet.py builtin_fleets() architecture fleet which lists 'architect-critic' as a sub-agent role reference, but it's not a registered agent. This is a phantom role: defined in one place, absent from the canonical registry, silently degrading functionality. (effort: 1.0h, risk: medium)",
+      "file": "src/harness/agents/cycle.py, src/harness/agents/agent_registry.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-066",
+      "severity": "warning",
+      "category": "cross-cutting_duplicated-constants",
+      "message": "[duplicated-constants] The constant ACTIVE_ENGAGEMENTS_FILE is defined in three places: lifecycle.py:30 ('.harness/active-engagements.yaml'), resolver.py:16 (same value), and paths.py:46 (_ACTIVE_ENGAGEMENTS_FILE = 'active-engagements.yaml'). lifecycle.py's ENGAGEMENTS_DIR = '.harness/engagements' (line 28) duplicates paths.py's _ENGAGEMENTS_DIR_NAME = 'engagements' combined with _HARNESS_DIR_NAME. These are explicitly marked as 'deprecated' in lifecycle.py but remain exported module-level constants. The resolver.py version is not marked deprecated at all. Importing lifecycle.py triggers a pylint/ruff warning about redefined constants. More critically, if someone changes the value in one file but not the other three, the result is a silent path mismatch. (effort: 1.0h, risk: medium)",
+      "file": "src/harness/engagement/lifecycle.py, src/harness/engagement/resolver.py, src/harness/paths.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-067",
+      "severity": "warning",
+      "category": "cross-cutting_contract-violation",
+      "message": "[contract-violation] AbstractBackend (base.py:116-131) declares prepare(), run(), and validate_config() as its abstract contract. ApiBackend adds run_stream() (api_backend.py:293) which is not part of the abstract interface. SessionClient.stream() (client.py:284) calls backend.run_stream(invocation) after casting to ApiBackend directly, bypassing the abstraction. This means: (1) Any other backend (CliBackend, EditorBackend) cannot be used for interactive streaming sessions \u2014 the code is tightly coupled to ApiBackend. (2) The PluginRegistry returns AbstractBackend instances, so callers must isinstance-check before calling run_stream(). Additionally, ApiBackend.run_stream() writes to invocation._stream_messages (api_backend.py:402) \u2014 a private attribute on a dataclass from another module \u2014 which is a contract violation by mutation. (effort: 3.0h, risk: medium)",
+      "file": "src/harness/agents/backends/base.py, src/harness/agents/backends/api_backend.py, src/harness/session/client.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-068",
+      "severity": "error",
+      "category": "cross-cutting_concurrency-gap",
+      "message": "[concurrency-gap] The active-engagements.yaml file is read and written without any file locking. lifecycle.py:_load_active_mapping() (line ~182) does yaml.safe_load() followed by in-memory mutation, then _save_active_mapping() (line ~195) does yaml.dump(). resolver.py:load_active_engagements() (line ~37) and save_active_engagements() (line ~47) follow the same pattern. There are at least 6 call sites that read-then-write this file: set_active_engagement(), close_engagement(), update_active_engagement_mapping() in lifecycle.py, and resolve_active_engagement() in resolver.py. Two concurrent `harness engagement create` or `harness engagement close` commands running from different terminals would race, with the last writer silently overwriting the first writer's changes. The classic load\u2192modify\u2192save without a lock is a TOCTOU bug. (effort: 2.0h, risk: high)",
+      "file": "src/harness/engagement/lifecycle.py, src/harness/engagement/resolver.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-069",
+      "severity": "error",
+      "category": "cross-cutting_production-stub",
+      "message": "[production-stub] commands.py:_handle_consult() (line ~360) returns CommandResult(display_lines=['__do_consult__']) \u2014 a sentinel string instead of actual consult dispatch. The intent is that the outer loop (interactive.py) would detect this sentinel and perform the actual consult routing. However, interactive.py:_execute_common_effects() (line ~195) has no handler for '__do_consult__'. It handles '__list_providers__', '__show_phase_diagram__', '__resume_checkpoint__', '__switch_provider__' but NOT '__do_consult__'. This means the /consult command in chat sessions silently does nothing \u2014 the user sees no output and no consultation occurs. The session-mode executor execute_session_effects() handles consult_result but it reads from result.consult_result which is None because the handler never populated it. This is a stub that was never wired up \u2014 two code paths diverged. (effort: 1.5h, risk: high)",
+      "file": "src/harness/session/commands.py, src/harness/session/interactive.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-070",
+      "severity": "warning",
+      "category": "cross-cutting_production-stub",
+      "message": "[production-stub] debt.py:180 has a TODO comment: 'Full circular dep analysis is a separate wave; for now flag obvious patterns' with the _detect_circular_imports method commented out. The DebtDetector.scan() method (line ~165) collects circular dep detection but the call is commented out. This means the 'circular dependency' debt rule is completely unimplemented \u2014 DebtReport will never contain circular_dependency violations even when clear cycles exist (like the runner\u2194cycle cycle that the architecture critic P1 already identified). This is a production stub masquerading as a feature gap. (effort: 4.0h, risk: medium)",
+      "file": "src/harness/refactor/debt.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-071",
+      "severity": "warning",
+      "category": "cross-cutting_yaml-write-safety",
+      "message": "[yaml-write-safety] yaml.dump() is used throughout to write config files (active-engagements.yaml, engagement.yaml). Standard PyYAML dump() discards all comments and does not preserve key ordering in mappings (despite sort_keys=False). This means: (1) User-added comments in engagement.yaml are silently lost on any write. (2) Field ordering can shift between writes, creating noisy diffs in version control. (3) The '---' YAML document separator handling is inconsistent \u2014 write_engagement_metadata() (lifecycle.py:110) manually inserts '---' before yaml.dump() output, but store_session_type() (types.py:133) does not, resulting in engagement.yaml sometimes having a document separator and sometimes not, depending on which code path wrote it. (effort: 3.0h, risk: medium)",
+      "file": "src/harness/engagement/lifecycle.py, src/harness/engagement/resolver.py, src/harness/session/types.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-072",
+      "severity": "info",
+      "category": "cross-cutting_contract-violation",
+      "message": "[contract-violation] CycleStepResult.status (cycle.py:175) uses values 'success', 'failure', 'skipped'. CycleResult.status (cycle.py:203) uses values 'complete', 'timeout', 'error', 'phase_jump:<target>'. These two related types use completely disjoint status vocabularies \u2014 a 'success' step can produce a 'timeout' cycle, but there's no documentation of the mapping between step-level and cycle-level statuses. BackendResult.status (base.py:80) uses 'success', 'failure', 'timeout', 'skipped' \u2014 matching CycleStepResult but not CycleResult. This three-way inconsistency makes it impossible to write generic status-checking code: callers must know which type they're dealing with and check different string sets. The 'partial' status in BackendResult.merge() (base.py:98) is undocumented and never appears in any status documentation. (effort: 1.0h, risk: low)",
+      "file": "src/harness/agents/cycle.py, src/harness/agents/backends/base.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    },
+    {
+      "id": "finding-073",
+      "severity": "warning",
+      "category": "cross-cutting_test-quality",
+      "message": "[test-quality] The test suite (as reported by P8) has 1826 tests at 74% coverage, but critical interactive flow paths are untested. The consultation dispatch bug (finding #6 above) would have been caught by a test that sends '/consult architecture question' and asserts a non-empty response. The serialisation asymmetry (finding #1) would be caught by an integration test that loads a real providers.yaml, passes it through AgentRunner, and verifies tool conversion. The session/commands.py module's _handle_exec() (line ~418) uses shell=True with unsanitised input (P6 finding), yet there are no security-focused tests for command injection. The interactive.py effect executors have no direct tests \u2014 they're only exercised through the full session_loop which is 38% covered. Adding tests for pure command routing is straightforward (commands.py returns CommandResult dataclasses \u2014 easy to assert on) but hasn't been done. (effort: 4.0h, risk: medium)",
+      "file": "src/harness/session/commands.py, src/harness/session/interactive.py",
+      "wave_slug": null,
+      "wave_status": "unassigned"
+    }
+  ]
+}

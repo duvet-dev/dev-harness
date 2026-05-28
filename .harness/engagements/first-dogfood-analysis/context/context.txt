@@ -1,0 +1,41 @@
+--- Engagement File Inventory ---
+
+📄 engagement.md
+📄 engagement.yaml
+📄 plan.md
+📄 plan.yaml
+  📄 20260524-002139-assessment.md
+  📄 20260524-002139-manifest.json
+  📄 20260524-003654-assessment.md
+  📄 20260524-003654-manifest.json
+  📄 20260524-080350-assessment.md
+  📄 20260524-080350-manifest.json
+  📄 20260524-120904-assessment.md
+  📄 20260524-120904-manifest.json
+  📄 20260524-213611-assessment.md
+  📄 20260524-213611-manifest.json
+  📄 20260524-224821-assessment.md
+  📄 20260524-224821-manifest.json
+
+
+
+--- File Summaries ---
+
+File Summaries:
+
+  engagement.md                              193B  ---
+  engagement.yaml                             29B  slug: first-dogfood-analysis
+  plan.md                                      0B  (no content)
+  plan.yaml                                   10B  waves: []
+  assessments/20260524-002139-assessment.md  10.3K  Analysis Summary
+  assessments/20260524-002139-manifest.json   273B  {; "timestamp": "2026-05-24T00:21:39.121200+00:00",; "repository": "/Users/claw/Projects/dev-harness",
+  assessments/20260524-003654-assessment.md  16.3K  Analysis Summary
+  assessments/20260524-003654-manifest.json   273B  {; "timestamp": "2026-05-24T00:36:54.089637+00:00",; "repository": "/Users/claw/Projects/dev-harness",
+  assessments/20260524-080350-assessment.md  20.1K  Analysis Summary
+  assessments/20260524-080350-manifest.json   273B  {; "timestamp": "2026-05-24T08:03:50.735929+00:00",; "repository": "/Users/claw/Projects/dev-harness",
+  assessments/20260524-120904-assessment.md  10.3K  Analysis Summary
+  assessments/20260524-120904-manifest.json   273B  {; "timestamp": "2026-05-24T12:09:04.539093+00:00",; "repository": "/Users/claw/Projects/dev-harness",
+  assessments/20260524-213611-assessment.md  25.5K  Analysis Summary
+  assessments/20260524-213611-manifest.json   273B  {; "timestamp": "2026-05-24T21:36:11.028688+00:00",; "repository": "/Users/claw/Projects/dev-harness",
+  assessments/20260524-224821-assessment.md  20.3K  Analysis Summary
+  assessments/20260524-224821-manifest.json   273B  {; "timestamp": "2026-05-24T22:48:21.925612+00:00",; "repository": "/Users/claw/Projects/dev-harness",

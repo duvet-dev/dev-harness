@@ -35,7 +35,9 @@ scripts/_temporal/
 BUILD_NUMBER
 
 # Generated documentation output
-docs/
+docs/**
+!docs/examples/
+!docs/examples/*.md
 
 # Coverage reports
 coverage/

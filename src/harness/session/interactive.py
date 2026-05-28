@@ -453,6 +453,7 @@ class InteractiveSession:
                     "system_prompt": (
                         self.client.system_prompt if self.client else ""
                     ),
+                    "_phase_list": getattr(self, "_phase_list", None),
                 }
 
                 if not self.handle_command(cmd, cmd_state):

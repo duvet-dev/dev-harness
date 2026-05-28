@@ -824,7 +824,7 @@ def _build_get_well_phase_list() -> list[dict]:
     triage = {
         "name": "assessment-triage",
         "title": "Assessment Triage & Finding Prioritisation",
-        "agent": "triage-agent",
+        "agent": "coordinator",
         "fleets": ["discovery"],
         "artifact": "triage.md",
         "prompt": (
@@ -858,8 +858,8 @@ def _build_get_well_phase_list() -> list[dict]:
     requirements = {
         "name": "remediation-requirements",
         "title": "Remediation Requirements Definition",
-        "agent": "requirements-agent",
-        "fleets": ["requirements"],
+        "agent": "requirements-builder",
+        "fleets": ["discovery"],
         "artifact": "remediation-requirements.md",
         "prompt": (
             "You are a **Remediation Requirements Analyst**. You are in the REMEDIATION "
@@ -901,7 +901,7 @@ def _build_get_well_phase_list() -> list[dict]:
         "name": "architecture-design",
         "title": "Architecture Design & Critical Analysis",
         "agent": "critical-analyser",
-        "fleets": ["architecture", "analysis"],
+        "fleets": ["architecture"],
         "artifact": "remediation-design.md",
         "prompt": (
             "You are a **Remediation Architect** with full codebase access via RepoTool. "
@@ -2657,6 +2657,7 @@ async def session_loop(
         session._phase_artifacts = phase_artifacts
         session._phase_conv = phase_conv
         session._phase_done = False
+        session._phase_list = _phase_list
 
         from harness.session.client import SessionClient
         session.client = SessionClient(

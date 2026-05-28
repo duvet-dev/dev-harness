@@ -181,6 +181,9 @@ def route_session_command(cmd: str, state: dict[str, Any]) -> CommandResult:
     Returns:
         ``CommandResult``.
     """
+    if cmd in ("exit", "quit"):
+        return CommandResult(exit_loop=True)
+
     if cmd == "version":
         from harness._version import __version__, __build__, __build_date__, __commit__
         date_str = __build_date__ if __build_date__ else "development"
@@ -207,17 +210,18 @@ def route_session_command(cmd: str, state: dict[str, Any]) -> CommandResult:
     if cmd.startswith("model "):
         return _handle_model_switch(cmd[6:].strip(), state)
 
+    # Legacy /write and /apply — deprecated in favour of RepoTool
     if cmd == "write":
-        content = state.get("last_response")
-        if content:
-            return CommandResult(capture_artifact=content)
-        return CommandResult(display_lines=["No assistant response to save."])
+        return CommandResult(display_lines=[
+            "/write is deprecated. Use /save to save the transcript, "
+            "or ask the agent to write files using ## File: path headings."
+        ])
 
     if cmd == "apply":
-        content = state.get("last_response")
-        if content:
-            return CommandResult(auto_apply=content)
-        return CommandResult(display_lines=["No assistant response to apply."])
+        return CommandResult(display_lines=[
+            "/apply is deprecated. Agents write files directly via RepoTool. "
+            "No manual /apply needed."
+        ])
 
     if cmd == "changes" or cmd.startswith("changes "):
         return _handle_changes(cmd, state)
@@ -269,15 +273,27 @@ def route_session_command(cmd: str, state: dict[str, Any]) -> CommandResult:
 
 
 def _handle_phase_switch(target: str, state: dict[str, Any]) -> CommandResult:
-    """Handle /phase <name> — switch phase with history preserved."""
+    """Handle /phase <name> — switch phase with history preserved.
+
+    Checks the session's effective phase list first (get-well sessions
+    have custom phases like "architecture-design"), then falls back to
+    the global PHASES for standard names like "design".
+    """
     from harness.session.loop import PHASES
 
     if not target:
         return CommandResult(display_lines=["__show_phase_diagram__"])
 
-    match = next((p for p in PHASES if p["name"] == target), None)
+    # Check effective phase list first (e.g. get-well phases)
+    effective_phases: list[dict] = state.get("_phase_list", PHASES)
+    match = next((p for p in effective_phases if p["name"] == target), None)
+
+    # Fall back to global PHASES for standard phase names
     if match is None:
-        names = ", ".join(p["name"] for p in PHASES)
+        match = next((p for p in PHASES if p["name"] == target), None)
+
+    if match is None:
+        names = ", ".join(p["name"] for p in effective_phases)
         return CommandResult(display_lines=[
             f"Unknown phase: {target}. Available: {names}"
         ])

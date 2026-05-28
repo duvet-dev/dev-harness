@@ -180,18 +180,15 @@ class TestRouteSessionCommand:
         result = route_session_command("model claude", self.make_state())
         assert result.new_provider["target_name"] == "claude"
 
-    def test_write(self):
+    def test_write_deprecated(self):
+        """Test /write now returns a deprecation message."""
         result = route_session_command("write", self.make_state())
-        assert result.capture_artifact is not None
+        assert "/write is deprecated" in "\n".join(result.display_lines)
 
-    def test_write_no_content(self):
-        state = self.make_state(last_response=None)
-        result = route_session_command("write", state)
-        assert result.capture_artifact is None
-
-    def test_apply(self):
+    def test_apply_deprecated(self):
+        """Test /apply now returns a deprecation message."""
         result = route_session_command("apply", self.make_state())
-        assert result.auto_apply is not None
+        assert "/apply is deprecated" in "\n".join(result.display_lines)
 
     def test_changes_with_reason(self):
         result = route_session_command("changes needs more tests", self.make_state())
@@ -245,12 +242,39 @@ class TestRouteSessionCommand:
         result = route_session_command("resume-force", self.make_state())
         assert "__resume_checkpoint__" in result.display_lines
 
+    def test_exit(self):
+        result = route_session_command("exit", self.make_state())
+        assert result.exit_loop is True
+
+    def test_quit(self):
+        result = route_session_command("quit", self.make_state())
+        assert result.exit_loop is True
+
     def test_phase_diagram(self):
         result = route_session_command("phase", self.make_state())
         assert "__show_phase_diagram__" in result.display_lines
 
     def test_phase_switch(self):
         result = route_session_command("phase design", self.make_state())
+        assert result.switch_to_phase_with_history == "design"
+
+    def test_phase_switch_custom_list(self):
+        """Test /phase works with custom phase lists (e.g. get-well)."""
+        custom_phases = [
+            {"name": "assessment-triage", "title": "Assessment Triage"},
+            {"name": "architecture-design", "title": "Architecture Design"},
+        ]
+        state = self.make_state(_phase_list=custom_phases)
+        result = route_session_command("phase architecture-design", state)
+        assert result.switch_to_phase_with_history == "architecture-design"
+
+    def test_phase_switch_fallback_to_global(self):
+        """Test /phase falls back to global PHASES for standard names."""
+        custom_phases = [
+            {"name": "assessment-triage", "title": "Assessment Triage"},
+        ]
+        state = self.make_state(_phase_list=custom_phases)
+        result = route_session_command("phase design", state)
         assert result.switch_to_phase_with_history == "design"
 
     def test_consult_resolve_valid(self):

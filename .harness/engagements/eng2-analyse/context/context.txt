@@ -1,0 +1,29 @@
+--- Engagement File Inventory ---
+
+📄 engagement.md
+📄 engagement.yaml
+📄 phases.yaml
+📄 plan.md
+📄 plan.yaml
+  📄 20260528-184613-assessment.md
+  📄 20260528-184613-manifest.json
+  📄 20260528-223845.md
+  📄 20260528-231550.md
+  📄 20260528-231557.md
+
+
+
+--- File Summaries ---
+
+File Summaries:
+
+  engagement.md                              153B  ---
+  engagement.yaml                             19B  slug: eng2-analyse
+  phases.yaml                                134B  phases:; architecture-design:; state: active
+  plan.md                                      0B  (no content)
+  plan.yaml                                   10B  waves: []
+  assessments/20260528-184613-assessment.md  20.7K  Analysis Summary
+  assessments/20260528-184613-manifest.json  46.2K  {; "timestamp": "2026-05-28T18:46:13.779835+00:00",; "repository": "/Users/claw/Projects/dev-harness",
+  chat/20260528-223845.md                    200B  Chat — assessment-triage — 20260528-223845
+  chat/20260528-231550.md                    571B  Chat — assessment-triage — 20260528-231550
+  chat/20260528-231557.md                    214B  Chat — remediation-requirements — 20260528-231557

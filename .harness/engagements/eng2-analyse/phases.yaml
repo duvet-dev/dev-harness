@@ -1,0 +1,7 @@
+phases:
+  architecture-design:
+    state: active
+  assessment-triage:
+    state: active
+  remediation-requirements:
+    state: active

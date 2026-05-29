@@ -17,6 +17,7 @@ from .client import (
     resolve_provider,
 )
 from .loop import chat_loop, session_loop
+from .guidance import SessionGuidanceInjector, get_guidance, should_enforce_boundary_tests
 from .types import SessionType, confirm_session_type, detect_session_type
 
 __all__ = [
@@ -31,4 +32,7 @@ __all__ = [
     "SessionType",
     "detect_session_type",
     "confirm_session_type",
+    "SessionGuidanceInjector",
+    "get_guidance",
+    "should_enforce_boundary_tests",
 ]

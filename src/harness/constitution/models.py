@@ -114,6 +114,48 @@ class AgentDef:
 
 
 # ──────────────────────────────────────────────
+# Session type + boundary enforcement models
+# ──────────────────────────────────────────────
+
+
+@dataclass
+class SessionTypeConfig:
+    """Configuration for a single session type.
+
+    Attributes:
+        enforce_boundary_tests:
+            Whether to enforce boundary tests for this session type.
+            If ``None``, inherits from the global
+            ``boundary_test_enforcement_default``.
+        guidance:
+            Guidance text injected into planning agent prompts for
+            this session type.
+    """
+
+    enforce_boundary_tests: bool | None = None
+    guidance: str = ""
+
+
+@dataclass
+class BoundaryConfig:
+    """Boundary test enforcement configuration (R20).
+
+    Attributes:
+        enforcement_default:
+            Global default for boundary test enforcement (maps to
+            ``boundary_test_enforcement_default`` in YAML).
+            Per-session-type ``enforce_boundary_tests`` overrides this.
+        session_types:
+            Per-session-type configuration. Keys are session type
+            names (e.g. ``"greenfield"``, ``"refactoring"``,
+            ``"get-well"``).
+    """
+
+    enforcement_default: bool = True
+    session_types: dict[str, SessionTypeConfig] = field(default_factory=dict)
+
+
+# ──────────────────────────────────────────────
 # Root document
 # ──────────────────────────────────────────────
 
@@ -128,6 +170,18 @@ class Constitution:
     coding: CodingConfig = field(default_factory=CodingConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     agents: list[AgentDef] = field(default_factory=list)
+    session_types: dict[str, SessionTypeConfig] = field(default_factory=dict)
+    """Per-session-type configuration (backward-compat shortcut).
+    Maps to ``session_types`` key in constitution YAML.
+    When this is set, its values take priority over
+    ``boundary.session_types``.
+    """
+
+    boundary: BoundaryConfig = field(default_factory=BoundaryConfig)
+    """Boundary test enforcement configuration (R20).
+    Maps to ``boundary`` key and top-level
+    ``boundary_test_enforcement_default`` in constitution YAML.
+    """
 
     # ── serialisation helpers ─────────────────
 
@@ -137,8 +191,68 @@ class Constitution:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Constitution:
-        """Deserialise from a dict (as loaded from YAML)."""
-        return _from_dict(cls, data)
+        """Deserialise from a dict (as loaded from YAML).
+
+        Handles:
+        - Top-level ``session_types: {name: {enforce: ..., guidance: ...}}``
+        - Top-level ``boundary_test_enforcement_default: bool``
+          (mapped to ``boundary.enforcement_default``)
+        - New-style ``boundary: {enforcement_default: ..., session_types: ...}``
+        """
+        # Normalise: read legacy top-level fields into the boundary sub-object
+        normalised = dict(data)
+
+        # Extract top-level boundary_test_enforcement_default into boundary
+        legacy_default = normalised.pop("boundary_test_enforcement_default", None)
+        legacy_session_types = normalised.pop("session_types", None)
+
+        boundary_data: dict[str, Any] = {}
+        if "boundary" in normalised:
+            b = normalised["boundary"]
+            if isinstance(b, dict):
+                boundary_data = dict(b)
+
+        # Legacy top-level fields override sub-object fields
+        if legacy_default is not None:
+            boundary_data["enforcement_default"] = legacy_default
+        if legacy_session_types is not None:
+            # Merge session types from legacy location
+            existing_st = boundary_data.get("session_types", {})
+            if isinstance(existing_st, dict):
+                merged = dict(existing_st)
+            else:
+                merged = {}
+            if isinstance(legacy_session_types, dict):
+                merged.update(legacy_session_types)
+            boundary_data["session_types"] = merged
+
+        if boundary_data:
+            normalised["boundary"] = boundary_data
+        else:
+            normalised.pop("boundary", None)
+
+        # Rebuild SessionTypeConfig for each entry
+        if "boundary" in normalised and "session_types" in normalised.get("boundary", {}):
+            sts = normalised["boundary"]["session_types"]
+            if isinstance(sts, dict):
+                rebuilt: dict[str, Any] = {}
+                for key, val in sts.items():
+                    if isinstance(val, dict):
+                        rebuilt[key] = SessionTypeConfig(
+                            enforce_boundary_tests=val.get("enforce_boundary_tests"),
+                            guidance=val.get("guidance", ""),
+                        )
+                    elif isinstance(val, bool):
+                        # Shorthand: ``session_types:
+                        #   greenfield: false``
+                        rebuilt[key] = SessionTypeConfig(
+                            enforce_boundary_tests=val,
+                        )
+                    else:
+                        rebuilt[key] = val
+                normalised["boundary"]["session_types"] = rebuilt
+
+        return _from_dict(cls, normalised)
 
 
 # ──────────────────────────────────────────────
@@ -184,6 +298,23 @@ def default_constitution(
             AgentDef(name="coder", phase="implementation", agent_type="built-in"),
             AgentDef(name="reviewer", phase="review", agent_type="built-in"),
         ],
+        boundary=BoundaryConfig(
+            enforcement_default=True,
+            session_types={
+                "greenfield": SessionTypeConfig(
+                    enforce_boundary_tests=False,
+                    guidance="Build new features without backward compatibility constraints.",
+                ),
+                "refactoring": SessionTypeConfig(
+                    enforce_boundary_tests=True,
+                    guidance="Preserve existing interfaces. First wave must be boundary tests.",
+                ),
+                "get-well": SessionTypeConfig(
+                    enforce_boundary_tests=True,
+                    guidance="Fix broken tests first. Boundaries may be restructured with explicit override.",
+                ),
+            },
+        ),
     )
 
 
@@ -262,7 +393,8 @@ def _rebuild_field(field_type: Any, value: Any) -> Any:
     if hasattr(field_type, "__origin__"):
         # handle UnionType from types module (PEP 604 | syntax)
         origin_t = field_type.__origin__
-        if origin_t is _typing.Union or origin_t is _types.UnionType:
+        _union_type = getattr(_types, 'UnionType', None)
+        if origin_t is _typing.Union or (_union_type is not None and origin_t is _union_type):
             return value
 
     # Plain built-in type

@@ -228,4 +228,14 @@ def validate(constitution: Constitution) -> list[str]:
             warnings.append(f"duplicate backend name: {backend.name!r}")
         seen_backends.add(backend.name)
 
+    # -- session types / boundary -------------------------------------------------
+    if constitution.session_types:
+        for st_name, st_config in constitution.session_types.items():
+            if not st_name:
+                warnings.append("session_types entry has empty name")
+            if not isinstance(st_config.enforce_boundary_tests, (bool, type(None))):
+                warnings.append(
+                    f"session_types.{st_name}.enforce_boundary_tests must be a bool or null"
+                )
+
     return warnings

@@ -1,3 +1,4 @@
 branches:
   eng/first-dogfood-analysis: first-dogfood-analysis
   main: eng2-analyse
+  eng/eng2-analyse: eng2-analyse

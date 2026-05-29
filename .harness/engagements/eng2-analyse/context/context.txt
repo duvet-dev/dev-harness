@@ -10,6 +10,7 @@
   📄 20260528-223845.md
   📄 20260528-231550.md
   📄 20260528-231557.md
+  📄 20260529-000856.md
 
 
 
@@ -27,3 +28,4 @@ File Summaries:
   chat/20260528-223845.md                    200B  Chat — assessment-triage — 20260528-223845
   chat/20260528-231550.md                    571B  Chat — assessment-triage — 20260528-231550
   chat/20260528-231557.md                    214B  Chat — remediation-requirements — 20260528-231557
+  chat/20260529-000856.md                    200B  Chat — assessment-triage — 20260529-000856

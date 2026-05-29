@@ -1360,7 +1360,7 @@ def create_wave_from_finding(finding_id, slug):
         click.echo(
             "The latest assessment does not contain structured findings.\n"
             "Re-run the assessment with --deep to get structured findings:\n"
-            f"  harness assess . --deep",
+            "  harness assess . --deep",
             err=True,
         )
         raise click.Abort()
@@ -1418,7 +1418,7 @@ def create_wave_from_finding(finding_id, slug):
     click.echo(f"  Severity: {severity}, Category: {category}")
     click.echo()
     click.echo(f"  Run it with:  harness wave run {wave.id}")
-    click.echo(f"  See plan:     harness wave list")
+    click.echo("  See plan:     harness wave list")
 
 
 @wave.command(name="create-from-assessment")
@@ -1500,7 +1500,7 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
         click.echo(
             "The latest assessment does not contain structured findings.\n"
             "Re-run with:\n"
-            f"  harness assess . --deep",
+            "  harness assess . --deep",
             err=True,
         )
         raise click.Abort()
@@ -1592,8 +1592,8 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
     if limit > 0 and created == limit:
         click.echo(f"  Reached --limit {limit}. Run again to create more.")
     click.echo()
-    click.echo(f"  Run:  harness wave list")
-    click.echo(f"  Run:  harness wave run <wave-id>")
+    click.echo("  Run:  harness wave list")
+    click.echo("  Run:  harness wave run <wave-id>")
 
 
 @main.command()
@@ -2680,7 +2680,7 @@ def finish(re_assess):
                         )
 
                     # Write manifest with findings
-                    from harness.cli import _write_assessment_report  # noqa
+                    from harness.cli import _write_assessment_report
                     written = _write_assessment_report(
                         report_text=result["report"],
                         repo_path=str(root),
@@ -2987,8 +2987,8 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
         if refactoring and waves_created:
             click.echo("")
             click.echo(f"  Created {waves_created} waves from assessment findings:")
-            click.echo(f"    Run:  harness wave list")
-            click.echo(f"    Run:  harness wave run <wave-id>")
+            click.echo("    Run:  harness wave list")
+            click.echo("    Run:  harness wave run <wave-id>")
             click.echo(f"    See:  cat {eng_dir / 'engagement.yaml'}")
         click.echo("")
         click.echo("Tip: Start a design loop with `harness work <description>`")
@@ -3477,7 +3477,7 @@ def diff(slug):
         click.echo(f"    ... and {len(new_findings) - 5} more")
 
     click.echo()
-    click.echo(f"  ──────────────────────────────")
+    click.echo("  ──────────────────────────────")
     click.echo(f"  Closure rate: {closure}% {alert}")
 
     if new_findings:

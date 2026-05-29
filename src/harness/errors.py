@@ -145,5 +145,5 @@ class WebSearchUnavailableError(HarnessError):
     """Web search provider is unavailable."""
 
 
-class BoundaryTestViolation(HarnessError):
+class BoundaryTestViolationError(HarnessError):
     """Plan validator: first wave not a boundary test (R20)."""

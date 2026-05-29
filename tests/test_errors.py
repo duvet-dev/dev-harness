@@ -7,7 +7,7 @@ import pytest
 from harness.errors import (
     AggregatorError,
     AgentTimeoutError,
-    BoundaryTestViolation,
+    BoundaryTestViolationError,
     CommandError,
     CommandValidationError,
     ConfigValidationError,
@@ -70,7 +70,7 @@ def _all_error_classes() -> list[type[HarnessError]]:
         CommandValidationError,
         NLTranslationError,
         WebSearchUnavailableError,
-        BoundaryTestViolation,
+        BoundaryTestViolationError,
     ]
 
 
@@ -130,7 +130,7 @@ class TestErrorHierarchy:
     def test_standalone_errors(self) -> None:
         assert issubclass(NLTranslationError, HarnessError)
         assert issubclass(WebSearchUnavailableError, HarnessError)
-        assert issubclass(BoundaryTestViolation, HarnessError)
+        assert issubclass(BoundaryTestViolationError, HarnessError)
 
 
 class TestErrorInstantiation:

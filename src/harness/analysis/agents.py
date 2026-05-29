@@ -657,7 +657,7 @@ P10_CRITICAL_REVIEWER = AnalysisAgent(
         "(load→modify→save patterns)\n"
         "6. **Production stubs** — Placeholder implementations in production "
         "code (NotImplementedError, pass-only bodies, pytest.skip() in non-test)\n"
-        "7. **Test quality** — Beyond coverage \%: assertion specificity, "
+        r"7. **Test quality** — Beyond coverage \%: assertion specificity, "
         "fixture isolation, edge case coverage\n"
         "8. **Version/platform gaps** — EOL Python versions, stale patterns\n"
         "9. **Effort estimation** — Estimate hours to fix each finding\n"

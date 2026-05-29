@@ -582,7 +582,7 @@ def format_health_report(report: HealthReport, verbose: bool = False) -> str:
         if sev == "INFO" and not verbose:
             continue
 
-        lines.append(f"")
+        lines.append("")
         lines.append(f"  {sev}")
         for c in checks:
             icon = "✓" if c.status == "pass" else ("⚠" if c.status == "warn" else "✗")
@@ -841,7 +841,7 @@ def fix_engagement(root: Path, slug: str) -> list[str]:
             }, f, default_flow_style=False, sort_keys=False)
         messages.append(f"Created engagement.yaml for '{slug}'.")
     else:
-        messages.append(f"engagement.yaml exists.")
+        messages.append("engagement.yaml exists.")
 
     eng_md = eng_dir / "engagement.md"
     if not eng_md.is_file():
@@ -856,14 +856,14 @@ def fix_engagement(root: Path, slug: str) -> list[str]:
         )
         messages.append(f"Created engagement.md for '{slug}'.")
     else:
-        messages.append(f"engagement.md exists.")
+        messages.append("engagement.md exists.")
 
     plan_yaml = eng_dir / "plan.yaml"
     if not plan_yaml.is_file():
         plan_yaml.write_text("waves: []\n")
         messages.append("Created empty plan.yaml.")
     else:
-        messages.append(f"plan.yaml exists.")
+        messages.append("plan.yaml exists.")
 
     plan_md = eng_dir / "plan.md"
     if not plan_md.is_file() or plan_md.stat().st_size == 0:

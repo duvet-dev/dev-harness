@@ -230,6 +230,164 @@ class TestSearXNGProvider:
         provider = SearXNGProvider()
         assert provider.name == "SearXNGProvider"
 
+    @pytest.mark.asyncio
+    async def test_abstract_search_method_body(self) -> None:
+        """Cover the abstract method body (line 100).
+
+        Uses a concrete subclass that delegates to the ABC's
+        ``...`` (Ellipsis) body of WebSearchProvider.search.
+        """
+
+        class _SearchBodyProvider(WebSearchProvider):
+            """Concrete subclass calling ABC's search body."""
+            async def search(self, query, max_results=5):  # type: ignore[override]
+                return await WebSearchProvider.search(self, query, max_results)
+
+        provider = _SearchBodyProvider()
+        result = await provider.search("test query")
+        assert result is None
+
+
+# ── DuckDuckGo HTTP Error Handling ─────────────────────────────────────────
+
+
+class TestDuckDuckGoErrorHandling:
+    """Tests for DuckDuckGoProvider HTTP error paths."""
+
+    @pytest.mark.asyncio
+    async def test_http_error_raises_web_search_unavailable(self) -> None:
+        """Covers httpx.HTTPError handler (lines 164-165)."""
+        import httpx
+        from unittest.mock import AsyncMock, patch
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.side_effect = httpx.HTTPError(
+            "connection failed"
+        )
+
+        with patch(
+            "httpx.AsyncClient",
+            return_value=mock_client,
+        ):
+            provider = DuckDuckGoProvider()
+            with pytest.raises(
+                WebSearchUnavailableError, match="DuckDuckGo search failed"
+            ):
+                await provider.search("test query")
+
+
+# ── SearXNG Error Handling + Success Paths ─────────────────────────────────
+
+
+class TestSearXNGErrorHandling:
+    """Tests for SearXNGProvider error and success paths."""
+
+    @pytest.mark.asyncio
+    async def test_http_error_raises_web_search_unavailable(self) -> None:
+        """Covers httpx.HTTPError handler (line 298)."""
+        import httpx
+        from unittest.mock import AsyncMock, patch
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.get.side_effect = httpx.HTTPError(
+            "connection refused"
+        )
+
+        with patch(
+            "httpx.AsyncClient",
+            return_value=mock_client,
+        ):
+            provider = SearXNGProvider()
+            with pytest.raises(
+                WebSearchUnavailableError,
+                match="SearXNG search failed",
+            ):
+                await provider.search("test query")
+
+    @pytest.mark.asyncio
+    async def test_json_decode_error_raises_web_search_unavailable(
+        self,
+    ) -> None:
+        """Covers JSON decode error handler (lines 304-307)."""
+        import httpx
+        from unittest.mock import AsyncMock, patch
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.__aenter__.return_value = mock_client
+
+        mock_response = AsyncMock(spec=httpx.Response)
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+        mock_client.get.return_value = mock_response
+
+        with patch(
+            "httpx.AsyncClient",
+            return_value=mock_client,
+        ):
+            provider = SearXNGProvider()
+            with pytest.raises(
+                WebSearchUnavailableError, match="invalid JSON"
+            ):
+                await provider.search("test query")
+
+    @pytest.mark.asyncio
+    async def test_successful_search_with_results(self) -> None:
+        """Covers success path with result parsing (lines 298, 309-319)."""
+        import httpx
+        from unittest.mock import AsyncMock, patch
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.__aenter__.return_value = mock_client
+
+        mock_response = AsyncMock(spec=httpx.Response)
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "results": [
+                {
+                    "title": "Test Title",
+                    "url": "https://example.com/1",
+                    "content": "Test content",
+                },
+            ]
+        }
+        mock_client.get.return_value = mock_response
+
+        with patch(
+            "httpx.AsyncClient",
+            return_value=mock_client,
+        ):
+            provider = SearXNGProvider()
+            result = await provider.search("test query")
+            assert len(result.results) == 1
+            assert result.results[0].title == "Test Title"
+            assert result.results[0].url == "https://example.com/1"
+            assert result.results[0].snippet == "Test content"
+            assert result.query == "test query"
+
+    @pytest.mark.asyncio
+    async def test_successful_search_empty_results(self) -> None:
+        """Covers success path with no results."""
+        import httpx
+        from unittest.mock import AsyncMock, patch
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.__aenter__.return_value = mock_client
+
+        mock_response = AsyncMock(spec=httpx.Response)
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {"results": []}
+        mock_client.get.return_value = mock_response
+
+        with patch(
+            "httpx.AsyncClient",
+            return_value=mock_client,
+        ):
+            provider = SearXNGProvider()
+            result = await provider.search("test query")
+            assert len(result.results) == 0
+
 
 # ── E2E Tests (manual run only) ────────────────────────────────────────────
 

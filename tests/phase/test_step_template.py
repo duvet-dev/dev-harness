@@ -90,3 +90,15 @@ class TestConstruction:
         assert template.input == [ArtifactType.REQUIREMENTS_SPEC]
         assert template.output == [ArtifactType.ARCHITECTURE_DECISION]
         assert template.description == "Full review template"
+
+    def test_template_type_unknown_when_neither_set(self) -> None:
+        """template_type returns 'unknown' when neither team/agents set.
+
+        This bypasses __post_init__ validation to test the fallback
+        return path (coverage line 88).
+        """
+        template = object.__new__(StepTemplate)
+        template.name = "fallback-test"
+        template.team = None
+        template.agents = None
+        assert template.template_type == "unknown"

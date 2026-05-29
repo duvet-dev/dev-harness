@@ -51,3 +51,6 @@ coverage/
 
 # Temp
 harness_simple_*
+
+# Harness runtime data
+.harness/

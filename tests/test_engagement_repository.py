@@ -268,3 +268,15 @@ class TestEngagementRepositoryUpdateStatus:
         """update_status on non-existent slug raises EngagementNotFoundError."""
         with pytest.raises(EngagementNotFoundError):
             repo.update_status("does-not-exist", EngagementStatus.ACTIVE)
+
+
+# ── Access Tests ────────────────────────────────────────────────────
+
+
+class TestEngagementRepositoryAccess:
+    """Tests for property access on EngagementRepository."""
+
+    def test_root_property(self, repo: EngagementRepository):
+        """root property returns the configured root path."""
+        assert repo.root is not None
+        assert repo.root.exists()

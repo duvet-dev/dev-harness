@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 from datetime import datetime, timedelta
+from unittest.mock import patch
 from pathlib import Path
 
 import pytest
@@ -274,3 +275,103 @@ class TestCheckEngagementHealth:
         """check_engagement_health for unknown returns warnings."""
         report = check_engagement_health("really-nonexistent")
         assert report.all_ok is False
+
+
+# ── Coverage: exception handlers ────────────────────────────────────
+
+
+class TestEngagementHealthCheckExceptions:
+    """Edge-case exception branches in health checks."""
+
+    def test_corrupt_state_via_json_decode_error(
+        self, checker: EngagementHealthCheck
+    ):
+        """Repository.load raising JSONDecodeError triggers corrupt_state."""
+        with patch.object(
+            checker._repository, "load",
+            side_effect=json.JSONDecodeError("mock error", "", 0),
+        ):
+            report = checker.check("corrupt-eng")
+        assert report.all_ok is False
+        assert any(w.type == "corrupt_state" for w in report.warnings)
+
+    def test_git_branch_subprocess_error(self, checker: EngagementHealthCheck):
+        """_get_git_branch except handler when subprocess.run raises."""
+        with patch(
+            "subprocess.run",
+            side_effect=FileNotFoundError("git not found"),
+        ):
+            branch = checker._get_git_branch()
+        assert branch is None
+
+    def test_git_status_subprocess_error(self, checker: EngagementHealthCheck):
+        """_get_git_status_summary except handler when subprocess.run raises."""
+        with patch(
+            "subprocess.run",
+            side_effect=FileNotFoundError("git not found"),
+        ):
+            status = checker._get_git_status_summary()
+        assert status == {"untracked": 0, "unstaged": 0}
+
+    def test_branch_exists_subprocess_error(
+        self, checker: EngagementHealthCheck, repo: EngagementRepository
+    ):
+        """_check_branch_exists except handler when subprocess.run raises."""
+        eng = Engagement(slug="branch-err", target_branch="main")
+        repo.save(eng)
+        with patch(
+            "subprocess.run",
+            side_effect=FileNotFoundError("git not found"),
+        ):
+            report = checker.check("branch-err")
+        # Exception swallowed, no branch_missing warning
+        missing_warnings = [w for w in report.warnings if w.type == "branch_missing"]
+        assert len(missing_warnings) == 0
+
+
+class TestEngagementHealthCheckNoGitRepo:
+    """Coverage for no-git-repo and clean-repo paths."""
+
+    def test_branch_alignment_no_git_repo_warning(
+        self, checker: EngagementHealthCheck, repo: EngagementRepository
+    ):
+        """When git branch can't be determined, no_git_repo warning fires."""
+        eng = Engagement(slug="test", target_branch="main")
+        repo.save(eng)
+        with patch(
+            "subprocess.run",
+            side_effect=FileNotFoundError("git not found"),
+        ):
+            report = checker.check("test")
+        no_git_warnings = [w for w in report.warnings if w.type == "no_git_repo"]
+        assert len(no_git_warnings) >= 1
+
+    def test_clean_dirty_repo_returns_empty(self, checker: EngagementHealthCheck):
+        """_check_dirty_repo returns [] when working tree is clean."""
+        eng = Engagement(slug="clean-eng", target_branch="main")
+        with patch.object(
+            checker, "_get_git_status_summary",
+            return_value={"untracked": 0, "unstaged": 0},
+        ):
+            warnings = checker._check_dirty_repo(eng, "clean-eng")
+        assert len(warnings) == 0
+        dirty_warnings = [w for w in warnings if w.type == "dirty_repo"]
+        assert len(dirty_warnings) == 0
+
+
+class TestEngagementHealthCheckStateEdgeCases:
+    """Edge-case state consistency branches."""
+
+    def test_slug_mismatch_warns(self, checker: EngagementHealthCheck):
+        """Slug mismatch generates a warning."""
+        eng = Engagement(slug="file-slug", target_branch="main")
+        warnings = checker._check_state_consistency(eng, "requested-slug")
+        slug_warnings = [w for w in warnings if w.type == "slug_mismatch"]
+        assert len(slug_warnings) == 1
+
+    def test_slug_mismatch_no_warning(self, checker: EngagementHealthCheck):
+        """Matching slugs generate no warning."""
+        eng = Engagement(slug="same-slug", target_branch="main")
+        warnings = checker._check_state_consistency(eng, "same-slug")
+        slug_warnings = [w for w in warnings if w.type == "slug_mismatch"]
+        assert len(slug_warnings) == 0

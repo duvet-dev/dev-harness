@@ -5,6 +5,9 @@ Covers all 9 handlers defined in V7 §5.20 Handler Delegation Map.
 
 from __future__ import annotations
 
+import builtins
+from unittest.mock import patch
+
 import pytest
 
 from harness.command.handlers import (
@@ -20,7 +23,7 @@ from harness.command.handlers import (
     register_all_handlers,
 )
 from harness.command.registry import CommandRegistry
-from harness.command.types import Command
+from harness.command.types import Command, CommandHandler, CommandResult
 
 
 class TestCreateEngagementHandler:
@@ -203,3 +206,97 @@ class TestRegisterAllHandlers:
         h1 = registry.get_handler("create_engagement")
         h2 = registry.get_handler("resume_engagement")
         assert h1 is not h2
+
+
+# ── Exception branch coverage ───────────────────────────────────────
+
+
+class TestEnterPhaseHandlerExceptions:
+    """Coverage for EnterPhaseHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = EnterPhaseHandler()
+        cmd = Command(
+            slug="my-eng", command_type="enter_phase",
+            data={"phase": "design"},
+        )
+        with patch(
+            "harness.phase.orchestrator.PhaseOrchestrator",
+            side_effect=ValueError("mocked orchestrator error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked orchestrator error" in result.error
+
+
+class TestCreateWaveHandlerExceptions:
+    """Coverage for CreateWaveHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = CreateWaveHandler()
+        cmd = Command(
+            slug="my-eng", command_type="create_wave",
+            data={"title": "Test Wave"},
+        )
+        with patch(
+            "harness.plan.plan_manager.PlanManager",
+            side_effect=ValueError("mocked plan error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked plan error" in result.error
+
+
+class TestExecuteStepHandlerExceptions:
+    """Coverage for ExecuteStepHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = ExecuteStepHandler()
+        cmd = Command(
+            slug="my-eng", command_type="execute_step",
+            data={"step": {"agents": ["architect"]}},
+        )
+        # The handler imports StepDispatcher inside a try block but never
+        # calls it. We mock __import__ to make the import itself fail.
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "harness.phase.dispatcher":
+                raise ImportError("mocked import error")
+            return original_import(name, *args, **kwargs)
+
+        with patch.object(builtins, "__import__", mock_import):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked import error" in result.error
+
+
+class TestQueryStatusHandlerExceptions:
+    """Coverage for QueryStatusHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = QueryStatusHandler()
+        cmd = Command(slug="my-eng", command_type="query_status")
+        with patch(
+            "harness.engagement.health.EngagementHealthCheck",
+            side_effect=ValueError("mocked health error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked health error" in result.error
+
+
+# ── CommandHandler ABC body coverage ────────────────────────────────
+
+
+class TestCommandHandlerAbstractBody:
+    """Coverage for CommandHandler.handle() abstract body (line 66)."""
+
+    def test_abstract_handle_body_via_super(self):
+        """Calling the abstract handle body via super() returns None."""
+        class _DirectHandler(CommandHandler):  # type: ignore[misc]
+            def handle(self, command: Command) -> CommandResult:
+                return super().handle(command)  # type: ignore[return-value]
+
+        result = _DirectHandler().handle(Command(slug="test"))
+        assert result is None

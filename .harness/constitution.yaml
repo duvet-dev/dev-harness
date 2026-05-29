@@ -1,0 +1,20 @@
+# Dev Harness Constitution — V7 Config Schema
+#
+# Top-level configuration for the Dev Harness.
+# See V7 §7 for full config schema specification.
+
+project: dev-harness
+version: "1.0"
+
+# Enforcement configuration — global default for boundary test enforcement
+# Per-session-type `enforce_boundary_tests:` overrides this global when set.
+boundary_test_enforcement_default: true
+
+# Session type configuration
+session_types:
+  greenfield:
+    enforce_boundary_tests: false       # Overrides global for greenfield
+  refactoring:
+    enforce_boundary_tests: true        # Inherits global default
+  get-well:
+    enforce_boundary_tests: true        # Inherits global default

@@ -1,0 +1,15 @@
+# Dev Harness Settings
+#
+# Runtime configuration for the Dev Harness.
+# See V7 §7 for the full config schema specification.
+
+# NL Translator settings
+nl_translator:
+  confidence_threshold: 0.75  # Range: 0.0–1.0 (W4)
+
+# Web Search settings
+web_search:
+  provider: duckduckgo  # "duckduckgo" or "searxng" (W2)
+  searxng_url: http://localhost:8888
+  max_results: 5
+  cache_ttl_seconds: 300

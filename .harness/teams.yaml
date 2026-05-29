@@ -1,0 +1,22 @@
+# Dev Harness Teams Configuration
+#
+# Defines named teams of agents (logical grouping).
+# Teams auto-expand to all members when referenced by a step.
+# Merge semantics: built-in < project < user (full replacement by name).
+#
+# See V7 §10 for the full AgentTeam specification.
+# Populated fully in Wave 1.5.
+
+teams:
+  # Built-in teams will be added in Wave 1.5
+  # - name: architecture
+  #   agents:
+  #     - architect
+  #     - architecture-critic
+  #   guidelines: "..."
+  #
+  # - name: coding
+  #   agents:
+  #     - coding-agent
+  #     - testing-agent
+  #   guidelines: "..."

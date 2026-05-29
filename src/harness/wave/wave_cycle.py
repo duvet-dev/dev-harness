@@ -1,13 +1,10 @@
 """WaveCycleRunner — orchestrates a single wave through implement→test→verify.
 
-Usage::
+DEPRECATED (Wave 4, R33): WaveCycleRunner is replaced by LoopRunner.
+All wave-cycle functionality is now in :class:`harness.loop.runner.LoopRunner`.
 
-    runner = WaveCycleRunner(root, engagement_slug)
-    result = await runner.run_wave("wave-01")
-    if result.success:
-        print(f"Wave {result.wave_id} committed with {result.iterations} iteration(s)")
-    else:
-        print(f"Wave failed: {result.errors}")
+This module is retained for transitional compatibility and will be
+removed entirely in the Cleanup Wave.
 """
 
 from __future__ import annotations
@@ -19,6 +16,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import warnings
 
 from harness.agents.context import ContextPacket, OutputContract
 from harness.agents.cycle import (
@@ -59,6 +58,13 @@ async def run_wave_via_cycle(
         A ``CycleResult`` with step results, final artifacts, and
         optional phase-jump status.
     """
+    warnings.warn(
+        "run_wave_via_cycle() is deprecated (Wave 4, R33). "
+        "Use LoopRunner instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     from harness.plan.plan_manager import PlanManager
 
     cycle_def = definition or wave_cycle_definition()
@@ -163,6 +169,12 @@ class WaveCycleRunner:
         engagement_slug: str,
         config: WaveCycleConfig | None = None,
     ) -> None:
+        warnings.warn(
+            "WaveCycleRunner is deprecated (Wave 4, R33). "
+            "Use LoopRunner instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._root = root
         self._slug = engagement_slug
         self._config = config or WaveCycleConfig.defaults()

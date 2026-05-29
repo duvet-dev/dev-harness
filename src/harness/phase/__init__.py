@@ -19,6 +19,7 @@ from harness.phase.dispatch_utility import (
 from harness.phase.dispatcher import StepDispatcher, StepResult
 from harness.phase.model import LoopConfig, Phase, Step
 from harness.phase.orchestrator import PhaseOrchestrator, PhaseOrchestratorResult
+from harness.phase.step_executor import StepExecutor
 from harness.phase.pruning import ArtifactSummariser, ContextPruner
 from harness.phase.state_manager import PhaseStateManager
 from harness.phase.strategy.base import PhaseResult, PhaseStrategy
@@ -43,6 +44,7 @@ __all__ = [
     "PhaseStrategy",
     "Step",
     "StepDispatcher",
+    "StepExecutor",
     "StepResult",
     "StrategyRunner",
 ]

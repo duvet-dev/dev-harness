@@ -33,7 +33,9 @@ from harness.session.client import (
 )
 from harness.session.loop import (
     PHASES,
+    _apply_file_blocks,
     _format_consult_result,
+    _report_apply_results,
     _write_phase_artifact,
 )
 from harness.session.commands import CommandResult
@@ -405,13 +407,20 @@ class InteractiveSession:
 
         click.echo()
 
+        last_response = self.client.get_last_response()
         self.transcript.messages.append(
             ChatMessage(
                 role="assistant",
-                content=self.client.get_last_response(),
+                content=last_response,
                 timestamp=datetime.now(timezone.utc).isoformat(),
             )
         )
+
+        # Auto-process ## File: blocks — write files to disk immediately
+        apply_results = _apply_file_blocks(self.root, last_response)
+        if apply_results:
+            click.echo()
+            _report_apply_results(apply_results, self.root)
 
     # ── Main loop ───────────────────────────────────────────────────────
 

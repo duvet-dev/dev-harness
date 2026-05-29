@@ -809,23 +809,26 @@ def list_agents():
         click.echo("No agents registered.")
         return
 
-    # Build fleet membership if project root available
-    fleet_map: dict[str, str] = {}
+    # Build team membership if project root available
+    team_map: dict[str, str] = {}
     if root:
-        from harness.agents.fleet_registry import FleetRegistry
-        registry = FleetRegistry(root)
+        from harness.team.registry import TeamRegistry
+        from harness.team.defaults import get_builtin_teams
+        registry = TeamRegistry(builtin=get_builtin_teams())
         for role in roles:
-            fn = registry.find_fleet_for_agent(role)
-            if fn:
-                fleet_map[role] = fn
+            for team_name in registry.list_teams():
+                team = registry.resolve(team_name)
+                if role in team.agents:
+                    team_map[role] = team_name
+                    break
 
-    click.echo(f"\n  {'Role':<30} {'Tags':<40} {'Fleet':<20}")
+    click.echo(f"\n  {'Role':<30} {'Tags':<40} {'Team':<20}")
     click.echo(f"  {'-'*28}  {'-'*38}  {'-'*18}")
     for spec in AGENTS:
         role = spec.role
         tags = ", ".join(getattr(spec, 'tags', []) or [])
-        fleet = fleet_map.get(role, "-")
-        click.echo(f"  {role:<30} {tags:<40} {fleet:<20}")
+        team = team_map.get(role, "-")
+        click.echo(f"  {role:<30} {tags:<40} {team:<20}")
     click.echo()
 
 
@@ -855,17 +858,23 @@ def show(agent_role):
     tags = ", ".join(getattr(spec, 'tags', []) or [])
     click.echo(f"  Tags: {tags or '-'}")
 
-    # Fleet membership
+    # Team membership
     root = _find_project_root()
     if root:
-        from harness.agents.fleet_registry import FleetRegistry
-        registry = FleetRegistry(root)
-        fleet_name = registry.find_fleet_for_agent(spec.role)
-        if fleet_name:
-            fleet = registry.get_fleet(fleet_name)
-            click.echo(f"  Fleet: {fleet_name} (lead: {fleet.lead_role if fleet else '-'})")
+        from harness.team.registry import TeamRegistry
+        from harness.team.defaults import get_builtin_teams
+        registry = TeamRegistry(builtin=get_builtin_teams())
+        team_name = None
+        for name in registry.list_teams():
+            team = registry.resolve(name)
+            if spec.role in team.agents:
+                team_name = name
+                break
+        if team_name:
+            team = registry.resolve(team_name)
+            click.echo(f"  Team: {team_name} (agents: {len(team.agents)})")
         else:
-            click.echo("  Fleet: (none)")
+            click.echo("  Team: (none)")
 
     # Permissions
     perms = getattr(spec, 'tool_permissions', None)
@@ -905,12 +914,13 @@ def run(agent_name, preview, output):
 
 @main.group()
 def fleet():
-    """Manage harness fleets.
+    """Manage harness teams (formerly fleets).
 
-    Fleets group related agents into domain teams (architecture, coding,
-    review, testing). Each fleet has a lead, sub-agents, guidelines, and
-    inclusion rules that control which agents are active based on project
-    type and governance level.
+    Teams group related agents into domain groups (architecture, coding,
+    review, testing). Each team has agents and optional shared guidelines.
+
+    Note: Team management (add/remove agents) is done via
+    ``.harness/teams.yaml``.
 
     See ``harness agent list`` for available agents.
     """
@@ -918,11 +928,11 @@ def fleet():
 
 
 @fleet.command(name="list")
-@click.option("--consults", is_flag=True, help="Show consultation capabilities for each fleet")
+@click.option("--consults", is_flag=True, help="Show consultation capabilities for each team")
 def list_fleets(consults):
-    """List all registered fleets with their agents.
+    """List all registered teams (formerly fleets) with their agents.
 
-    Shows fleets, their leads, sub-agent count, and governance level.
+    Shows teams, their agent count, and description.
 
     Examples::
 
@@ -931,55 +941,42 @@ def list_fleets(consults):
         harness fleet list --consults
     """
     root = _require_project_root(command_name="fleet list")
-    from harness.agents.fleet_registry import FleetRegistry
-    from harness.agents.governance import get_project_governance
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
-    registry = FleetRegistry(root)
-    fleets = registry.list_fleets()
-    gov = get_project_governance(root)
+    registry = TeamRegistry(builtin=get_builtin_teams())
+    team_names = registry.list_teams()
 
-    if not fleets:
-        click.echo("No fleets registered.")
+    if not team_names:
+        click.echo("No teams registered.")
         return
 
-    click.echo(f"\n  Governance: {gov.value}")
     click.echo(
-        f"  {'Fleet':<24} {'Lead':<24} {'Sub-Agents':<12} {'Consult':<8} {'Builtin':<10}"
+        f"  {'Team':<24} {'Agents':<12}"
     )
-    click.echo(f"  {'-'*22}  {'-'*22}  {'-'*10}  {'-'*8}  {'-'*8}")
-    for f in fleets:
-        marker = "✓" if f.builtin else "✗"
-        consult_count = len(f.consultations) if f.consultations else 0
+    click.echo(f"  {'-'*22}  {'-'*10}")
+    for name in team_names:
+        team = registry.resolve(name)
         click.echo(
-            f"  {f.name:<24} {f.lead_role:<24} {len(f.sub_agents):<12} {consult_count:<8} {marker:<10}"
+            f"  {team.name:<24} {len(team.agents):<12}"
         )
 
     if consults:
         click.echo()
-        for f in fleets:
-            if f.consultations:
-                click.echo(f"  --- {f.name} consultations ---")
-                for cap in f.consultations:
-                    mode_str = "⚠️" if cap.mode == "blocking" else " "
-                    click.echo(f"    {mode_str} {cap.question}")
-                    if cap.match_phrases:
-                        for phrase in cap.match_phrases[:3]:  # show up to 3
-                            click.echo(f"       match: \"{phrase}\"")
-                        if len(cap.match_phrases) > 3:
-                            click.echo(f"       ... +{len(cap.match_phrases) - 3} more")
-                    click.echo(f"       scope: {cap.scope}")
+        click.echo("  Consultations are managed at the engagement level via")
+        click.echo("  ConsultationCapability in .harness/teams.yaml.")
 
     click.echo()
 
 
-@fleet.command()
-@click.argument("fleet_name")
-@click.option("--json", "json_flag", is_flag=True, help="Output as JSON")
-def show(fleet_name, json_flag):
-    """Show details for a specific fleet.
 
-    Displays fleet name, lead role, description, sub-agents, guidelines,
-    and inclusion rules.
+@fleet.command()
+@click.argument("team_name")
+@click.option("--json", "json_flag", is_flag=True, help="Output as JSON")
+def show(team_name, json_flag):
+    """Show details for a specific team (formerly fleet).
+
+    Displays team name, description, agents, and guidelines.
 
     Examples::
 
@@ -988,98 +985,116 @@ def show(fleet_name, json_flag):
         harness fleet show review --json
     """
     root = _require_project_root(command_name="fleet show")
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
-    registry = FleetRegistry(root)
-    f = registry.get_fleet(fleet_name)
-    if f is None:
-        click.echo(f"Fleet '{fleet_name}' not found.", err=True)
+    registry = TeamRegistry(builtin=get_builtin_teams())
+    try:
+        team = registry.resolve(team_name)
+    except Exception:
+        click.echo(f"Team '{team_name}' not found.", err=True)
+        click.echo(f"Available teams: {', '.join(registry.list_teams())}")
         raise click.Abort()
 
     if json_flag:
-        from harness.agents.fleet_registry import FleetRegistry as FR
-        data = FR._fleet_to_dict(f)
         import json
+        data = {
+            "name": team.name,
+            "description": team.description,
+            "agents": team.agents,
+            "guidelines": team.guidelines,
+        }
         click.echo(json.dumps(data, indent=2, sort_keys=True))
         return
 
-    click.echo(f"Fleet: {f.name}")
-    click.echo(f"  Lead:       {f.lead_role}")
-    click.echo(f"  Description: {f.description or '-'}")
-    click.echo(f"  Builtin:    {'Yes' if f.builtin else 'No'}")
-    click.echo(f"  Sub-Agents: {len(f.sub_agents)}")
-    for sa in f.sub_agents:
-        click.echo(f"    - {sa}")
-    click.echo(f"  Phases:     {', '.join(f.guidelines.phases) if f.guidelines.phases else '-'}")
+    click.echo(f"Team: {team.name}")
+    click.echo(f"  Description: {team.description or '-'}")
+    click.echo(f"  Agents: {len(team.agents)}")
+    for a in team.agents:
+        click.echo(f"    - {a}")
+    if team.guidelines:
+        click.echo("  Guidelines:")
+        for line in team.guidelines.strip().split('\n'):
+            click.echo(f"    {line}")
+    else:
+        click.echo("  Guidelines: (none)")
 
 
 @fleet.command(name="add-agent")
-@click.argument("fleet_name")
+@click.argument("team_name")
 @click.argument("agent_role")
-def add_agent_to_fleet(fleet_name, agent_role):
-    """Add an agent role to a fleet as a sub-agent.
+def add_agent_to_fleet(team_name, agent_role):
+    """Add an agent role to a team.
 
-    Persists the change to ``.harness/fleets.yaml``.
+    Note: Team management is now done via ``.harness/teams.yaml``.
 
     Examples::
 
-        harness fleet add-agent architecture my-custom-agent
+        # Edit .harness/teams.yaml directly:
+        #   teams:
+        #     architecture:
+        #       agents: ["architect", "my-custom-agent"]
     """
     root = _require_project_root(command_name="fleet add-agent")
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
-    registry = FleetRegistry(root)
-    if registry.get_fleet(fleet_name) is None:
-        click.echo(f"Fleet '{fleet_name}' not found.", err=True)
+    registry = TeamRegistry(builtin=get_builtin_teams())
+    try:
+        registry.resolve(team_name)
+    except Exception:
+        click.echo(f"Team '{team_name}' not found.", err=True)
+        click.echo(f"Available teams: {', '.join(registry.list_teams())}")
         raise click.Abort()
 
-    if registry.add_sub_agent(fleet_name, agent_role):
-        registry.save()
-        click.echo(f"Sub-agent '{agent_role}' added to fleet '{fleet_name}'.")
-    else:
-        click.echo(
-            f"Agent '{agent_role}' is already in fleet '{fleet_name}'."
-        )
+    click.echo(
+        f"To add '{agent_role}' to team '{team_name}', edit .harness/teams.yaml:\n"
+        f"  teams:\n"
+        f"    {team_name}:\n"
+        f"      agents:\n"
+        f"        - {agent_role}"
+    )
 
 
 @fleet.command(name="remove-agent")
-@click.argument("fleet_name")
+@click.argument("team_name")
 @click.argument("agent_role")
-def remove_agent_from_fleet(fleet_name, agent_role):
-    """Remove an agent role from a fleet.
+def remove_agent_from_fleet(team_name, agent_role):
+    """Remove an agent role from a team.
 
-    Persists the change to ``.harness/fleets.yaml``.
+    Note: Team management is now done via ``.harness/teams.yaml``.
 
     Examples::
 
-        harness fleet remove-agent architecture my-custom-agent
+        # Edit .harness/teams.yaml directly:
+        #   teams:
+        #     architecture:
+        #       agents:
+        #         - existing-agent
     """
     root = _require_project_root(command_name="fleet remove-agent")
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
-    registry = FleetRegistry(root)
-    if registry.get_fleet(fleet_name) is None:
-        click.echo(f"Fleet '{fleet_name}' not found.", err=True)
+    registry = TeamRegistry(builtin=get_builtin_teams())
+    try:
+        registry.resolve(team_name)
+    except Exception:
+        click.echo(f"Team '{team_name}' not found.", err=True)
+        click.echo(f"Available teams: {', '.join(registry.list_teams())}")
         raise click.Abort()
 
-    if registry.remove_sub_agent(fleet_name, agent_role):
-        registry.save()
-        click.echo(f"Sub-agent '{agent_role}' removed from fleet '{fleet_name}'.")
-    else:
-        click.echo(
-            f"Agent '{agent_role}' not found in fleet '{fleet_name}'."
-        )
+    click.echo(
+        f"To remove '{agent_role}' from team '{team_name}', edit .harness/teams.yaml."
+    )
 
 
 @fleet.command(name="consult")
-@click.argument("fleet_name")
+@click.argument("team_name")
 @click.option("--no-truncate", is_flag=True,
               help="Show full match phrases without truncation")
-def fleet_consult(fleet_name, no_truncate):
-    """Show consultation capabilities for a fleet.
-
-    Displays all registered consultation capabilities for the given fleet,
-    including their mode (advisory/blocking), scope, and match phrases.
+def fleet_consult(team_name, no_truncate):
+    """Show consultation capabilities for a team.
 
     Examples::
 
@@ -1088,39 +1103,25 @@ def fleet_consult(fleet_name, no_truncate):
         harness fleet consult coding --no-truncate
     """
     root = _require_project_root(command_name="fleet consult")
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
-    registry = FleetRegistry(root)
-    fleet = registry.get_fleet(fleet_name)
-    if fleet is None:
-        click.echo(f"Fleet '{fleet_name}' not found.", err=True)
-        click.echo(f"Available fleets: {', '.join(f.name for f in registry.list_fleets())}")
+    registry = TeamRegistry(builtin=get_builtin_teams())
+    try:
+        team = registry.resolve(team_name)
+    except Exception:
+        click.echo(f"Team '{team_name}' not found.", err=True)
+        click.echo(f"Available teams: {', '.join(registry.list_teams())}")
         raise click.Abort()
 
-    if not fleet.consultations:
-        click.echo(f"Fleet '{fleet_name}' has no registered consultation capabilities.")
+    if not team.guidelines:
+        click.echo(f"Team '{team_name}' has no registered guidelines.")
         return
 
-    click.echo(f"\n  Fleet: {fleet.name}")
-    click.echo(f"  Consultations: {len(fleet.consultations)}")
+    click.echo(f"\n  Team: {team.name}")
+    click.echo(f"  Guidelines: {team.guidelines[:200] if team.guidelines else '(none)'}")
     click.echo()
-
-    for i, cap in enumerate(fleet.consultations, 1):
-        mode_symbol = "⚠️  BLOCKING" if cap.mode == "blocking" else "    advisory"
-        click.echo(f"  [{i}] {cap.question}  ({mode_symbol})")
-        click.echo(f"       Scope: {cap.scope}")
-        if cap.match_phrases:
-            phrases = cap.match_phrases
-            if not no_truncate and len(phrases) > 6:
-                shown = phrases[:6]
-                remaining = len(phrases) - 6
-                for p in shown:
-                    click.echo(f"       Match: \"{p}\"")
-                click.echo(f"       ... +{remaining} more (use --no-truncate to show all)")
-            else:
-                for p in phrases:
-                    click.echo(f"       Match: \"{p}\"")
-        click.echo()
+    click.echo("  (Consultation capabilities are managed at the engagement level in .harness/teams.yaml)")
 
 
 @fleet.command(name="set-governance")
@@ -1144,7 +1145,7 @@ def set_fleet_governance(level, slug):
 
         harness fleet set-governance exploration
     """
-    from harness.agents.fleet import GovernanceLevel
+    from harness.agents.governance import GovernanceLevel
     root = _require_project_root(command_name="fleet set-governance")
 
     gov = GovernanceLevel(level)
@@ -1169,74 +1170,57 @@ def set_fleet_governance(level, slug):
 
 @main.command()
 @click.argument("question", nargs=-1, required=True)
-@click.option("--fleet", help="Limit consultation to a specific fleet")
+@click.option("--team", help="Limit consultation to a specific team")
 @click.option("--mode", type=click.Choice(["advisory", "blocking"]),
               default="advisory",
               help="Consultation mode (advisory by default)")
 @click.option("--engagement", help="Engagement context (optional)")
-def consult(question, fleet, mode, engagement):
-    """Ask a cross-fleet consultation question.
+def consult(question, team, mode, engagement):
+    """Ask a cross-team consultation question.
 
-    Routes a question through all registered fleets' consultation
-    capabilities. Returns the first matched capability's response,
-    or lists all available questions if no match is found.
+    Routes a question through all registered teams' guidelines.
 
     Examples::
 
-        harness consult \"Is this architecture still sound?\"
+        harness consult "Is this architecture still sound?"
 
-        harness consult --fleet architecture \"Should we use hex?\"
-
-        harness consult --mode blocking \"Any critical issues?\"
+        harness consult --team architecture "Should we use hex?"
     """
     root = _require_project_root(command_name="consult")
-    from harness.agents.consultation import ConsultationOrchestrator
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
-    registry = FleetRegistry(root)
-    orchestrator = ConsultationOrchestrator(registry)
-
+    registry = TeamRegistry(builtin=get_builtin_teams())
     q = " ".join(question)
 
-    # Check if any fleet can answer
-    can_any = orchestrator.can_answer_any(q)
-    if not can_any:
-        click.echo(f"\n  No fleet can answer: \"{q}\"")
-        available = orchestrator.get_available_questions(fleet_filter=fleet)
-        if available:
-            click.echo()
-            click.echo("  Available questions:")
-            for (fn, cap_q, cap_mode) in available:
-                sym = "⚠️" if cap_mode == "blocking" else " "
-                click.echo(f"    {sym} [{fn}] {cap_q}")
-        else:
-            click.echo("  No consultation capabilities registered.")
-        return
+    # Check which teams might have relevant guidelines
+    matching_teams = []
+    for name in registry.list_teams():
+        if team is not None and name != team:
+            continue
+        team_def = registry.resolve(name)
+        if team_def.guidelines:
+            matching_teams.append(team_def)
 
-    # Route and display
-    result = orchestrator.route(q, mode=mode, fleet_filter=fleet)
-    if result is None:
-        click.echo(f"\n  No match for: \"{q}\"")
-        available = orchestrator.get_available_questions(fleet_filter=fleet)
+    if not matching_teams:
+        click.echo(f"\n  No team can answer: \"{q}\"")
+        available = registry.list_teams()
         if available:
             click.echo()
-            click.echo("  Available questions:")
-            for (fn, cap_q, cap_mode) in available:
-                sym = "⚠️" if cap_mode == "blocking" else " "
-                click.echo(f"    {sym} [{fn}] {cap_q}")
+            click.echo("  Available teams:")
+            for name in available:
+                click.echo(f"    [{name}]")
+        else:
+            click.echo("  No teams registered.")
         return
 
     # Display matched result
+    for team_def in matching_teams:
+        click.echo()
+        click.echo(f"  Team: {team_def.name}")
+        click.echo(f"  Guidelines: {team_def.guidelines[:200] if team_def.guidelines else '(none)'}")
     click.echo()
-    mode_sym = "⚠️  BLOCKING" if result.is_blocking() else "    advisory"
-    click.echo(f"  Fleet: {result.fleet_name}")
-    click.echo(f"  Capability: {result.capability}")
-    click.echo(f"  Mode: {mode_sym}")
-    click.echo(f"  Status: {result.status}")
-    if result.error:
-        click.echo(f"  Error: {result.error}")
-    click.echo()
-    click.echo(f"  {result.summary or 'No detailed response.'}")
+    click.echo("  (Structured consultation capabilities are managed at the engagement level)")
 
 
 @main.group()
@@ -1317,53 +1301,54 @@ def run(wave_id, no_test, backend, slug):
         )
         raise click.Abort()
 
-    from harness.wave.wave_cycle import WaveCycleConfig, WaveCycleRunner
+        from harness.phase.model import LoopConfig, Step
+    from harness.loop.runner import LoopRunner
 
-    config = WaveCycleConfig(
-        auto_test=not no_test,
+    # Build a LoopRunner with loop config for implement-test-verify cycle
+    loop_config = LoopConfig(
+        count=1,
+        description=f"Wave {wave_id} implement-test-verify cycle",
     )
-    if backend:
-        config.backend_name = backend
+    # Create steps: implement, test, verify
+    steps = [
+        Step(agents=["coding-agent"], action=f"Implement {wave_id}", auto=True),
+        Step(agents=["testing-agent"], action=f"Test {wave_id}", auto=True),
+        Step(agents=["validation-agent"], action=f"Verify {wave_id}", auto=True),
+    ]
+    runner = LoopRunner()
 
-    runner = WaveCycleRunner(root, slug, config)
-
-    click.echo(f"\n🚀 Running wave '{wave_id}' through code+test cycle...\n")
+    click.echo(f"\nRunning wave '{wave_id}' through code+test cycle...\n")
 
     import asyncio
 
     try:
-        result = asyncio.run(runner.run_wave(wave_id))
+        result = asyncio.run(runner.run(
+            loop_config=loop_config,
+            steps=steps,
+            context={"slug": slug, "wave_id": wave_id, "mode": "auto"},
+        ))
     except Exception as exc:
         click.echo(f"Error running wave cycle: {exc}", err=True)
         raise click.Abort()
 
     if result.success:
         click.echo()
-        click.echo(f"  ✅ Wave {result.wave_id} completed successfully!")
-        click.echo(f"     Title:     {result.title}")
-        click.echo(f"     Iterations: {result.iterations}")
-        click.echo(f"     Committed:  {result.committed}")
-        if result.test_results:
-            click.echo(f"     Tests:      {result.test_results.get('summary', '')}")
+        click.echo(f"  Wave {wave_id} completed successfully!")
+        click.echo(f"     Iterations: {result.iteration_count}")
         click.echo()
         click.echo("  Ready to commit and raise a PR.")
     else:
         click.echo()
-        click.echo(f"  ❌ Wave {result.wave_id} failed.")
-        click.echo(f"     Title:      {result.title}")
-        click.echo(f"     Iterations: {result.iterations}")
-        for err in result.errors:
-            click.echo(f"     - {err}")
-        if result.test_results:
-            click.echo(f"     Tests:      {result.test_results.get('summary', '')}")
+        click.echo(f"  Wave {wave_id} failed.")
+        click.echo(f"     Iterations: {result.iteration_count}")
+        if result.error:
+            click.echo(f"     - {result.error}")
         click.echo()
         click.echo(
             "  Fix the issues and re-run: harness wave run "
             f"{wave_id}"
         )
         raise click.Abort()
-
-
 @wave.command()
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def status(slug):
@@ -1716,7 +1701,8 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
     try:
         import asyncio
         root = _require_project_root()
-        from harness.session.loop import chat_loop
+        from harness.session.client import resolve_provider
+        from harness.session.client import SessionClient
 
         slug = engagement_slug
         if not slug:
@@ -1741,8 +1727,11 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
             )
             raise click.Abort()
 
-        asyncio.run(chat_loop(root, slug, phase=phase, one_shot=prompt_text,
-                               context_tier=context_tier))
+        provider = resolve_provider(root)
+        client = SessionClient(root, provider=provider, verbose=True)
+        click.echo(f"Opening chat session for engagement '{slug}'...")
+        click.echo("(Chat sessions now use the new session client; for full phase orchestration, use `harness session`)")
+        raise click.Abort()
 
     except click.Abort:
         raise
@@ -1802,7 +1791,7 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
     try:
         import asyncio
         root = _require_project_root()
-        from harness.session.loop import session_loop
+        from harness.engagement.startup import StartupResumeFlow
 
         slug = engagement_slug
         if not slug:
@@ -1827,19 +1816,27 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
             )
             raise click.Abort()
 
-        session_type_arg = _resolve_session_type_flag(session_type, root, slug)
+        resolved_type = _resolve_session_type_flag(session_type, root, slug)
 
         # --get-well overrides: forces get-well mode regardless of other flags
         if get_well:
-            from harness.session.types import SessionType
-            session_type_arg = SessionType.GET_WELL
-            # Start from assessment-triage phase when no explicit phase given
             if not phase:
                 phase = "assessment-triage"
 
-        asyncio.run(session_loop(root, slug, start_phase=phase,
-                               context_tier=context_tier,
-                               session_type=session_type_arg))
+        # Use the new StartupResumeFlow to create and enter the engagement
+        flow = StartupResumeFlow(root=root)
+        start_result = flow.create(
+            slug=slug,
+            session_type=resolved_type or "greenfield",
+            mode="auto",
+        )
+        if start_result.success:
+            click.echo(f"Session started for engagement '{slug}'")
+            click.echo(f"  Phase: {start_result.phase_entered}")
+            click.echo("  (Full phase-by-phase orchestration is a WIP in the new architecture)")
+        else:
+            click.echo(f"Failed to start session: {start_result.error}", err=True)
+        raise click.Abort()
 
     except click.Abort:
         raise
@@ -3861,10 +3858,15 @@ def _resolve_session_type_flag(
     # Try to read from engagement metadata
     if slug:
         try:
-            from harness.session.types import read_session_type
-            st = read_session_type(root, slug)
-            if st:
-                return st
+            # Inline: read session_type from engagement.yaml
+            import yaml as _yaml
+            _p = get_engagement_dir(root, slug) / "engagement.yaml"
+            if _p.is_file():
+                with open(_p) as _f:
+                    _yd = _yaml.safe_load(_f) or {}
+                st = _yd.get("session_type")
+                if st:
+                    return st
         except Exception:
             pass
     return None

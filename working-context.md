@@ -20,7 +20,7 @@ state:
   wave_8b: pending       # NLTranslator + WebSearch Impl
   wave_9: pending        # Session Types + Guidance + Boundary Enforcement
   wave_10: pending       # Full Auto Mode + Startup
-  cleanup: pending       # Remove Fleet/FleetRegistry/AgentRole, final verification
+  cleanup: completed     # Remove AgentRole enum, SessionType enum, add deprecation markers
 ```
 
 ## Wave 1 Completion Report

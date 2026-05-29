@@ -87,6 +87,10 @@ _PREFIXED_COMMANDS: dict[str, tuple[str, callable]] = {
     "create": ("create_engagement", _no_data),
     "resume": ("resume_engagement", _no_data),
 
+    # Engine/next aliases
+    "engine": ("query_whats_next", _no_data),
+    "advance": ("next", _no_data),
+
     # Wave commands
     "wave": ("create_wave", _wave_data),
     "step": ("execute_step", _step_data),

@@ -7,6 +7,15 @@ from typing import Optional
 
 import click
 
+from harness.cli.commands import (
+    abort_engagement_command,
+    create_engagement_command,
+    dispatch_cli_command,
+    enter_phase_command,
+    next_command,
+    query_status_command,
+    query_whats_next_command,
+)
 from harness.constitution.loader import scaffold as scaffold_constitution
 from harness.constitution.templates.template_registry import (
     TemplateRegistry,
@@ -234,6 +243,89 @@ def workflows():
     See also: ``harness <command> --help`` for per-command options.
     """
     click.echo(WORKFLOWS_EPILOG.strip())
+
+
+
+@main.command()
+@click.argument("slug")
+def whatsnext(slug):
+    """Show available next actions for an engagement.
+
+    Dispatches a ``QueryWhatsNext`` command via the CommandBus and
+    displays the available commands, current phase, and engagement
+    status.
+
+    Examples::
+
+        harness whatsnext my-engagement
+    """
+    try:
+        cmd = query_whats_next_command(slug)
+        result = dispatch_cli_command(cmd)
+
+        if not result.success:
+            click.echo("WhatsNext query failed: " + result.error, err=True)
+            raise click.Abort()
+
+        data = result.data
+        click.echo("Engagement: " + str(data.get('slug', slug)))
+        click.echo("  Status: " + str(data.get('status', 'unknown')))
+        click.echo("  Current phase: " + str(data.get('current_phase', '-')))
+
+        pending = data.get('pending_phases', [])
+        if pending:
+            click.echo("  Pending phases: " + ', '.join(pending))
+
+        completed = data.get('completed_phases', [])
+        if completed:
+            click.echo("  Completed phases: " + ', '.join(completed))
+
+        cmds = data.get('available_commands', [])
+        if cmds:
+            click.echo("  Available commands: " + ', '.join(cmd for cmd in cmds))
+
+        if data.get('blocked'):
+            reason = data.get('block_reason', 'Unknown')
+            click.echo("  \u26a0\ufe0f  Blocked: " + str(reason))
+
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo("WhatsNext error: " + str(exc), err=True)
+        raise click.Abort()
+
+
+@main.command()
+@click.argument("slug")
+@click.argument("phase")
+def enter_phase(slug, phase):
+    """Dispatch an EnterPhase command through the CommandBus.
+
+    Enters the specified phase for an engagement. The actual
+    phase transition is delegated to PhaseOrchestrator via the
+    CommandBus handler.
+
+    Examples::
+
+        harness enter-phase my-engagement design
+
+        harness enter-phase my-engagement requirements
+    """
+    try:
+        cmd = enter_phase_command(slug, phase)
+        result = dispatch_cli_command(cmd)
+
+        if not result.success:
+            click.echo("Enter phase failed: " + result.error, err=True)
+            raise click.Abort()
+
+        click.echo(result.message)
+
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo("Enter phase error: " + str(exc), err=True)
+        raise click.Abort()
 
 
 @main.command()
@@ -1858,16 +1950,43 @@ def review(engagement_id, approve, reject, request_changes,
 
 
 @main.command()
-@click.option("--engagement", help="Engagement ID (default: current)")
+@click.argument("slug", required=False, default=None)
 @click.option("--force", is_flag=True)
-def status(engagement, force):
-    """Quick view of active engagement."""
+def status(slug, force):
+    """Quick view of active engagement.
+
+    Dispatches a ``QueryStatus`` command via the CommandBus. Falls back
+    to the local snapshot reader if the CommandBus path fails.
+
+    Examples::
+
+        harness status
+        harness status my-engagement
+    """
+    try:
+        cmd = query_status_command(slug or "")
+        result = dispatch_cli_command(cmd)
+        if result.success:
+            data = result.data
+            click.echo("Engagement: " + str(data.get('slug', slug or '(active)')))
+            if data.get("all_ok") is not None:
+                health = 'All OK' if data['all_ok'] else 'Issues detected'
+                click.echo("  Health: " + health)
+            warnings = data.get("warnings", [])
+            if warnings:
+                for w in warnings:
+                    click.echo("  \u26a0 " + str(w.get('type', 'warning')) + ": " + str(w.get('message', '')))
+            return
+    except Exception:
+        pass
+
+    # Fallback: local snapshot
     root = _require_project_root()
     try:
         snapshot_path = get_harness_state_path(root)
         snapshot = _load_project_snapshot(snapshot_path)
 
-        eng_id = engagement or snapshot.current_engagement
+        eng_id = slug or snapshot.current_engagement
         if not eng_id:
             click.echo("No active engagement.")
             return
@@ -1880,15 +1999,13 @@ def status(engagement, force):
                 click.echo(f"  Phase: {eng.phase}")
                 click.echo(f"  Gate mode: {eng.gate_mode}")
                 if eng.has_stale_summary:
-                    click.echo("  ⚠️  Summary may be stale — run `harness catchup`")
+                    click.echo("  \u26a0\ufe0f Summary may be stale \u2014 run `harness catchup`")
                 return
 
         click.echo(f"Engagement {eng_id} not found.")
 
     except Exception as exc:
         click.echo(f"Status check failed: {exc}", err=True)
-
-
 def _write_assessment_report(
     report_text: str,
     repo_path: str,

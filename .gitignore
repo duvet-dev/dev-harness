@@ -32,7 +32,6 @@ context.md
 scripts/_temporal/
 
 # Local build counter (monotonic, not in git)
-BUILD_NUMBER
 
 
 # Coverage reports

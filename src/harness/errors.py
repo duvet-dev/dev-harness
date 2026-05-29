@@ -134,6 +134,21 @@ class CommandValidationError(CommandError):
     """CommandBus: command failed validation."""
 
 
+# ── Workflow Errors ───────────────────────────────────────────────────
+
+
+class UnknownWorkflowError(ValidationError):
+    """WorkflowOrchestrator: workflow name not found."""
+
+
+class WorkflowNotActiveError(StateError):
+    """WorkflowOrchestrator: workflow is not in active state."""
+
+
+class WorkflowPhaseConflictError(ValidationError):
+    """WorkflowOrchestrator: phase not in expected state for operation."""
+
+
 # ── Other Errors ─────────────────────────────────────────────────────
 
 

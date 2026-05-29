@@ -524,3 +524,113 @@ class TestAdvanceWorkflow:
         state = wf_orch.get_state("test-eng")
         assert state is not None
         assert state.workflow_name == "test"
+
+    async def test_advance_workflow_pending_phases_empty_with_current_phase(
+        self, mock_phase_orchestrator: MagicMock
+    ) -> None:
+        """Coverage: orchestrator.py lines 372-374.
+
+        When advance_workflow is called with current_phase set
+        but no pending phases remaining, it should mark the
+        workflow as COMPLETED.
+
+        This happens after reset_to_phase on the last completed
+        phase — current_phase is set but pending_phases is empty.
+        """
+        wf_orch = WorkflowOrchestrator(mock_phase_orchestrator)
+        wf_orch.register_workflow(
+            Workflow(name="two_phase", phases=["a", "b"])
+        )
+
+        # Enter and advance to complete both phases
+        await wf_orch.enter_workflow(
+            slug="test", workflow_name="two_phase"
+        )
+        await wf_orch.advance_workflow("test")
+
+        # State should be COMPLETED with no current phase
+        state = wf_orch.get_state("test")
+        assert state.status == WorkflowStatus.COMPLETED
+        assert state.current_phase is None
+
+        # Reset to last completed phase — sets current_phase="b"
+        # with no pending phases remaining
+        state.reset_to_phase("b")
+        assert state.current_phase == "b"
+        assert not state.pending_phases
+
+        # advance_workflow should hit the second not-pending check
+        # (line 372) and mark as COMPLETED
+        result = await wf_orch.advance_workflow("test")
+        assert result.success
+        assert result.status == WorkflowStatus.COMPLETED
+        assert result.current_phase is None
+
+    async def test_advance_with_failing_phase_and_escalation(
+        self, mock_phase_orchestrator: MagicMock
+    ) -> None:
+        """Coverage: orchestrator.py lines 409-415.
+
+        When advance_workflow dispatches a phase that fails with
+        an escalation value, the escalation logging block must
+        be exercised.
+
+        This requires the first phase (entered via enter_workflow)
+        to succeed, then the second phase (from advance_workflow)
+        to fail with an escalation value.
+        """
+        call_count = 0
+
+        async def _enter(slug, phase_name, mode="auto"):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return PhaseOrchestratorResult(
+                    success=True,
+                    phase_name=phase_name,
+                )
+            return PhaseOrchestratorResult(
+                success=False,
+                phase_name=phase_name,
+                error=f"Phase '{phase_name}' failed",
+                escalation="phase",
+            )
+
+        orchestrator_mock = MagicMock(spec=PhaseOrchestrator)
+        orchestrator_mock.enter_phase = AsyncMock(
+            side_effect=_enter
+        )
+
+        wf_orch = WorkflowOrchestrator(orchestrator_mock)
+        wf_orch.register_workflow(
+            Workflow(name="test", phases=["a", "b"])
+        )
+
+        # Enter — runs phase_a (succeeds)
+        await wf_orch.enter_workflow(
+            slug="test", workflow_name="test"
+        )
+
+        # Advance — runs phase_b (fails with escalation="phase")
+        result = await wf_orch.advance_workflow("test")
+
+        assert not result.success
+        assert result.status == WorkflowStatus.FAILED
+        state = wf_orch.get_state("test")
+        assert "b" in state.failed_phases
+
+
+    async def test_advance_with_failing_phase(
+        self, mock_failing_phase_orchestrator: MagicMock
+    ) -> None:
+        """Test that advance_workflow handles phase failure with escalation."""
+        wf_orch = WorkflowOrchestrator(mock_failing_phase_orchestrator)
+        wf_orch.register_workflows(DEFAULT_WORKFLOWS)
+
+        await wf_orch.enter_workflow(
+            slug="test-eng", workflow_name="standard",
+        )
+        result = await wf_orch.advance_workflow("test-eng")
+
+        assert not result.success
+        assert result.status == WorkflowStatus.FAILED

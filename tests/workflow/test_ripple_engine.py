@@ -32,6 +32,7 @@ from harness.workflow.ripple_engine import (
     RippleEffect,
     TransitionType,
     WorkflowRippleEngine,
+    _ConditionalRule,
 )
 
 
@@ -556,6 +557,40 @@ class TestRippleEffects:
         )
         assert effect.severity == "info"
 
+    def test_changed_phase_not_found_returns_empty(
+        self,
+    ) -> None:
+        """Coverage: ripple_engine.py line 246.
+
+        When the changed_phase is not in the combined list of
+        completed + pending phases, compute_ripple_effects should
+        return an empty list early.
+        """
+        engine = WorkflowRippleEngine()
+        effects = engine.determine_ripple_effects(
+            changed_phase="nonexistent",
+            completed_phases=["a", "b"],
+            pending_phases=["c"],
+        )
+
+        assert len(effects) == 0
+
+    def test_base_conditional_rule_evaluate_returns_none(
+        self,
+    ) -> None:
+        """Coverage: ripple_engine.py line 512.
+
+        The base _ConditionalRule.evaluate() always returns None
+        (the default / fall-through behaviour).
+        """
+        rule = _ConditionalRule(target_phase="b")
+        result = rule.evaluate(
+            phase_result=PhaseResult(success=True),
+            artifact_map={},
+        )
+
+        assert result is None
+
 
 # ── Artifact Passing Tests ──────────────────────────────────────────
 
@@ -668,3 +703,24 @@ class TestTransitionStateHandling:
 
         assert not transition.re_enter_current
         assert transition.next_phase == "b"
+
+
+    def test_ripple_last_phase_no_downstream(self) -> None:
+        """Changed phase is the last completed — no downstream to affect."""
+        engine = WorkflowRippleEngine()
+        effects = engine.determine_ripple_effects(
+            changed_phase="test",
+            completed_phases=["plan", "design", "build", "test"],
+            pending_phases=[],
+        )
+        assert len(effects) == 0
+
+    def test_ripple_not_found_in_list(self) -> None:
+        """Changed phase not in combined list — early return."""
+        engine = WorkflowRippleEngine()
+        effects = engine.determine_ripple_effects(
+            changed_phase="nonexistent",
+            completed_phases=["plan", "design", "build"],
+            pending_phases=["test"],
+        )
+        assert len(effects) == 0

@@ -14,6 +14,8 @@ Architecture §2 — Agent System.
 
 from __future__ import annotations
 
+import warnings
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -103,6 +105,14 @@ class AgentRole(str, Enum):
     CODER = "coder"
     TESTER = "tester"
     REVIEWER = "reviewer"
+
+
+warnings.warn(
+    "AgentRole enum is deprecated. Use string-based agent references via "
+    "AgentCatalogue instead. AgentRole will be removed in the Cleanup Wave.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class CriticLoopState(str, Enum):

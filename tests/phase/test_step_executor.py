@@ -20,6 +20,7 @@ import pytest
 from harness.errors import LoopExecutionError, PhaseExecutionError
 from harness.phase.model import LoopConfig, Step
 from harness.phase.step_executor import StepExecutor, StepResult
+from harness.phase.step_executor import _LoopContext
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────
@@ -418,3 +419,205 @@ class TestStepExecutorEdgeCases:
         result = await executor.execute(step, context)
         assert not result.success
         assert result.error == "Dispatcher error"
+
+
+# ── Coverage Gap Tests ──────────────────────────────────────────
+
+
+class TestStepExecutorCoverage:
+    """Coverage gap tests for uncovered branches in StepExecutor.
+
+    These tests exercise stub methods, object-context paths, and
+    defensive guards not reached by existing tests.
+
+    The built-in stub methods (_stub_dispatcher, _stub_loop_runner,
+    _stub_phase_orchestrator) replace their respective dependencies
+    when None is passed to __init__. However, the dispatch methods
+    call .dispatch(), .run(), and .enter_phase() respectively on
+    these objects, while the stubs are themselves callables (async
+    methods) — so they can't be reached through execute(). We
+    test them by calling them directly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stub_dispatcher_call(
+        self, context: dict
+    ) -> None:
+        """_stub_dispatcher returns a valid result.
+
+        Exercises lines 318-320.
+        """
+        executor = StepExecutor()
+        step = Step(agents=["architect"])
+        result = await executor._stub_dispatcher(step, context)
+        assert result.success
+        assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_stub_loop_runner_call(
+        self, context: dict
+    ) -> None:
+        """_stub_loop_runner returns a valid result.
+
+        Exercises lines 331-333.
+        """
+        executor = StepExecutor()
+        step = Step(loop=LoopConfig(count=1))
+        result = await executor._stub_loop_runner(
+            loop_config=step.loop,
+            steps=[],
+            context=context,
+        )
+        assert result.success
+        assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_stub_phase_orchestrator_call(
+        self, context: dict
+    ) -> None:
+        """_stub_phase_orchestrator returns a valid result.
+
+        Exercises lines 346-348.
+        """
+        executor = StepExecutor()
+        result = await executor._stub_phase_orchestrator(
+            slug="test",
+            phase_name="design",
+            mode="auto",
+        )
+        assert result.success
+        assert result.error is None
+        assert result.phase_name == "design"
+
+    @pytest.mark.asyncio
+    async def test_get_context_attr_with_object_context(
+        self,
+    ) -> None:
+        """_get_context_attr object path.
+
+        Exercises line 257: return getattr(context, attr, default).
+        """
+        executor = StepExecutor()
+        ctx = SimpleNamespace(trace_id="obj-trace")
+        result = executor._get_context_attr(ctx, "trace_id", "")
+        assert result == "obj-trace"
+
+    @pytest.mark.asyncio
+    async def test_get_context_attr_with_none_context(
+        self,
+    ) -> None:
+        """_get_context_attr handles None context.
+
+        Exercises lines 253-254: if context is None: return default.
+        """
+        executor = StepExecutor()
+        result = executor._get_context_attr(None, "trace_id", "fallback")
+        assert result == "fallback"
+
+    @pytest.mark.asyncio
+    async def test_loop_step_none_loop_config_guard(
+        self, context: dict
+    ) -> None:
+        """The step.loop is None guard returns an error result.
+
+        Exercises line 200: the loop-None check in
+        _dispatch_loop_step. Called directly since execute()
+        routes away when step.loop is falsy.
+        """
+        executor = StepExecutor()
+        step = object.__new__(Step)
+        step.agents = None
+        step.team = None
+        step.loop = None
+        step.phase = None
+
+        result = await executor._dispatch_loop_step(step, context)
+        assert not result.success
+        assert "no loop configuration" in (result.error or "")
+        assert result.step_type == "loop"
+
+    @pytest.mark.asyncio
+    async def test_get_context_attr_none_phase_default(
+        self,
+    ) -> None:
+        """_get_context_attr used within phase dispatch with None."""
+        executor = StepExecutor()
+        result = executor._get_context_attr(None, "slug", "fallback")
+        assert result == "fallback"
+
+
+# ── LoopContext Tests ────────────────────────────────────────────────
+
+
+class TestLoopContext:
+    """Tests for the internal _LoopContext adapter class."""
+
+    def test_from_context_none(self) -> None:
+        """from_context(None) returns a default _LoopContext.
+
+        Exercises line 378.
+        """
+        lc = _LoopContext.from_context(None)
+        assert lc.slug == ""
+        assert lc.mode == "auto"
+        assert lc.trace_id == ""
+        assert lc.steps == []
+        assert lc.reentry is None
+
+    def test_from_context_object(self) -> None:
+        """from_context(object) reads attributes.
+
+        Exercises lines 388-393.
+        """
+        ctx = SimpleNamespace(
+            slug="my-slug",
+            mode="manual",
+            trace_id="my-trace",
+            steps=["a", "b"],
+            reentry="loop-1",
+        )
+        lc = _LoopContext.from_context(ctx)
+        assert lc.slug == "my-slug"
+        assert lc.mode == "manual"
+        assert lc.trace_id == "my-trace"
+        assert lc.steps == ["a", "b"]
+        assert lc.reentry == "loop-1"
+
+    def test_from_context_dict(self) -> None:
+        """from_context(dict) reads via .get()."""
+        ctx = {
+            "slug": "dict-slug",
+            "mode": "strict",
+            "trace_id": "dict-trace",
+            "steps": ["x"],
+            "reentry": "loop-2",
+        }
+        lc = _LoopContext.from_context(ctx)
+        assert lc.slug == "dict-slug"
+        assert lc.mode == "strict"
+        assert lc.trace_id == "dict-trace"
+        assert lc.steps == ["x"]
+        assert lc.reentry == "loop-2"
+
+    def test_setdefault_missing_key(self) -> None:
+        """setdefault adds a key that doesn't exist.
+
+        Exercises lines 397-398. Must use a key that __init__
+        does NOT already set (all known fields are pre-set).
+        """
+        lc = _LoopContext()
+        lc.setdefault("custom_field", "custom_value")
+        assert lc.custom_field == "custom_value"  # type: ignore[attr-defined]
+
+    def test_setdefault_existing_key(self) -> None:
+        """setdefault does nothing when key already exists."""
+        lc = _LoopContext()
+        lc.slug = "original"
+        lc.setdefault("slug", "new")
+        assert lc.slug == "original"
+
+    def test_setdefault_custom_key(self) -> None:
+        """setdefault works with custom attribute names."""
+        lc = _LoopContext()
+        lc.setdefault("custom_field", "custom_value")
+        assert lc.custom_field == "custom_value"  # type: ignore[attr-defined]

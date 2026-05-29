@@ -6,6 +6,7 @@ Modules:
 - ``lifecycle`` — Engagement lifecycle operations (create, close, set-active)
 - ``repository`` — EngagementRepository (file-based persistence)
 - ``health`` — EngagementHealthCheck (health checks for engagements)
+- ``startup`` — StartupResumeFlow (engagement creation, resumption, auto mode)
 """
 
 from harness.engagement.health import EngagementHealthCheck, HealthReport, check_engagement_health
@@ -18,6 +19,13 @@ from harness.engagement.lifecycle import (
 )
 from harness.engagement.repository import EngagementRepository
 from harness.engagement.resolver import resolve_active_engagement
+from harness.engagement.startup import (
+    StartupResumeFlow,
+    StartupResult,
+    create_engagement,
+    load_engagement,
+    resume_engagement,
+)
 
 __all__ = [
     "EngagementHealthCheck",
@@ -30,4 +38,9 @@ __all__ = [
     "set_active_engagement",
     "close_engagement",
     "slugify",
+    "StartupResumeFlow",
+    "StartupResult",
+    "create_engagement",
+    "resume_engagement",
+    "load_engagement",
 ]

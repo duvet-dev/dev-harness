@@ -146,51 +146,58 @@ class TestCommandFactories:
 class TestDispatchCliCommand:
     """Tests for the dispatch_cli_command helper."""
 
+    @staticmethod
+    def _unique_slug(base: str) -> str:
+        """Create a unique slug using a counter to avoid cross-test collisions."""
+        import time
+        return f"{base}-{int(time.time() * 1000000) % 1000000}"
+
     def test_dispatch_create_engagement(self):
         """dispatch_cli_command dispatches create_engagement successfully."""
-        cmd = create_engagement_command(slug="test-eng")
+        slug = self._unique_slug("create-eng")
+        cmd = create_engagement_command(slug=slug)
         result = dispatch_cli_command(cmd)
         assert isinstance(result, CommandResult)
         assert result.success is True
-        assert "creation requested" in result.message
+        assert "created" in result.message
 
     def test_dispatch_enter_phase(self):
         """dispatch_cli_command dispatches enter_phase successfully."""
-        cmd = enter_phase_command(slug="test-eng", phase="design")
+        cmd = enter_phase_command(slug=self._unique_slug("phase"), phase="design")
         result = dispatch_cli_command(cmd)
         assert result.success is True
         assert "Phase 'design' entry dispatched" in result.message
 
     def test_dispatch_next(self):
         """dispatch_cli_command dispatches next successfully."""
-        cmd = next_command(slug="test-eng")
+        cmd = next_command(slug=self._unique_slug("next"))
         result = dispatch_cli_command(cmd)
         assert result.success is True
         assert "dispatched to NextEngine" in result.message
 
     def test_dispatch_abort_graceful(self):
         """dispatch_cli_command dispatches abort_engagement gracefully."""
-        cmd = abort_engagement_command(slug="test-eng")
+        cmd = abort_engagement_command(slug=self._unique_slug("abort"))
         result = dispatch_cli_command(cmd)
         # May succeed or fail depending on environment
         assert isinstance(result, CommandResult)
 
     def test_dispatch_abort_hard(self):
         """dispatch_cli_command dispatches abort_engagement hard."""
-        cmd = abort_engagement_command(slug="test-eng", mode="hard")
+        cmd = abort_engagement_command(slug=self._unique_slug("abort-hard"), mode="hard")
         result = dispatch_cli_command(cmd)
         assert isinstance(result, CommandResult)
 
     def test_dispatch_query_status(self):
         """dispatch_cli_command dispatches query_status successfully."""
-        cmd = query_status_command(slug="test-eng")
+        cmd = query_status_command(slug=self._unique_slug("query"))
         result = dispatch_cli_command(cmd)
         assert result.success is True
         assert "slug" in result.data
 
     def test_dispatch_query_whats_next(self):
         """dispatch_cli_command dispatches query_whats_next."""
-        cmd = query_whats_next_command(slug="test-eng")
+        cmd = query_whats_next_command(slug=self._unique_slug("whatsnext"))
         result = dispatch_cli_command(cmd)
         # May fail gracefully if engagement doesn't exist
         assert isinstance(result, CommandResult)
@@ -202,18 +209,25 @@ class TestDispatchCliCommand:
             dispatch_cli_command(cmd)
 
     def test_dispatch_empty_slug(self):
-        """dispatch_cli_command works with empty slug."""
+        """dispatch_cli_command fails with empty slug (StartupResumeFlow validation)."""
         cmd = create_engagement_command(slug="")
         result = dispatch_cli_command(cmd)
-        assert result.success is True
+        assert result.success is False
+        assert "cannot be empty" in result.error.lower()
 
-    def test_dispatch_passes_data_through(self):
-        """dispatch_cli_command passes extra data to handlers."""
-        cmd = create_engagement_command(slug="test-eng", extra_field="value")
-        result = dispatch_cli_command(cmd)
-        assert result.success is True
-        # The stub handler returns data, but doesn't echo extra fields
-        assert result.data["slug"] == "test-eng"
+    def test_dispatch_duplicate_slug(self):
+        """dispatch_cli_command fails with duplicate slug."""
+        slug = self._unique_slug("dup")
+        # First create succeeds
+        cmd1 = create_engagement_command(slug=slug)
+        result1 = dispatch_cli_command(cmd1)
+        assert result1.success is True
+
+        # Second should fail
+        cmd2 = create_engagement_command(slug=slug)
+        result2 = dispatch_cli_command(cmd2)
+        assert result2.success is False
+        assert "already exists" in result2.error.lower()
 
 
 class TestRoundTripIntegration:

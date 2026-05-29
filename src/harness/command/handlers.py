@@ -3,9 +3,11 @@
 Each handler calls exactly one business component method and wraps the
 result in a CommandResult. See V7 §5.20 Handler Delegation Map.
 
-Stubs wire up to existing components (PhaseOrchestrator, StepDispatcher,
-PlanManager) and use placeholder stubs for future components
-(StartupResumeFlow, NextEngine, AbortHandler, WhatsNextEngine).
+Wave 10: CreateEngagementHandler and ResumeEngagementHandler are fully
+wired to StartupResumeFlow. Remaining handlers delegate to existing
+components (PhaseOrchestrator, StepDispatcher, PlanManager, AbortHandler,
+WhatsNextEngine). Async methods (phase entry, step execution) note that
+full async dispatch requires CommandBus async dispatch support.
 """
 
 from __future__ import annotations
@@ -24,51 +26,149 @@ from harness.errors import (
 
 
 class CreateEngagementHandler(CommandHandler):
-    """Delegates to StartupResumeFlow.create() — stubbed until Wave 10."""
+    """Delegates to StartupResumeFlow.create().
+
+    Wave 10: fully wired — creates an engagement via StartupResumeFlow.
+    """
 
     def handle(self, command: Command) -> CommandResult:
-        """Stub: creates an engagement via StartupResumeFlow.create().
+        """Create an engagement via StartupResumeFlow.create().
+
+        Reads optional ``workflow_name``, ``session_type``, and
+        ``mode`` from command data. Delegates to
+        StartupResumeFlow.create() for the actual lifecycle.
 
         Args:
             command: Command with slug and optional data payload.
 
         Returns:
-            CommandResult indicating stub status until Wave 10.
+            CommandResult with engagement creation status.
         """
-        data: dict[str, Any] = {
-            "slug": command.slug,
-            "status": "stub",
-            "note": "StartupResumeFlow.create() not yet implemented (Wave 10)",
-        }
-        return CommandResult(
-            success=True,
-            message=f"Engagement '{command.slug}' creation requested (stub)",
-            data=data,
-        )
+        try:
+            from pathlib import Path
+            from harness.engagement.startup import StartupResumeFlow
+
+            root = Path.cwd()
+            flow = StartupResumeFlow(root=root)
+
+            workflow_name = command.data.get("workflow_name")
+            session_type = command.data.get("session_type", "greenfield")
+            mode = command.data.get("mode", "auto")
+
+            result = flow.create(
+                slug=command.slug,
+                workflow_name=workflow_name,
+                session_type=session_type,
+                mode=mode,
+            )
+
+            if not result.success:
+                return CommandResult(
+                    success=False,
+                    error=result.error,
+                    message=f"Failed to create engagement '{command.slug}': {result.error}",
+                    data={"slug": command.slug},
+                )
+
+            engagement = result.engagement
+            data: dict[str, Any] = {
+                "slug": engagement.slug,
+                "workflow_name": engagement.workflow_name,
+                "session_type": engagement.session_type,
+                "status": engagement.status.value,
+                "current_phase": engagement.current_phase,
+                "target_branch": engagement.target_branch,
+                "branch_created": result.branch_created,
+                "warnings": [
+                    {"type": w.type, "message": w.message}
+                    for w in result.warnings
+                ],
+                "delegated_to": "StartupResumeFlow.create()",
+                "note": "Phase entry requires async dispatch (enter_first_phase_async)",
+            }
+            return CommandResult(
+                success=True,
+                message=(
+                    f"Engagement '{engagement.slug}' created "
+                    f"({engagement.workflow_name} workflow, "
+                    f"session_type={engagement.session_type})"
+                ),
+                data=data,
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Failed to create engagement: {exc}",
+            )
 
 
 class ResumeEngagementHandler(CommandHandler):
-    """Delegates to StartupResumeFlow.resume() — stubbed until Wave 10."""
+    """Delegates to StartupResumeFlow.resume().
+
+    Wave 10: fully wired — resumes an engagement via StartupResumeFlow.
+    """
 
     def handle(self, command: Command) -> CommandResult:
-        """Stub: resumes an engagement via StartupResumeFlow.resume().
+        """Resume an engagement via StartupResumeFlow.resume().
+
+        Reads optional ``mode`` from command data. Delegates to
+        StartupResumeFlow.resume() for the actual lifecycle.
 
         Args:
             command: Command with slug of the engagement to resume.
 
         Returns:
-            CommandResult indicating stub status until Wave 10.
+            CommandResult with engagement resume status.
         """
-        data: dict[str, Any] = {
-            "slug": command.slug,
-            "status": "stub",
-            "note": "StartupResumeFlow.resume() not yet implemented (Wave 10)",
-        }
-        return CommandResult(
-            success=True,
-            message=f"Engagement '{command.slug}' resume requested (stub)",
-            data=data,
-        )
+        try:
+            from pathlib import Path
+            from harness.engagement.startup import StartupResumeFlow
+
+            root = Path.cwd()
+            flow = StartupResumeFlow(root=root)
+
+            mode = command.data.get("mode", "auto")
+
+            result = flow.resume(slug=command.slug, mode=mode)
+
+            if not result.success:
+                return CommandResult(
+                    success=False,
+                    error=result.error,
+                    message=f"Failed to resume engagement '{command.slug}': {result.error}",
+                    data={"slug": command.slug},
+                )
+
+            engagement = result.engagement
+            data: dict[str, Any] = {
+                "slug": engagement.slug,
+                "status": engagement.status.value,
+                "current_phase": engagement.current_phase,
+                "workflow_name": engagement.workflow_name,
+                "warnings": [
+                    {"type": w.type, "message": w.message}
+                    for w in result.warnings
+                ],
+                "delegated_to": "StartupResumeFlow.resume()",
+                "note": "Phase re-entry requires async dispatch (resume_async)",
+            }
+            return CommandResult(
+                success=True,
+                message=(
+                    f"Engagement '{engagement.slug}' resumed "
+                    f"(phase: {engagement.current_phase})"
+                ),
+                data=data,
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Failed to resume engagement: {exc}",
+            )
 
 
 class EnterPhaseHandler(CommandHandler):

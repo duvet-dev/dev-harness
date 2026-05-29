@@ -27,37 +27,98 @@ from harness.command.types import Command, CommandHandler, CommandResult
 
 
 class TestCreateEngagementHandler:
-    """Delegates to StartupResumeFlow.create() — stubbed."""
+    """Delegates to StartupResumeFlow.create() — Wave 10 wired."""
 
-    def test_returns_success_stub(self):
-        handler = CreateEngagementHandler()
-        cmd = Command(slug="my-eng", command_type="create_engagement")
-        result = handler.handle(cmd)
+    def test_creates_engagement(self, tmp_path):
+        """Handler creates engagement via StartupResumeFlow."""
+        # Set up a temp project with .harness dir
+        (tmp_path / ".harness").mkdir()
+
+        from unittest.mock import patch
+        with patch("pathlib.Path.cwd", return_value=tmp_path):
+            handler = CreateEngagementHandler()
+            cmd = Command(slug="my-eng", command_type="create_engagement")
+            result = handler.handle(cmd)
+
         assert result.success is True
-        assert "creation requested" in result.message
+        assert "created" in result.message
         assert result.data["slug"] == "my-eng"
-        assert result.data["status"] == "stub"
+        assert result.data["status"] == "active"
+        assert result.data["delegated_to"] == "StartupResumeFlow.create()"
 
-    def test_with_extra_data(self):
-        handler = CreateEngagementHandler()
-        cmd = Command(
-            slug="my-eng", command_type="create_engagement",
-            data={"workflow": "standard"},
-        )
-        result = handler.handle(cmd)
+    def test_with_workflow_override(self, tmp_path):
+        """Handler passes workflow_name through to StartupResumeFlow."""
+        (tmp_path / ".harness").mkdir()
+
+        from unittest.mock import patch
+        with patch("pathlib.Path.cwd", return_value=tmp_path):
+            handler = CreateEngagementHandler()
+            cmd = Command(
+                slug="fix-bug", command_type="create_engagement",
+                data={"workflow_name": "quick-fix"},
+            )
+            result = handler.handle(cmd)
+
         assert result.success is True
+        assert result.data["workflow_name"] == "quick-fix"
+
+    def test_empty_slug_fails(self, tmp_path):
+        """Empty slug is rejected."""
+        (tmp_path / ".harness").mkdir()
+
+        from unittest.mock import patch
+        with patch("pathlib.Path.cwd", return_value=tmp_path):
+            handler = CreateEngagementHandler()
+            cmd = Command(slug="", command_type="create_engagement")
+            result = handler.handle(cmd)
+
+        assert result.success is False
+        assert "cannot be empty" in result.error.lower()
+
+    def test_duplicate_slug_fails(self, tmp_path):
+        """Creating with existing slug fails."""
+        (tmp_path / ".harness").mkdir()
+
+        from unittest.mock import patch
+        with patch("pathlib.Path.cwd", return_value=tmp_path):
+            handler = CreateEngagementHandler()
+            # Create first
+            cmd1 = Command(slug="my-eng", command_type="create_engagement")
+            handler.handle(cmd1)
+            # Try again — should fail
+            cmd2 = Command(slug="my-eng", command_type="create_engagement")
+            result = handler.handle(cmd2)
+
+        assert result.success is False
+        assert "already exists" in result.error.lower()
 
 
 class TestResumeEngagementHandler:
-    """Delegates to StartupResumeFlow.resume() — stubbed."""
+    """Delegates to StartupResumeFlow.resume() — Wave 10 wired."""
 
-    def test_returns_success_stub(self):
-        handler = ResumeEngagementHandler()
-        cmd = Command(slug="my-eng", command_type="resume_engagement")
-        result = handler.handle(cmd)
+    def test_resumes_engagement(self, tmp_path):
+        """Handler resumes engagement via StartupResumeFlow."""
+        (tmp_path / ".harness").mkdir()
+
+        from unittest.mock import patch
+        with patch("pathlib.Path.cwd", return_value=tmp_path):
+            # First create an engagement
+            create_handler = CreateEngagementHandler()
+            create_cmd = Command(
+                slug="my-eng", command_type="create_engagement",
+            )
+            create_handler.handle(create_cmd)
+
+            # Now resume it
+            handler = ResumeEngagementHandler()
+            cmd = Command(slug="my-eng", command_type="resume_engagement")
+            result = handler.handle(cmd)
+
         assert result.success is True
-        assert "resume requested" in result.message
-        assert result.data["status"] == "stub"
+        assert "resumed" in result.message
+        assert result.data["slug"] == "my-eng"
+        assert result.data["status"] == "active"
+        assert result.data["delegated_to"] == "StartupResumeFlow.resume()"
 
 
 class TestEnterPhaseHandler:

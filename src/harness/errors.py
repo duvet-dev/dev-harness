@@ -84,6 +84,10 @@ class AggregatorError(ExecutionError):
     """LeadAggregator: technical failure."""
 
 
+class CircuitBreakerTrippedError(ExecutionError):
+    """CircuitBreaker: step dispatch blocked due to tripped circuit."""
+
+
 # ── State Errors ─────────────────────────────────────────────────────
 
 

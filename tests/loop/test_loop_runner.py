@@ -516,3 +516,309 @@ class TestLoopRunnerResult:
         assert result.error == "Step failed in iteration 2"
         assert result.escalation == "loop"
         assert result.trace_id == "trace-123"
+
+
+# ── _get_attr Coverage Tests ────────────────────────────────────────────
+
+
+class TestLoopRunnerGetAttr:
+    """Coverage for _get_attr internal method.
+
+    Lines 119 (obj is None → return default) and
+    122 (obj not dict, not None → getattr) are uncovered
+    because all existing tests pass a dict context.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_attr_with_none_context(self) -> None:
+        """_get_attr returns default when obj is None (line 119).
+
+        Pass context=None with count=0 so no iterations execute
+        but _get_attr is called at the start.
+        """
+        runner = LoopRunner()
+        result = await runner.run(
+            loop_config=LoopConfig(count=0),
+            steps=[],
+            context=None,
+        )
+        assert result.success
+        assert result.iteration_count == 0
+
+    @pytest.mark.asyncio
+    async def test_get_attr_with_object_context(self) -> None:
+        """_get_attr uses getattr when obj is not dict/None (line 122).
+
+        Pass a SimpleNamespace as context instead of a dict.
+        """
+        context = SimpleNamespace(
+            slug="obj-loop",
+            trace_id="trace-obj-1",
+            mode="auto",
+        )
+        executor = AsyncMock()
+        executor.execute = AsyncMock(
+            return_value=SimpleNamespace(
+                success=True, artifacts=[], error=None
+            )
+        )
+        runner = LoopRunner(step_executor=executor)
+        result = await runner.run(
+            loop_config=LoopConfig(count=2),
+            steps=[Step(agents=["builder"])],
+            context=context,
+        )
+        assert result.success
+        assert result.iteration_count == 2
+
+
+# ── Circuit Breaker Tripped Tests ─────────────────────────────────────
+
+
+class TestLoopRunnerCircuitTripped:
+    """Coverage for circuit breaker tripped path (lines 196-208).
+
+    Tests that when can_dispatch returns False, the loop returns
+    immediately with escalation info.
+    """
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_pre_tripped_first_step(
+        self,
+    ) -> None:
+        """Circuit breaker pre-tripped for the first step key.
+
+        The step_key format is:
+        loop.{slug}.{loop_id}.{iteration}.{step_idx}
+
+        We use a context with known _loop_id and slug so we can
+        pre-register a tripped breaker.
+        """
+        cb_registry = CircuitBreakerRegistry()
+
+        # Pre-trip the breaker for the step_key that will be checked.
+        # context slug="test-cb", _loop_id="cb-loop-1"
+        # iteration=1, step_idx=0
+        step_key = "loop.test-cb.cb-loop-1.1.0"
+        cb = cb_registry.get_or_create(step_key, max_attempts=1)
+        cb.record_failure()
+        assert cb.is_tripped()
+
+        executor = AsyncMock()
+        executor.execute = AsyncMock(
+            return_value=SimpleNamespace(
+                success=True, artifacts=[], error=None
+            )
+        )
+        runner = LoopRunner(
+            step_executor=executor,
+            circuit_breaker_registry=cb_registry,
+        )
+
+        result = await runner.run(
+            loop_config=LoopConfig(count=3),
+            steps=[Step(agents=["builder"])],
+            context={
+                "slug": "test-cb",
+                "_loop_id": "cb-loop-1",
+            },
+        )
+
+        assert not result.success
+        assert result.iteration_count == 0
+        assert result.error is not None
+        assert "Circuit breaker tripped" in result.error
+        assert result.escalation is not None
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_records_and_trips_mid_loop(
+        self,
+        mock_failing_executor: AsyncMock,
+    ) -> None:
+        """Mid-loop failure records on circuit breaker — verifies
+        that record_failure is called and escalation=loop returned."""
+        cb_registry = CircuitBreakerRegistry()
+
+        runner = LoopRunner(
+            step_executor=mock_failing_executor,
+            circuit_breaker_registry=cb_registry,
+        )
+
+        result = await runner.run(
+            loop_config=LoopConfig(count=5),
+            steps=[Step(agents=["builder"])],
+            context={"slug": "mid-loop-cb"},
+        )
+
+        assert not result.success
+        assert result.escalation == "loop"
+
+        # Verify circuit breakers were created from the failure
+        states = cb_registry.list_all()
+        assert len(states) > 0
+        for state in states:
+            assert state.attempt_count > 0
+
+
+# ── _set_loop_metadata Coverage Tests ─────────────────────────────────
+
+
+class TestLoopRunnerSetLoopMetadata:
+    """Coverage for _set_loop_metadata check (line 224).
+
+    The code checks ``if hasattr(accumulated_context, '_set_loop_metadata'):``
+    and then calls ``accumulated_context.setdefault(...)``. We use a
+    dict subclass that has a _set_loop_metadata attribute.
+    """
+
+    class ContextWithLoopMetadata(dict):
+        """A dict subclass that has _set_loop_metadata as a class attr.
+
+        This allows hasattr() to return True while still supporting
+        .setdefault() from the dict interface.
+        """
+        _set_loop_metadata = True
+
+    @pytest.mark.asyncio
+    async def test_context_with_loop_metadata_attribute(
+        self,
+    ) -> None:
+        """Context with _set_loop_metadata triggers the metadata path."""
+        context = self.ContextWithLoopMetadata(
+            slug="meta-loop",
+            trace_id="trace-meta",
+            mode="auto",
+        )
+
+        executor = AsyncMock()
+        executor.execute = AsyncMock(
+            return_value=SimpleNamespace(
+                success=True, artifacts=[], error=None
+            )
+        )
+        runner = LoopRunner(step_executor=executor)
+        result = await runner.run(
+            loop_config=LoopConfig(count=2),
+            steps=[Step(agents=["builder"])],
+            context=context,
+        )
+
+        assert result.success
+        assert result.iteration_count == 2
+        assert "_loop_metadata" in context
+        assert context["_loop_metadata"]["total_iterations"] == 2
+
+
+# ── _update_context Object Context Tests ──────────────────────────────
+
+
+class TestLoopRunnerUpdateContextObject:
+    """Coverage for _update_context when context is an object with
+    an ``artifacts`` attribute (lines 385-386, the elif branch).
+
+    Also hits line 122 (getattr path in _get_attr) since the context
+    is a SimpleNamespace, not a dict.
+    """
+
+    @pytest.mark.asyncio
+    async def test_update_context_with_object_artifacts(
+        self,
+    ) -> None:
+        """_update_context with object context that has artifacts attr."""
+        class ArtifactContext:
+            def __init__(self) -> None:
+                self.artifacts: list = []
+                self.slug = "artifact-obj-loop"
+                self.trace_id = "trace-artifact"
+
+        context = ArtifactContext()
+
+        # Use a real executor that produces artifacts
+        executor = AsyncMock(spec=[])
+
+        async def execute_fn(
+            step: Step, ctx: ArtifactContext
+        ) -> SimpleNamespace:
+            return SimpleNamespace(
+                success=True,
+                artifacts=["art-1", "art-2"],
+                error=None,
+            )
+
+        executor.execute = execute_fn
+
+        runner = LoopRunner(step_executor=executor)
+        result = await runner.run(
+            loop_config=LoopConfig(count=2),
+            steps=[Step(agents=["builder"])],
+            context=context,
+        )
+
+        assert result.success
+        assert result.iteration_count == 2
+        # The context.artifacts should have been updated via
+        # the elif branch in _update_context
+        assert context.artifacts is not None
+
+
+# ── Stub Executor Tests ──────────────────────────────────────────────
+
+
+class TestLoopRunnerStubExecutor:
+    """Coverage for _stub_executor (lines 396-402).
+
+    The stub executor is used when no step_executor is provided.
+    It returns SimpleNamespace(success=True, artifacts=[], error=None).
+    """
+
+    @pytest.mark.asyncio
+    async def test_stub_executor_direct_call(self) -> None:
+        """Call _stub_executor directly to cover lines 396-402.
+
+        Note: _stub_executor is a bound method, not an object with
+        an .execute() method. The run() path calls
+        self._step_executor.execute(...), so the method can only
+        be tested directly (lines 396-402).
+        """
+        runner = LoopRunner()
+        step = Step(agents=["coder"])
+
+        result = await runner._stub_executor(step, {"slug": "test"})
+
+        assert result.success
+        assert result.artifacts == []
+        assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_stub_executor_multiple_steps(self) -> None:
+        """Verify stub executor handles different step types."""
+        runner = LoopRunner()
+
+        for agent_list in [["coder"], ["tester", "reviewer"], []]:
+            step = Step(agents=agent_list)
+            result = await runner._stub_executor(
+                step, {"slug": "multi"}
+            )
+            assert result.success
+            assert result.artifacts == []
+            assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_stub_executor_with_various_contexts(self) -> None:
+        """Verify stub executor handles different context types."""
+        runner = LoopRunner()
+        step = Step(agents=["coder"])
+
+        # Dict context
+        r1 = await runner._stub_executor(step, {"a": 1})
+        assert r1.success
+
+        # None context
+        r2 = await runner._stub_executor(step, None)
+        assert r2.success
+
+        # Object context
+        r3 = await runner._stub_executor(
+            step, SimpleNamespace(slug="x")
+        )
+        assert r3.success

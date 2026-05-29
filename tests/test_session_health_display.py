@@ -221,3 +221,27 @@ class TestHealthDisplay:
 
         assert "/status" in output
         assert "/abort" in output
+
+
+class TestHealthDisplayGetAttr:
+    """HealthDisplay._get_attr edge cases (covering lines 194, 196)."""
+
+    def test_get_attr_none_obj(self):
+        """_get_attr with None obj returns default (line 194)."""
+        result = HealthDisplay._get_attr(None, "anything", "fallback")
+        assert result == "fallback"
+
+    def test_get_attr_dict_obj(self):
+        """_get_attr with dict obj uses .get (line 196)."""
+        result = HealthDisplay._get_attr({"key": "value"}, "key", "nope")
+        assert result == "value"
+
+    def test_get_attr_dict_missing_key(self):
+        """_get_attr with dict missing attr returns default (line 196)."""
+        result = HealthDisplay._get_attr({"key": "value"}, "missing", "default")
+        assert result == "default"
+
+    def test_get_attr_dict_default_missing(self):
+        """_get_attr with dict, no default for missing key returns empty (line 196)."""
+        result = HealthDisplay._get_attr({"key": "value"}, "missing")
+        assert result == ""

@@ -151,6 +151,50 @@ class TestArtifactSummariser:
         assert result == content
         assert not result.endswith("...")
 
+    @pytest.mark.asyncio
+    async def test_summarise_truncation_at_paragraph_boundary(self) -> None:
+        """Truncation at paragraph boundary past 60% of limit (line 125)."""
+        # limit=20, content has \n\n at position 13. 13 > 20*0.6=12 → hit line 125
+        summariser = ArtifactSummariser(max_summary_chars=20)
+        content = "aaaaaaaaaaaaa\n\naaaaaaaaaa"
+        result = await summariser.summarise({"content": content})
+        assert len(result) <= 23  # 20 + "..."
+        assert result.endswith("...")
+
+    @pytest.mark.asyncio
+    async def test_summarise_truncation_at_newline_boundary(self) -> None:
+        """Truncation at newline boundary past 60% of limit (line 125)."""
+        summariser = ArtifactSummariser(max_summary_chars=20)
+        # newline at position 14, 14 > 20*0.6=12 → hit line 125
+        content = "aaaaaaaaaaaaaa\naaaaa\n"
+        result = await summariser.summarise({"content": content})
+        assert result.endswith("...")
+
+    @pytest.mark.asyncio
+    async def test_summarise_truncation_at_sentence_end(self) -> None:
+        """Truncation at '. ' boundary past 60% of limit (line 125)."""
+        summariser = ArtifactSummariser(max_summary_chars=25)
+        # '. ' at position 18, 18 > 25*0.6=15 → hit line 125
+        content = "This is a good test. More words here."
+        result = await summariser.summarise({"content": content})
+        assert result.endswith("...")
+
+    @pytest.mark.asyncio
+    async def test_summarise_truncation_at_exclamation(self) -> None:
+        """Truncation at '! ' boundary past 60% of limit (line 125)."""
+        summariser = ArtifactSummariser(max_summary_chars=25)
+        content = "This is a good test! More words here."
+        result = await summariser.summarise({"content": content})
+        assert result.endswith("...")
+
+    @pytest.mark.asyncio
+    async def test_summarise_truncation_at_question(self) -> None:
+        """Truncation at '? ' boundary past 60% of limit (line 125)."""
+        summariser = ArtifactSummariser(max_summary_chars=25)
+        content = "This is a good test? More words here."
+        result = await summariser.summarise({"content": content})
+        assert result.endswith("...")
+
 
 class TestContextPruner:
     """ContextPruner tests."""

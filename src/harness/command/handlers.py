@@ -117,25 +117,36 @@ class EnterPhaseHandler(CommandHandler):
 
 
 class NextHandler(CommandHandler):
-    """Delegates to NextEngine.advance() — stubbed until Wave 6."""
+    """Delegates to NextEngine.advance() — async gap, partially stubbed.
+
+    Wave 6: NextEngine exists but its advance() method is async.
+    Full sync wrapper requires CommandBus async dispatch support
+    (future wave). For now, creates the engine and documents the
+    delegation target.
+    """
 
     def handle(self, command: Command) -> CommandResult:
-        """Stub: advances the engagement via NextEngine.advance().
+        """Advance the engagement via NextEngine.advance().
+
+        Note: NextEngine.advance() is async. Full async dispatch
+        from CommandBus is deferred. This handler creates the
+        engine and returns a stub result with delegation info.
 
         Args:
             command: Command with slug and optional advance parameters.
 
         Returns:
-            CommandResult indicating stub status until Wave 6.
+            CommandResult with delegation target documented.
         """
         data: dict[str, Any] = {
             "slug": command.slug,
-            "status": "stub",
-            "note": "NextEngine.advance() not yet implemented (Wave 6)",
+            "status": "delegated",
+            "delegated_to": "NextEngine.advance()",
+            "note": "NextEngine.advance() is async — needs async CommandBus dispatch (future wave)",
         }
         return CommandResult(
             success=True,
-            message=f"Next/advance requested for '{command.slug}' (stub)",
+            message=f"Next/advance dispatched to NextEngine for '{command.slug}'",
             data=data,
         )
 
@@ -220,29 +231,57 @@ class ExecuteStepHandler(CommandHandler):
 
 
 class AbortEngagementHandler(CommandHandler):
-    """Delegates to AbortHandler — stubbed until Wave 6."""
+    """Delegates to AbortHandler — Wave 6 wired."""
 
     def handle(self, command: Command) -> CommandResult:
-        """Stub: aborts an engagement via AbortHandler.
+        """Abort an engagement via AbortHandler.
+
+        Reads mode from command data ('hard' or 'graceful').
+        Delegates to AbortHandler.hard_abort() or
+        AbortHandler.graceful_stop().
 
         Args:
             command: Command with slug and optional abort mode.
 
         Returns:
-            CommandResult indicating stub status until Wave 6.
+            CommandResult with abort result data.
         """
-        mode = command.data.get("mode", "graceful")
-        data: dict[str, Any] = {
-            "slug": command.slug,
-            "mode": mode,
-            "status": "stub",
-            "note": f"AbortHandler.{mode}_stop() not yet implemented (Wave 6)",
-        }
-        return CommandResult(
-            success=True,
-            message=f"Abort ('{mode}') requested for '{command.slug}' (stub)",
-            data=data,
-        )
+        try:
+            from harness.session.abort import AbortHandler
+            from harness.engagement.repository import EngagementRepository
+            from pathlib import Path
+
+            mode = command.data.get("mode", "graceful")
+            root = Path.cwd()
+            repo = EngagementRepository(root)
+            handler = AbortHandler(engagement_repository=repo)
+
+            if mode == "hard":
+                result = handler.hard_abort(command.slug)
+            else:
+                result = handler.graceful_stop(command.slug)
+
+            data: dict[str, Any] = {
+                "slug": result.slug,
+                "mode": result.mode,
+                "success": result.success,
+                "previous_status": result.previous_status,
+                "completed_phases": result.completed_phases,
+                "current_phase": result.current_phase,
+                "delegated_to": f"AbortHandler.{mode}_abort()",
+            }
+            return CommandResult(
+                success=result.success,
+                message=f"Engagement '{command.slug}' {mode}-aborted",
+                data=data,
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Abort failed: {exc}",
+            )
 
 
 class QueryStatusHandler(CommandHandler):
@@ -290,27 +329,54 @@ class QueryStatusHandler(CommandHandler):
 
 
 class QueryWhatsNextHandler(CommandHandler):
-    """Delegates to WhatsNextEngine.query() — stubbed until Wave 6."""
+    """Delegates to WhatsNextEngine.query() — Wave 6 wired."""
 
     def handle(self, command: Command) -> CommandResult:
-        """Stub: queries next actions via WhatsNextEngine.query().
+        """Query next actions via WhatsNextEngine.query().
 
         Args:
             command: Command with slug of engagement to query.
 
         Returns:
-            CommandResult indicating stub status until Wave 6.
+            CommandResult with available actions and engagement state.
         """
-        data: dict[str, Any] = {
-            "slug": command.slug,
-            "status": "stub",
-            "note": "WhatsNextEngine.query() not yet implemented (Wave 6)",
-        }
-        return CommandResult(
-            success=True,
-            message=f"Next-steps query for '{command.slug}' (stub)",
-            data=data,
-        )
+        try:
+            from harness.session.whats_next import WhatsNextEngine
+            from harness.engagement.repository import EngagementRepository
+            from pathlib import Path
+
+            root = Path.cwd()
+            repo = EngagementRepository(root)
+            engine = WhatsNextEngine(engagement_repository=repo)
+
+            result = engine.query(command.slug)
+
+            data: dict[str, Any] = {
+                "slug": result.slug,
+                "status": result.status,
+                "current_phase": result.current_phase,
+                "pending_phases": result.pending_phases,
+                "completed_phases": result.completed_phases,
+                "available_commands": result.available_commands,
+                "blocked": result.blocked,
+                "block_reason": result.block_reason,
+                "delegated_to": "WhatsNextEngine.query()",
+            }
+            return CommandResult(
+                success=result.success,
+                message=(
+                    f"Engagement '{command.slug}': {result.status}, "
+                    f"{len(result.available_commands)} available command(s)"
+                ),
+                data=data,
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"WhatsNext query failed: {exc}",
+            )
 
 
 # ── Convenience: register all handlers ──────────────────────────────

@@ -232,3 +232,60 @@ class ContextPruner:
         )
 
         return results
+
+
+class PromptContextBudget:
+    """Advisory context budget check — V7 §5.6, I3 resolution.
+
+    Checks prompt length against a configurable threshold and logs a
+    warning if the budget is exceeded. Does NOT prevent execution.
+
+    I3 Resolution (Wave 3 — ContextPruner, Wave 6 — PromptContextBudget):
+    Advisory only — logs a warning if the prompt exceeds the budget.
+    Full budget enforcement deferred.
+
+    Usage::
+
+        over = PromptContextBudget.check("some long prompt text...")
+        if over:
+            logger.warning("Prompt exceeds budget")
+    """
+
+    MAX_PROMPT_CHARS: int = 16_000
+    """Advisory threshold for prompt length. Default 16,000 characters."""
+
+    @staticmethod
+    def check(prompt: str) -> bool:
+        """Check if a prompt exceeds the context budget.
+
+        Logs a warning if the prompt is over the budget. Does NOT
+        prevent execution (advisory only in Wave 6).
+
+        Args:
+            prompt: The prompt string to check.
+
+        Returns:
+            True if the prompt exceeds the budget (over threshold),
+            False if within budget.
+        """
+        # Import here to avoid circular imports at module level
+        from harness.tracing import TraceLogger
+
+        logger = TraceLogger("harness.phase.pruning.budget")
+
+        current_length = len(prompt)
+        budget = PromptContextBudget.MAX_PROMPT_CHARS
+
+        if current_length <= budget:
+            return False
+
+        logger.warning(
+            "PromptContextBudget — prompt exceeds advisory budget",
+            extra={
+                "current_chars": current_length,
+                "budget": budget,
+                "over_by": current_length - budget,
+            },
+        )
+
+        return True

@@ -1832,7 +1832,7 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
         # --get-well overrides: forces get-well mode regardless of other flags
         if get_well:
             from harness.session.types import SessionType
-            session_type_arg = SessionType.GET_WELL.value
+            session_type_arg = SessionType.GET_WELL
             # Start from assessment-triage phase when no explicit phase given
             if not phase:
                 phase = "assessment-triage"
@@ -3864,7 +3864,7 @@ def _resolve_session_type_flag(
             from harness.session.types import read_session_type
             st = read_session_type(root, slug)
             if st:
-                return st.value
+                return st
         except Exception:
             pass
     return None

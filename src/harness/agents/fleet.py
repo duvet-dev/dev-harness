@@ -1,11 +1,12 @@
 """Fleet data model — domain fleets, fleet guidelines, inclusion rules.
 
-Defines the fleet abstraction for grouping harness agents into domain
-teams. Each fleet has a lead agent, fleet-level guidelines that all
-agents in the fleet inherit, and inclusion rules that control which
-sub-agents are active based on project type and governance level.
+DEPRECATED (Wave 1.5): Fleet, FleetGuidelines, and the fleet abstraction
+are superseded by AgentTeam, TeamRegistry, and string-keyed agent
+catalogue in ``harness.team``. This module is retained for backward
+compatibility only and will be removed in a future cleanup wave.
 
-Wave 17 — Phase 1 (Fleet Data Model & Registry).
+Use ``harness.team.model.AgentTeam`` and ``harness.team.registry.TeamRegistry``
+instead.
 """
 
 from __future__ import annotations
@@ -461,7 +462,7 @@ def builtin_fleets() -> list[Fleet]:
         # ── Architecture Fleet ─────────────────────────────────────────────
         Fleet(
             name="architecture",
-            lead_role=AgentRole.ARCHITECT.value,
+            lead_role=AgentRole.ARCHITECT,
             description=(
                 "Designs system architecture, domain models, and "
                 "boundaries. Produces architecture documents, ADRs, "
@@ -525,7 +526,7 @@ def builtin_fleets() -> list[Fleet]:
         # ── Coding Fleet ──────────────────────────────────────────────────
         Fleet(
             name="coding",
-            lead_role=AgentRole.CODING_AGENT.value,
+            lead_role=AgentRole.CODING_AGENT,
             description=(
                 "Implements code following architecture decisions. "
                 "Consumes architecture specs, produces implementation "
@@ -586,7 +587,7 @@ def builtin_fleets() -> list[Fleet]:
         # ── Testing Fleet ─────────────────────────────────────────────────
         Fleet(
             name="testing",
-            lead_role=AgentRole.TESTING_AGENT.value,
+            lead_role=AgentRole.TESTING_AGENT,
             description=(
                 "Defines test strategies, generates test code, and "
                 "validates implementations against specifications. "
@@ -641,7 +642,7 @@ def builtin_fleets() -> list[Fleet]:
         # ── Review Fleet ──────────────────────────────────────────────────
         Fleet(
             name="review",
-            lead_role=AgentRole.CRITICAL_ANALYSER.value,
+            lead_role=AgentRole.CRITICAL_ANALYSER,
             description=(
                 "Reviews architecture, code, and test output for "
                 "correctness, security, performance, and alignment "

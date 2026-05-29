@@ -566,9 +566,9 @@ class AgentRunner:
         cycle_def = CycleRunnerDefinition(
             name="critic-loop",
             steps=[
-                CycleStep(agent=cfg.architect_role.value, step_type="produce",
+                CycleStep(agent=cfg.architect_role, step_type="produce",
                           artifact="design.md", max_retries=0),
-                CycleStep(agent=cfg.critic_role.value, step_type="critique",
+                CycleStep(agent=cfg.critic_role, step_type="critique",
                           artifact="critique.md", max_retries=0),
             ],
             convergence=CycleConvergence(

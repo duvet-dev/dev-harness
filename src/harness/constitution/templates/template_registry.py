@@ -533,7 +533,7 @@ def refresh_agent_profiles(
     )
 
     for spec in AGENTS:
-        role = spec.role.value
+        role = spec.role
         agent_dir = agents_dir / role
         agent_dir.mkdir(parents=True, exist_ok=True)
 
@@ -573,7 +573,7 @@ def refresh_agent_profiles(
         identity_content = f"""# Identity — {spec.name}
 
 ## Role
-{spec.role.value}
+{spec.role}
 
 ## Description
 {spec.description}

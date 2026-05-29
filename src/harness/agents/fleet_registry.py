@@ -1,11 +1,10 @@
 """Fleet registry — manages built-in and custom fleet state.
 
-Provides loading, saving, and querying of fleet definitions. Built-in
-fleets are defined in :mod:`harness.agents.fleet` and registered at
-module load time. Custom fleets and sub-agent overrides are persisted
-in ``.harness/fleets.yaml``.
+DEPRECATED (Wave 1.5): FleetRegistry is superseded by TeamRegistry in
+``harness.team.registry``. This module is retained for backward
+compatibility only and will be removed in a future cleanup wave.
 
-Wave 17 — Phase 1 (Fleet Data Model & Registry).
+Use ``harness.team.registry.TeamRegistry`` instead.
 """
 
 from __future__ import annotations

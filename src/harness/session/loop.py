@@ -1,13 +1,13 @@
 """Interactive terminal loops — chat and phase-by-phase sessions.
 
-
+DEPRECATED: The ``chat_loop`` and ``session_loop`` functions are superseded
+by the config-driven orchestration in ``harness.phase.step_executor`` and
+``harness.cli.commands``. This module is retained for backward compatibility
+only and will be removed in a future cleanup wave.
 
 Provides:
-
 - ``chat_loop`` — simple interactive chat with an LLM
-
 - ``session_loop`` — orchestrated phase-by-phase agent interaction
-
 """
 
 

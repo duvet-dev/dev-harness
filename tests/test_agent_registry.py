@@ -59,10 +59,10 @@ class TestAgentRole:
     """Tests for AgentRole enum."""
 
     def test_known_roles(self):
-        assert AgentRole.COORDINATOR.value == "coordinator"
-        assert AgentRole.ARCHITECT.value == "architect"
-        assert AgentRole.CODING_AGENT.value == "coding-agent"
-        assert AgentRole.TESTING_AGENT.value == "testing-agent"
+        assert AgentRole.COORDINATOR == "coordinator"
+        assert AgentRole.ARCHITECT == "architect"
+        assert AgentRole.CODING_AGENT == "coding-agent"
+        assert AgentRole.TESTING_AGENT == "testing-agent"
 
     def test_from_string(self):
         assert AgentRole("coordinator") == AgentRole.COORDINATOR
@@ -156,9 +156,9 @@ class TestRegistryFunctions:
         assert agent.role == AgentRole.ARCHITECT
 
     def test_get_agent_nonexistent(self):
-        """get_agent with a string that's not a valid AgentRole raises ValueError."""
-        with pytest.raises(ValueError):
-            get_agent("nonexistent-role")
+        """get_agent with a string that's not a valid AgentRole returns None."""
+        result = get_agent("nonexistent-role")
+        assert result is None
 
     def test_get_agents_by_tag(self):
         agents = get_agents_by_tag("core")

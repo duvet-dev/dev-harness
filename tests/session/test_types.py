@@ -17,14 +17,14 @@ from harness.session.types import (
 
 class TestSessionType:
     def test_values(self):
-        assert SessionType.GREENFIELD.value == "greenfield"
-        assert SessionType.BROWNFIELD.value == "brownfield"
-        assert SessionType.REFACTORING.value == "refactoring"
-        assert SessionType.GET_WELL.value == "get-well"
+        assert SessionType.GREENFIELD == "greenfield"
+        assert SessionType.BROWNFIELD == "brownfield"
+        assert SessionType.REFACTORING == "refactoring"
+        assert SessionType.GET_WELL == "get-well"
 
-    def test_get_well_is_enum_member(self):
+    def test_get_well_is_string(self):
         assert SessionType.GET_WELL is not None
-        assert SessionType.GET_WELL.value == "get-well"
+        assert SessionType.GET_WELL == "get-well"
         assert isinstance(SessionType.GET_WELL, str)
 
 
@@ -64,6 +64,11 @@ class TestConfirmSessionType:
         with patch("builtins.input", side_effect=["n", "1"]):
             result = confirm_session_type(SessionType.REFACTORING)
             assert result == SessionType.GREENFIELD
+
+    def test_rejects_then_accept_second_alternative(self):
+        with patch("builtins.input", side_effect=["n", "2"]):
+            result = confirm_session_type(SessionType.REFACTORING)
+            assert result == SessionType.BROWNFIELD
 
     def test_rejects_then_cancel(self):
         with patch("builtins.input", side_effect=["n", "99"]):
@@ -132,3 +137,10 @@ class TestPromptAlternative:
             result = _prompt_alternative(SessionType.REFACTORING)
         # Entering "1" selects the first remaining alternative (GREENFIELD)
         assert result == SessionType.GREENFIELD
+
+    def test_selects_second_alternative(self):
+        """When REFACTORING is rejected, the second choice is BROWNFIELD."""
+        from harness.session.types import _prompt_alternative, SessionType
+        with patch("builtins.input", return_value="2"):
+            result = _prompt_alternative(SessionType.REFACTORING)
+        assert result == SessionType.BROWNFIELD

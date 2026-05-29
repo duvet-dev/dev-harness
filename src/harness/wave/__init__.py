@@ -1,25 +1,16 @@
 """Per-wave code and test cycle orchestration.
 
-Each wave in a development plan represents a self-contained unit of work.
-The ``WaveCycleRunner`` walks a single wave through:
+The ``WaveCycleResult`` dataclass is still re-exported for callers that
+process results from the (deprecated) wave-cycle runner.
 
-1. Implementation (coder agent writes code + tests)
-2. Test analysis (tester agent validates and supplements tests)
-3. Test suite execution (actual ``pytest`` run)
-4. Fix loop (if tests fail, coder revises with test output)
-5. Commit (wave marked complete in plan)
-
-This ensures every wave can be raised as a PR with full confidence.
+The old ``WaveCycleRunner`` and ``WaveCycleConfig`` classes are deprecated
+(Wave 4, R33). Use ``LoopRunner`` in ``harness.loop.runner`` instead.
 """
 
 from .wave_cycle import (
-    WaveCycleConfig,
     WaveCycleResult,
-    WaveCycleRunner,
 )
 
 __all__ = [
-    "WaveCycleConfig",
     "WaveCycleResult",
-    "WaveCycleRunner",
 ]

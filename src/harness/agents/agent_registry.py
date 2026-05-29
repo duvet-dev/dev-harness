@@ -75,8 +75,20 @@ class ToolPermissions:
         )
 
 
-class AgentRole(str, Enum):
-    """Identifies the role of an agent within the harness."""
+# ── AgentRole — deprecated legacy enum ─────────────────────────────────
+# AgentRole is replaced by string-based agent keys via AgentCatalogue.
+# The class below provides backward-compatible attribute access so that
+# existing code like ``AgentRole.ARCHITECT`` continues to resolve to the
+# string ``"architect"``. Do not use AgentRole in new code.
+
+
+class _AgentRoleType(str):
+    """Backward-compatible shim replacing the former AgentRole enum.
+
+    Provides the same attribute access (``AgentRole.ARCHITECT`` →
+    ``"architect"``). No longer an enum — use string keys from
+    AgentCatalogue for new code.
+    """
 
     COORDINATOR = "coordinator"
     REQUIREMENTS_BUILDER = "requirements-builder"
@@ -106,10 +118,30 @@ class AgentRole(str, Enum):
     TESTER = "tester"
     REVIEWER = "reviewer"
 
+    _VALID_ROLES: set[str] = frozenset({
+        "coordinator", "requirements-builder", "architect",
+        "architecture-analyser", "planning-agent", "coding-agent",
+        "testing-agent", "critical-analyser", "validation-agent",
+        "documentation-agent", "example-scenarios-agent", "discovery-agent",
+        "sync", "refactoring-agent", "boundary-test-agent",
+        "refactor-orchestrator", "dead-code-analyser", "component-analyser",
+        "domain-interface-tester", "requirements-conformance-reviewer",
+        "researcher", "planner", "coder", "tester", "reviewer",
+    })
+
+    def __new__(cls, value: str) -> str:
+        """Allow ``AgentRole("architect")`` style construction."""
+        if value in cls._VALID_ROLES:
+            return value
+        raise ValueError(f"'{value}' is not a valid AgentRole")
+
+
+AgentRole = _AgentRoleType
+
 
 warnings.warn(
     "AgentRole enum is deprecated. Use string-based agent references via "
-    "AgentCatalogue instead. AgentRole will be removed in the Cleanup Wave.",
+    "AgentCatalogue instead.",
     DeprecationWarning,
     stacklevel=2,
 )
@@ -139,10 +171,10 @@ class CriticLoopConfig:
     See Wave 15 — Phase 4 (Design-Critic Loop).
     """
 
-    architect_role: AgentRole = AgentRole.ARCHITECT
+    architect_role: str = AgentRole.ARCHITECT
     """Role of the agent that writes/revises design documents."""
 
-    critic_role: AgentRole = AgentRole.CRITICAL_ANALYSER
+    critic_role: str = AgentRole.CRITICAL_ANALYSER
     """Role of the agent that reviews designs and writes critique reports."""
 
     max_iterations: int = 5
@@ -190,7 +222,7 @@ class CriticLoopIteration:
 class AgentSpec:
     """Specification for a single agent role."""
 
-    role: AgentRole
+    role: str
     name: str
     description: str
     sop_summary: list[str] = field(default_factory=list)
@@ -711,10 +743,12 @@ AGENTS: list[AgentSpec] = [
 # ---------------------------------------------------------------------------
 
 
-def get_agent(role: AgentRole | str) -> AgentSpec | None:
+def get_agent(role: str) -> AgentSpec | None:
     """Look up an agent specification by role."""
-    if isinstance(role, str):
+    try:
         role = AgentRole(role)
+    except ValueError:
+        return None
     for agent in AGENTS:
         if agent.role == role:
             return agent
@@ -728,15 +762,15 @@ def get_agents_by_tag(tag: str) -> list[AgentSpec]:
 
 def list_agent_names() -> list[str]:
     """Get the canonical names of all registered agents."""
-    return [a.role.value for a in AGENTS]
+    return [a.role for a in AGENTS]
 
 
-def list_agent_roles() -> list[AgentRole]:
+def list_agent_roles() -> list[str]:
     """Get all registered agent roles."""
     return [a.role for a in AGENTS]
 
 
-def has_awareness_role(role: AgentRole) -> bool:
+def has_awareness_role(role: str) -> bool:
     """Check if an agent role is one of the brownfield/refactoring-aware roles."""
     return role in (
         AgentRole.ARCHITECT,
@@ -764,7 +798,7 @@ def registry_summary() -> dict[str, Any]:
         "total_agents": len(AGENTS),
         "agents": [
             {
-                "role": a.role.value,
+                "role": a.role,
                 "name": a.name,
                 "tags": a.tags,
             }

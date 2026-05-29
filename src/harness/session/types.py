@@ -8,30 +8,42 @@ Provides:
 
 from __future__ import annotations
 
-import enum
 from pathlib import Path
 from typing import Optional
 
 from harness.paths import get_engagement_yaml
 
 
-class SessionType(str, enum.Enum):
-    """The type of development session to run.
+# ── SessionType — backward-compatible shim ────────────────────────────────
+# SessionType was formerly a ``(str, enum.Enum)``. Session types are now
+# config-driven from constitution.yaml. The class below provides backward-
+# compatible attribute access so that existing code like
+# ``SessionType.REFACTORING`` continues to resolve to ``"refactoring"``.
 
-    * **GREENFIELD** — Build from scratch. No existing-code constraints.
-    * **BROWNFIELD** — Work within an existing codebase. Agents understand
-      they are constrained by what already exists and document compromises.
-    * **REFACTORING** — Restructure existing code toward an ideal architecture.
-      Uses behaviour-preserving boundary tests as guard rails.
-    * **GET_WELL** — Remediation-driven session: loads assessment findings,
-      triages them, designs a cohesive remediation plan, then executes it
-      through the standard phase pipeline.
+
+class _SessionType(str):
+    """Backward-compatible shim replacing the former SessionType enum.
+
+    Provides the same attribute access (``SessionType.REFACTORING`` →
+    ``"refactoring"``). No longer an enum — use string values for new code.
     """
 
     GREENFIELD = "greenfield"
     BROWNFIELD = "brownfield"
     REFACTORING = "refactoring"
     GET_WELL = "get-well"
+
+    _VALID = frozenset({"greenfield", "brownfield", "refactoring", "get-well"})
+
+    def __new__(cls, value: str) -> str:
+        """Allow ``SessionType("greenfield")`` style construction."""
+        if value in cls._VALID:
+            return value
+        raise ValueError(f"'{value}' is not a valid SessionType")
+
+
+# Export under the original name for backward compatibility
+SessionType = _SessionType
 
 
 # ── Detection constants ────────────────────────────────────────────────────
@@ -75,7 +87,10 @@ def detect_session_type(prompt: str) -> Optional[SessionType]:
     return None
 
 
-def confirm_session_type(suggested: SessionType) -> Optional[SessionType]:
+_SESSION_TYPE_VALUES = ["greenfield", "brownfield", "refactoring", "get-well"]
+
+
+def confirm_session_type(suggested: str) -> Optional[str]:
     """Ask the user to confirm a suggested session type.
 
     Returns the confirmed type, or ``None`` if the user says no to all
@@ -86,12 +101,12 @@ def confirm_session_type(suggested: SessionType) -> Optional[SessionType]:
         SessionType.BROWNFIELD: "brownfield (work within existing code, document compromises)",
     }
 
-    label = labels.get(suggested, suggested.value)
+    label = labels.get(suggested, suggested)
     print(f"\nThis looks like a {label} task.")
 
 
     while True:
-        choice = input(f"Start a {suggested.value} session? [Y/n] ").strip().lower()
+        choice = input(f"Start a {suggested} session? [Y/n] ").strip().lower()
         if choice in ("", "y", "yes"):
             return suggested
         if choice in ("n", "no"):
@@ -102,13 +117,13 @@ def confirm_session_type(suggested: SessionType) -> Optional[SessionType]:
         print("Please answer Y or n.")
 
 
-def _prompt_alternative(rejected: SessionType) -> Optional[SessionType]:
+def _prompt_alternative(rejected: str) -> Optional[str]:
     """Prompt for an alternative type when the user rejects the suggestion."""
-    remaining = [t for t in SessionType if t != rejected]
+    remaining = [t for t in _SESSION_TYPE_VALUES if t != rejected]
 
     print("\nChoose a session type:")
     for i, t in enumerate(remaining, 1):
-        print(f"  {i}. {t.value}")
+        print(f"  {i}. {t}")
     print(f"  {len(remaining) + 1}. Cancel (use greenfield)")
 
     try:
@@ -140,7 +155,7 @@ def store_session_type(
     else:
         data = {}
 
-    data["session_type"] = session_type.value
+    data["session_type"] = session_type
     eng_yaml.parent.mkdir(parents=True, exist_ok=True)
     with open(eng_yaml, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)

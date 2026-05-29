@@ -499,26 +499,21 @@ class TestAutoMode:
     ) -> None:
         """enter_first_phase_async exists and is async."""
         import asyncio
-        coro = startup_flow.enter_first_phase_async(
-            slug=existing_engagement.slug
-        )
-        assert asyncio.iscoroutine(coro)
+        assert asyncio.iscoroutinefunction(startup_flow.enter_first_phase_async)
 
     def test_resume_async_signature(
         self, startup_flow: StartupResumeFlow, existing_engagement: Engagement
     ) -> None:
         """resume_async exists and is async."""
         import asyncio
-        coro = startup_flow.resume_async(slug=existing_engagement.slug)
-        assert asyncio.iscoroutine(coro)
+        assert asyncio.iscoroutinefunction(startup_flow.resume_async)
 
     def test_run_auto_async_signature(
         self, startup_flow: StartupResumeFlow, existing_engagement: Engagement
     ) -> None:
         """run_auto_async exists and is async."""
         import asyncio
-        coro = startup_flow.run_auto_async(slug=existing_engagement.slug)
-        assert asyncio.iscoroutine(coro)
+        assert asyncio.iscoroutinefunction(startup_flow.run_auto_async)
 
 
 # ── Health Check Integration Tests ──────────────────────────────────

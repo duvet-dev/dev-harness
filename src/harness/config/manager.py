@@ -3,6 +3,7 @@
 Reads and resolves configuration from:
 - Project-level config file
 - Engagement-level override engagement.yaml
+- Settings YAML file
 - Architecture goal file
 
 Key setting: ``allow_refactoring_suggestions`` (bool, default ``True``).
@@ -10,19 +11,102 @@ Key setting: ``allow_refactoring_suggestions`` (bool, default ``True``).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
-from harness.paths import get_config_path, get_engagement_dir
+from harness.paths import get_config_path, get_engagement_dir, get_settings_path
 
 # ── Defaults ───────────────────────────────────────────────────────────────
 
 _DEFAULT_ALLOW_REFACTORING = True
 
+# ── Settings dataclasses (V7 §7, Wave 8b) ──────────────────────────────────
+
+
+@dataclass
+class NLTranslatorSettings:
+    """Settings for the NL Translator (V7 §5.21).
+
+    Attributes:
+        confidence_threshold: Minimum confidence for auto-dispatch
+            (0.0–1.0, default 0.75).
+    """
+
+    confidence_threshold: float = 0.75
+
+
+@dataclass
+class WebSearchSettings:
+    """Settings for web search providers (V7 §5.22).
+
+    Attributes:
+        provider: The active provider - "duckduckgo" or "searxng".
+        searxng_url: Base URL for self-hosted SearXNG instance.
+        max_results: Default maximum results per search.
+        cache_ttl_seconds: Cache time-to-live in seconds.
+    """
+
+    provider: str = "duckduckgo"
+    searxng_url: str = "http://localhost:8888"
+    max_results: int = 5
+    cache_ttl_seconds: int = 300
+
 
 # ── Config manager ─────────────────────────────────────────────────────────
+
+
+# ── Settings helpers ───────────────────────────────────────────────────────
+
+
+def _load_settings_dict(root: Path) -> dict:
+    """Lazy-load the settings.yaml file as a dict.
+
+    Args:
+        root: Project root directory.
+
+    Returns:
+        Parsed settings dict, or empty dict if file not found.
+    """
+    path = get_settings_path(root)
+    if path.is_file():
+        with open(path) as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def load_settings(root: Path) -> tuple[NLTranslatorSettings, WebSearchSettings]:
+    """Load NL translator and web search settings from ``.harness/settings.yaml``.
+
+    Args:
+        root: Project root directory.
+
+    Returns:
+        A tuple of (NLTranslatorSettings, WebSearchSettings) with values
+        merged from the settings file, or defaults if the file is missing.
+    """
+    raw = _load_settings_dict(root)
+
+    # NL Translator settings
+    nl_raw = raw.get("nl_translator", {})
+    nl_settings = NLTranslatorSettings(
+        confidence_threshold=float(
+            nl_raw.get("confidence_threshold", NLTranslatorSettings.confidence_threshold)
+        ),
+    )
+
+    # Web search settings
+    ws_raw = raw.get("web_search", {})
+    ws_settings = WebSearchSettings(
+        provider=str(ws_raw.get("provider", WebSearchSettings.provider)),
+        searxng_url=str(ws_raw.get("searxng_url", WebSearchSettings.searxng_url)),
+        max_results=int(ws_raw.get("max_results", WebSearchSettings.max_results)),
+        cache_ttl_seconds=int(ws_raw.get("cache_ttl_seconds", WebSearchSettings.cache_ttl_seconds)),
+    )
+
+    return nl_settings, ws_settings
 
 
 class HarnessConfigManager:

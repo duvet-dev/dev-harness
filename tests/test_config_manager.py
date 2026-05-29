@@ -185,3 +185,117 @@ class TestConfigManagerEdgeCases:
 
         # Manager should still return cached False
         assert mgr.allow_refactoring_suggestions() is False
+
+
+class TestSettingsLoading:
+    """Tests for settings.yaml loading (V7 §7, Wave 8b)."""
+
+    def test_load_settings_defaults(self, tmp_path):
+        """When no settings.yaml exists, defaults are returned."""
+        from harness.config.manager import load_settings
+
+        nl_settings, ws_settings = load_settings(tmp_path)
+        assert nl_settings.confidence_threshold == 0.75
+        assert ws_settings.provider == "duckduckgo"
+        assert ws_settings.searxng_url == "http://localhost:8888"
+        assert ws_settings.max_results == 5
+        assert ws_settings.cache_ttl_seconds == 300
+
+    def test_load_settings_custom_nl(self, tmp_path):
+        """Custom NL translator settings are loaded correctly."""
+        from harness.config.manager import load_settings
+
+        settings_dir = tmp_path / ".harness"
+        settings_dir.mkdir()
+        settings_file = settings_dir / "settings.yaml"
+        with open(settings_file, "w") as f:
+            yaml.dump({
+                "nl_translator": {
+                    "confidence_threshold": 0.85,
+                },
+            }, f)
+
+        nl_settings, ws_settings = load_settings(tmp_path)
+        assert nl_settings.confidence_threshold == 0.85
+        # Web search should still have defaults
+        assert ws_settings.provider == "duckduckgo"
+
+    def test_load_settings_custom_web_search(self, tmp_path):
+        """Custom web search settings are loaded correctly."""
+        from harness.config.manager import load_settings
+
+        settings_dir = tmp_path / ".harness"
+        settings_dir.mkdir()
+        settings_file = settings_dir / "settings.yaml"
+        with open(settings_file, "w") as f:
+            yaml.dump({
+                "web_search": {
+                    "provider": "searxng",
+                    "searxng_url": "http://search.internal:8888",
+                    "max_results": 10,
+                    "cache_ttl_seconds": 600,
+                },
+            }, f)
+
+        nl_settings, ws_settings = load_settings(tmp_path)
+        assert ws_settings.provider == "searxng"
+        assert ws_settings.searxng_url == "http://search.internal:8888"
+        assert ws_settings.max_results == 10
+        assert ws_settings.cache_ttl_seconds == 600
+        # NL settings should still have defaults
+        assert nl_settings.confidence_threshold == 0.75
+
+    def test_load_settings_both_sections(self, tmp_path):
+        """Both NL translator and web search settings can coexist."""
+        from harness.config.manager import load_settings
+
+        settings_dir = tmp_path / ".harness"
+        settings_dir.mkdir()
+        settings_file = settings_dir / "settings.yaml"
+        with open(settings_file, "w") as f:
+            yaml.dump({
+                "nl_translator": {
+                    "confidence_threshold": 0.9,
+                },
+                "web_search": {
+                    "provider": "searxng",
+                    "max_results": 7,
+                },
+            }, f)
+
+        nl_settings, ws_settings = load_settings(tmp_path)
+        assert nl_settings.confidence_threshold == 0.9
+        assert ws_settings.provider == "searxng"
+        assert ws_settings.max_results == 7
+        assert ws_settings.cache_ttl_seconds == 300  # default
+
+    def test_load_settings_empty_yaml(self, tmp_path):
+        """Empty settings.yaml returns all defaults."""
+        from harness.config.manager import load_settings
+
+        settings_dir = tmp_path / ".harness"
+        settings_dir.mkdir()
+        settings_file = settings_dir / "settings.yaml"
+        with open(settings_file, "w") as f:
+            yaml.dump({}, f)
+
+        nl_settings, ws_settings = load_settings(tmp_path)
+        assert nl_settings.confidence_threshold == 0.75
+        assert ws_settings.provider == "duckduckgo"
+
+    def test_load_settings_with_bad_type_raises(self, tmp_path):
+        """Settings with wrong types raise ValueError."""
+        from harness.config.manager import load_settings
+
+        settings_dir = tmp_path / ".harness"
+        settings_dir.mkdir()
+        settings_file = settings_dir / "settings.yaml"
+        with open(settings_file, "w") as f:
+            yaml.dump({
+                "nl_translator": {
+                    "confidence_threshold": "very high",  # not float
+                },
+            }, f)
+
+        with pytest.raises(ValueError):
+            load_settings(tmp_path)

@@ -46,6 +46,7 @@ _ENGAGEMENTS_DIR_NAME = "engagements"
 _ACTIVE_ENGAGEMENTS_FILE = "active-engagements.yaml"
 _CONFIG_FILE = "config.yaml"
 _PROVIDERS_FILE = "providers.yaml"
+_SETTINGS_FILE = "settings.yaml"
 _FLEETS_FILE = "fleets.yaml"
 _PATTERNS_DIR_NAME = "patterns"
 _CACHE_DIR_NAME = "cache"
@@ -272,6 +273,11 @@ def get_agent_procedures_path(root: Path, role: str) -> Path:
 def get_config_path(root: Path) -> Path:
     """Return the project-level config file path."""
     return get_harness_dir(root) / _CONFIG_FILE
+
+
+def get_settings_path(root: Path) -> Path:
+    """Return the project-level settings file path."""
+    return get_harness_dir(root) / _SETTINGS_FILE
 
 
 def get_providers_path(root: Path) -> Path:

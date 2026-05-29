@@ -16,9 +16,12 @@ from harness.config.architecture import (
 )
 from harness.config.manager import (
     HarnessConfigManager,
+    NLTranslatorSettings,
+    WebSearchSettings,
     allow_refactoring_suggestions,
     ensure_project_config,
     load_project_config,
+    load_settings,
 )
 from harness.config.provider_models import (
     ProviderConfig,
@@ -35,6 +38,10 @@ __all__ = [
     "allow_refactoring_suggestions",
     "ensure_project_config",
     "load_project_config",
+    # Settings (Wave 8b)
+    "NLTranslatorSettings",
+    "WebSearchSettings",
+    "load_settings",
     # Architecture goal
     "ArchitectureGoal",
     "LayerGoal",

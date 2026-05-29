@@ -321,3 +321,53 @@ class SearXNGProvider(WebSearchProvider):
             results=results,
             timestamp=datetime.now(),
         )
+
+
+# ── Provider factory (V7 §7, Wave 8b) ──────────────────────────────────
+
+
+def create_web_search_provider(
+    provider_name: str = "duckduckgo",
+    searxng_url: str = "http://localhost:8888",
+    timeout_seconds: int = 15,
+) -> WebSearchProvider:
+    """Create a web search provider from configuration.
+
+    Factory function that returns the appropriate provider based on
+    the configured provider name. Designed to be called from settings
+    loaded from ``.harness/settings.yaml``.
+
+    Args:
+        provider_name: "duckduckgo" (default) or "searxng".
+        searxng_url: Base URL for SearXNG instance (only used when
+            provider_name is "searxng").
+        timeout_seconds: HTTP request timeout in seconds.
+
+    Returns:
+        A configured WebSearchProvider instance.
+
+    Raises:
+        ValueError: If provider_name is not "duckduckgo" or "searxng".
+
+    Usage::
+
+        # From settings.yaml:
+        from harness.skills.builtin.web_search import create_web_search_provider
+
+        provider = create_web_search_provider(
+            provider_name="duckduckgo",
+        )
+        result = await provider.search("python type hints")
+    """
+    if provider_name == "duckduckgo":
+        return DuckDuckGoProvider(timeout_seconds=timeout_seconds)
+    elif provider_name == "searxng":
+        return SearXNGProvider(
+            base_url=searxng_url,
+            timeout_seconds=timeout_seconds,
+        )
+    else:
+        raise ValueError(
+            f"Unknown web search provider: '{provider_name}'. "
+            f"Expected 'duckduckgo' or 'searxng'."
+        )

@@ -176,6 +176,7 @@ class AllGatesStrategy(ConvergenceStrategy):
 
 
 class TestSuiteStrategy(ConvergenceStrategy):
+    __test__ = False  # pytest: not a test class
     """Convergence when the project test suite passes.
 
     On failure, test output is captured and fed back.

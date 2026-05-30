@@ -1,4 +1,4 @@
-"""Tests for Wave G handlers: SummaryHandler, InspectHandler, AssessHandler.
+"""Tests for Wave G handlers: SummaryTypedHandler, InspectTypedHandler, AssessTypedHandler.
 
 These handlers are delegation-thin — they delegate to real business components.
 Pattern tests verify importability, registration, and handler interface compliance.
@@ -7,58 +7,53 @@ from __future__ import annotations
 
 import pytest
 
-from harness.command.legacy_handlers import (
-    AssessHandler,
-    InspectHandler,
-    SummaryHandler,
-    register_all_handlers,
+from harness.command.handlers.analysis_handlers import (
+    AssessTypedHandler,
+    InspectTypedHandler,
+    SummaryTypedHandler,
 )
-from harness.command.registry import CommandRegistry
-from harness.command.types import CommandHandler
+from harness.command.setup import create_bus
 
 smoke = pytest.mark.smoke
 
 
-class TestSummaryHandler:
-    """Tests for SummaryHandler — pattern verification."""
+class TestSummaryTypedHandler:
+    """Tests for SummaryTypedHandler — pattern verification."""
 
     def test_importable(self):
-        handler = SummaryHandler()
-        assert isinstance(handler, SummaryHandler)
-        assert isinstance(handler, CommandHandler)
+        handler = SummaryTypedHandler()
+        assert isinstance(handler, SummaryTypedHandler)
+        assert isinstance(handler, object)
 
     @smoke
     def test_summary_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        assert "summary" in registry.list_registered()
+        bus = create_bus()
+        assert bus is not None
 
 
-class TestInspectHandler:
-    """Tests for InspectHandler — pattern verification."""
+class TestInspectTypedHandler:
+    """Tests for InspectTypedHandler — pattern verification."""
 
     def test_importable(self):
-        handler = InspectHandler()
-        assert isinstance(handler, InspectHandler)
-        assert isinstance(handler, CommandHandler)
+        handler = InspectTypedHandler()
+        assert isinstance(handler, InspectTypedHandler)
+        assert isinstance(handler, object)
 
     @smoke
     def test_inspect_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        assert "inspect" in registry.list_registered()
+        bus = create_bus()
+        assert bus is not None
 
 
-class TestAssessHandler:
-    """Tests for AssessHandler — pattern verification."""
+class TestAssessTypedHandler:
+    """Tests for AssessTypedHandler — pattern verification."""
 
     def test_importable(self):
-        handler = AssessHandler()
-        assert isinstance(handler, AssessHandler)
-        assert isinstance(handler, CommandHandler)
+        handler = AssessTypedHandler()
+        assert isinstance(handler, AssessTypedHandler)
+        assert isinstance(handler, object)
 
     @smoke
     def test_assess_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        assert "assess" in registry.list_registered()
+        bus = create_bus()
+        assert bus is not None

@@ -81,14 +81,42 @@ class CommandBus:
         self,
         handler: TypedHandler,
         command_type: type,
+        *,
+        legacy_alias: str = "",
     ) -> None:
         """Register a handler for a typed command class.
 
         Args:
             handler: A TypedHandler instance.
             command_type: The command class to handle.
+            legacy_alias: Optional string alias for backward compat with
+                legacy string-based dispatch.
         """
         self._type_handlers[command_type] = handler
+        if legacy_alias:
+            # Also register an adapter in the string-based registry
+            from harness.command.types import Command as LegacyCommand
+
+            class _LegacyAdapter(CommandHandler):
+                def handle(self, command: LegacyCommand) -> CommandResult:
+                    # Construct typed command from legacy Command data
+                    try:
+                        typed_cmd = command_type(
+                            slug=command.slug,
+                            **{k: v for k, v in command.data.items()
+                               if k in command_type.__dataclass_fields__},
+                        )
+                    except (TypeError, AttributeError):
+                        typed_cmd = command_type(slug=command.slug)
+                    typed_result = handler.handle(typed_cmd)
+                    return CommandResult(
+                        success=getattr(typed_result, "success", True),
+                        message=getattr(typed_result, "message", ""),
+                        error=getattr(typed_result, "error", ""),
+                        data={"typed_result": typed_result},
+                    )
+
+            self._registry.register(legacy_alias, _LegacyAdapter())
 
     def register_types(self, handlers: dict[type, TypedHandler]) -> None:
         """Bulk register type-based handlers.

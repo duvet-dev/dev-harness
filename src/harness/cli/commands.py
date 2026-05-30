@@ -1,22 +1,7 @@
-"""CLI-to-CommandBus command factories and dispatch helper — V7 §12 Wave 8.
+"""CLI-to-CommandBus command factories and dispatch helper.
 
-Translates Click CLI argument patterns into ``Command`` instances for the
-CommandBus. Provides factory functions that accept human-friendly argument
+Provides factory functions that accept human-friendly argument
 naming and produce the correct ``command_type`` and ``data`` fields.
-
-Usage::
-
-    from harness.cli.commands import (
-        dispatch_cli_command,
-    )
-
-    result = dispatch_cli_command(cmd)
-    if result.success:
-        click.echo(result.message)
-    else:
-        click.echo(f"Error: {result.error}", err=True)
-
-R30 (§6 DDD Layering): CLI is a thin translator — no business logic here.
 """
 
 from __future__ import annotations
@@ -28,7 +13,7 @@ from harness.command.setup import create_bus
 from harness.command.types import Command, CommandResult
 
 
-# ── Wave G: Summary / Inspect / Assess (not yet migrated) ────────────
+# ── Command Factory Functions (remaining, for dispatch_cli_command) ──
 
 
 def summary_command(
@@ -38,7 +23,7 @@ def summary_command(
     json_flag: bool = False,
     reconcile: bool = False,
 ) -> Command:
-    """Create a ``Summary`` command for the CommandBus."""
+    """Create a Summary command."""
     return Command(
         slug=engagement or "",
         command_type="summary",
@@ -52,20 +37,17 @@ def summary_command(
 
 
 def inspect_command(root: str = ".") -> Command:
-    """Create an ``Inspect`` command for the CommandBus."""
+    """Create an Inspect command."""
     return Command(slug="", command_type="inspect", data={"root": root})
 
 
 def assess_command(root: str = ".", deep_flag: bool = True) -> Command:
-    """Create an ``Assess`` command for the CommandBus."""
+    """Create an Assess command."""
     return Command(
         slug="",
         command_type="assess",
         data={"root": root, "deep_flag": deep_flag},
     )
-
-
-# ── Wave H: Batch + Lower Priority ─────────────────────────────────
 
 
 def create_waves_from_assessment_command(
@@ -74,7 +56,7 @@ def create_waves_from_assessment_command(
     slug: str = "",
     refactoring: bool = False,
 ) -> Command:
-    """Create a ``CreateWavesFromAssessment`` command."""
+    """Create a CreateWavesFromAssessment command."""
     return Command(
         slug=slug,
         command_type="create_waves_from_assessment",
@@ -86,7 +68,7 @@ def create_wave_from_finding_command(
     finding_id: str,
     slug: str = "",
 ) -> Command:
-    """Create a ``CreateWaveFromFinding`` command."""
+    """Create a CreateWaveFromFinding command."""
     return Command(
         slug=slug,
         command_type="create_wave_from_finding",
@@ -95,17 +77,17 @@ def create_wave_from_finding_command(
 
 
 def list_waves_command(slug: str = "") -> Command:
-    """Create a ``ListWaves`` command."""
+    """Create a ListWaves command."""
     return Command(slug=slug, command_type="list_waves")
 
 
 def wave_status_command(slug: str = "") -> Command:
-    """Create a ``WaveStatus`` command."""
+    """Create a WaveStatus command."""
     return Command(slug=slug, command_type="wave_status")
 
 
 def generate_docs_command(root: str = ".") -> Command:
-    """Create a ``GenerateDocs`` command."""
+    """Create a GenerateDocs command."""
     return Command(slug="", command_type="generate_docs", data={"root": root})
 
 
@@ -114,15 +96,12 @@ def annotate_changelog_command(
     wave: str,
     text: str,
 ) -> Command:
-    """Create an ``AnnotateChangelog`` command."""
+    """Create an AnnotateChangelog command."""
     return Command(
         slug=slug,
         command_type="annotate_changelog",
         data={"wave": wave, "text": text},
     )
-
-
-# ── Wave I: Thin Wrappers ───────────────────────────────────────────
 
 
 def rename_engagement_command(
@@ -131,7 +110,7 @@ def rename_engagement_command(
     branch_strategy: str = "keep",
     dry_run: bool = False,
 ) -> Command:
-    """Create a ``RenameEngagement`` command."""
+    """Create a RenameEngagement command."""
     return Command(
         slug=old_slug,
         command_type="rename_engagement",
@@ -144,7 +123,7 @@ def rename_engagement_command(
 
 
 def set_branch_command(slug: str, branch: str) -> Command:
-    """Create a ``SetBranch`` command."""
+    """Create a SetBranch command."""
     return Command(
         slug=slug,
         command_type="set_branch",
@@ -153,7 +132,7 @@ def set_branch_command(slug: str, branch: str) -> Command:
 
 
 def fix_engagement_command(slug: str, fix_type: str = "metadata") -> Command:
-    """Create a ``FixEngagement`` command."""
+    """Create a FixEngagement command."""
     return Command(
         slug=slug,
         command_type="fix_engagement",
@@ -165,7 +144,7 @@ def refresh_agents_command(
     project_dir: str | None = None,
     force: bool = False,
 ) -> Command:
-    """Create a ``RefreshAgents`` command."""
+    """Create a RefreshAgents command."""
     return Command(
         slug="",
         command_type="refresh_agents",
@@ -180,7 +159,7 @@ def set_governance_command(
     level: str = "standard",
     slug: str = "",
 ) -> Command:
-    """Create a ``SetGovernance`` command."""
+    """Create a SetGovernance command."""
     return Command(
         slug=slug,
         command_type="set_governance",
@@ -189,17 +168,17 @@ def set_governance_command(
 
 
 def agent_list_command() -> Command:
-    """Create an ``AgentList`` command."""
+    """Create an AgentList command."""
     return Command(slug="", command_type="agent_list")
 
 
 def fleet_list_command() -> Command:
-    """Create a ``FleetList`` command."""
+    """Create a FleetList command."""
     return Command(slug="", command_type="fleet_list")
 
 
 def consult_command(question: str = "") -> Command:
-    """Create a ``Consult`` command."""
+    """Create a Consult command."""
     return Command(
         slug="",
         command_type="consult",
@@ -213,17 +192,8 @@ def consult_command(question: str = "") -> Command:
 def dispatch_cli_command(command: Command) -> CommandResult:
     """Dispatch a command through the CommandBus from a CLI context.
 
-    Creates a fresh ``CommandBus`` via ``create_bus()`` with all registered
-    handlers (both legacy and typed), and dispatches the command.
-
-    Args:
-        command: The Command to dispatch.
-
-    Returns:
-        A CommandResult from the registered handler.
-
-    Raises:
-        harness.errors.UnknownCommandError: If no handler is registered.
+    Creates a fresh ``CommandBus`` via ``create_bus()`` with all
+    typed handlers registered, and dispatches the command.
     """
     bus = create_bus()
     return bus.dispatch(command)

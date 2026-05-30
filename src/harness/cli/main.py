@@ -424,11 +424,8 @@ def refresh_agents(project_dir, force):
 def work(description, mode, backend, max_iterations, partial_approval):
     """Start a new engagement.
 
-    Creates a tracked engagement: state snapshot, freshness record,
-    and (when Temporal is available) a durable workflow.
-
-    Optional --max-iterations controls how many edit-feedback cycles a
-    wave can undergo before the harness suggests moving on (soft limit).
+    Dispatches a ``CreateEngagement`` command via the CommandBus.
+    Delegates to ``StartupResumeFlow.create()`` in the handler.
 
     Examples:
 
@@ -439,69 +436,36 @@ def work(description, mode, backend, max_iterations, partial_approval):
         harness work "Fix bugs" --mode auto --no-partial-approval
     """
     try:
-        from harness.state.temporal_adapter import start_engagement
-        from harness.state.temporal_server import ensure_temporal_server
-
         root = require_project_root(command_name="work")
-        repo = GitRepo(root)
-        current_branch = repo.branch()
-        current_head = get_head_sha(root)
-        engagement_id = f"eng-{current_branch}-{current_head[:8]}"
 
-        # Build iteration config
-        iteration_config = {
-            "max_iterations": max_iterations,
-            "escalation_after_max": True,
-            "partial_approval": partial_approval,
-        }
+        import re
+        slug = re.sub(r"[^a-z0-9-]", "-", description.lower().strip())
+        slug = re.sub(r"-+", "-", slug).strip("-")
 
-        # Try to start Temporal workflow
-        temporal_ok = False
-        try:
-            temporal_available = ensure_temporal_server()
-            if temporal_available:
-                asyncio.run(start_engagement(
-                    engagement_id=engagement_id,
-                    description=description,
-                    gate_mode=mode,
-                    iteration_config=iteration_config,
-                ))
-                temporal_ok = True
-        except Exception:
-            click.echo("  (Temporal unavailable — using local state only)")
-
-        # Write snapshot
-        snapshot_path = get_harness_state_path(root)
-        existing = load_project_snapshot(snapshot_path)
-
-        eng = EngagementSnapshot(
-            id=engagement_id,
-            description=description,
-            status="in_progress",
-            gate_mode=mode,
-            phase="requirements",
+        cmd = create_engagement_command(
+            slug=slug,
+            workflow_name="standard",
+            session_type="greenfield",
+            mode=mode,
         )
-        existing.engagements.append(eng)
-        existing.current_engagement = engagement_id
-        SnapshotWriter.write(existing, snapshot_path)
+        result = dispatch_cli_command(cmd)
 
-        # Write freshness
-        record = FreshnessRecord(
-            branch=current_branch,
-            head_sha=current_head,
-            last_reconciled="",
-            stale=False,
-        ).mark_fresh(current_head)
-        save_freshness(record, root)
+        if not result.success:
+            click.echo(f"Failed to start engagement: {result.error}", err=True)
+            raise click.Abort()
 
-        gateway = "temporal" if temporal_ok else "local"
-        click.echo(
-            f"Engagement started: '{description}' (mode: {mode}, "
-            f"gateway: {gateway}, max_iterations: {max_iterations})"
-        )
-        click.echo(f"  ID: {engagement_id}")
-        click.echo(f"  Branch: {current_branch}")
+        click.echo(result.message)
+        data = result.data
+        click.echo(f"  ID: {data.get('slug', slug)}")
+        click.echo(f"  Branch: {data.get('target_branch', '-')}")
+        if data.get('branch_created'):
+            click.echo("  Branch created: yes")
+        warnings = data.get('warnings', [])
+        for w in warnings:
+            click.echo(f"  {w.get('type', 'warning')}: {w.get('message', '')}")
 
+    except click.Abort:
+        raise
     except Exception as exc:
         click.echo(f"Failed to start engagement: {exc}", err=True)
         raise click.Abort()
@@ -2986,9 +2950,11 @@ def rename(old_slug, new_slug, branch_strategy, dry_run):
 def close(slug):
     """Close an engagement by setting its status to completed.
 
-    Checks that all waves are completed before closing (if any exist).
-    Updates ``engagement.md`` with ``completed`` status and timestamp.
-    Removes the branch mapping from ``active-engagements.yaml``.
+    Dispatches an ``AbortEngagement`` command via the CommandBus.
+    Delegates to ``AbortHandler.graceful_stop()`` in the handler.
+
+    CLI guard: validates engagement exists and checks all waves are
+    completed before closing.
 
     Examples:
 
@@ -2997,8 +2963,7 @@ def close(slug):
     try:
         root = require_project_root(command_name="engagement close")
 
-        # Validate engagement exists
-        eng_dir = get_engagement_dir(root, slug)
+        # Validate engagement exists (CLI guard)
         md_file = get_engagement_md(root, slug)
         if not md_file.is_file():
             click.echo(
@@ -3015,7 +2980,7 @@ def close(slug):
             click.echo(f"Engagement '{slug}' is already completed.")
             return
 
-        # Check waves completion
+        # Check waves completion (CLI guard)
         waves_dir = get_engagement_dir(root, slug) / "waves"
         waves_completed = True
         wave_count = 0
@@ -3036,13 +3001,22 @@ def close(slug):
             )
             raise click.Abort()
 
-        # Close the engagement
-        from harness.engagement.lifecycle import close_engagement
-        updated = close_engagement(root, slug)
+        # Dispatch through CommandBus
+        cmd = abort_engagement_command(slug, mode="graceful")
+        result = dispatch_cli_command(cmd)
 
-        click.echo(f"Engagement closed: {slug}")
-        if "completed_at" in updated:
-            click.echo(f"  Completed at: {updated['completed_at']}")
+        if not result.success:
+            click.echo(f"Failed to close engagement: {result.error}", err=True)
+            raise click.Abort()
+
+        click.echo(result.message)
+        data = result.data
+        if data.get("current_phase"):
+            click.echo(f"  Current phase: {data['current_phase']}")
+        if data.get("completed_phases"):
+            click.echo(f"  Completed phases: {', '.join(data['completed_phases'])}")
+        if data.get("previous_status"):
+            click.echo(f"  Previous status: {data['previous_status']}")
 
     except click.Abort:
         raise

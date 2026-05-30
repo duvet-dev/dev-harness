@@ -3,14 +3,21 @@
 Defines the base Command dataclass, CommandResult, and CommandHandler
 abstract base class used by all delegation-thin handlers.
 
-See V7 §5.20 for the design.
+WAVE 1: Adds typed generic infrastructure alongside existing concrete types.
+Old patterns (Command, CommandResult, CommandHandler) remain unchanged for
+backward compatibility during migration.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Generic, Protocol, TypeVar
+
+
+# ====================================================================
+# Legacy types (concrete, backward-compat during migration)
+# ====================================================================
 
 
 @dataclass
@@ -64,3 +71,89 @@ class CommandHandler(ABC):
             CommandResult indicating success or failure.
         """
         ...
+
+
+# ====================================================================
+# New typed infrastructure (Wave 1+)
+# ====================================================================
+
+
+# Type variables for generic handlers
+TCommand_co = TypeVar("TCommand_co", bound=Command, covariant=True)
+TResult_co = TypeVar("TResult_co", bound=CommandResult, covariant=True)
+TCommand = TypeVar("TCommand", bound=Command)
+TResult = TypeVar("TResult", bound=CommandResult)
+
+# Separate type variables for typed command/result subclasses
+TTypedCommand = TypeVar("TTypedCommand", bound="TypedCommand")
+TTypedResult = TypeVar("TTypedResult", bound="TypedResult")
+
+
+class TypedCommand:
+    """Base type for typed commands. Marker base — no shared fields.
+
+    Used by fully typed handlers in the post-migration command subsystem.
+    Subclasses are frozen dataclasses with explicit typed fields.
+    """
+
+    __slots__ = ()  # prevent __dict__ on dataclass subclasses
+
+
+class TypedResult:
+    """Base type for typed results. Shared structural fields.
+
+    Subclasses must define at least: success, message.
+    """
+
+    __slots__ = ()
+
+
+class TypedHandler(ABC, Generic[TCommand, TResult]):
+    """Generic handler for typed commands.
+
+    Handles a single command type and returns a typed result.
+    Type relationship is enforced by the generic signature.
+    """
+
+    @abstractmethod
+    def handle(self, command: TCommand) -> TResult:
+        ...
+
+
+# ── Presenter protocol ─────────────────────────────────────────────
+
+
+class CommandPresenter(Protocol[TResult]):
+    """Format a typed result for display.
+
+    Separate from handler — CLI, REPL, and sessions each have their
+    own presenter implementations.
+    """
+
+    def present(self, result: TResult) -> str:
+        """Return formatted output string (success case)."""
+        ...
+
+    def present_error(self, result: TResult) -> str:
+        """Return formatted error string (failure case)."""
+        ...
+
+
+__all__ = [
+    # Legacy types
+    "Command",
+    "CommandResult",
+    "CommandHandler",
+    # Typed infrastructure
+    "TypedCommand",
+    "TypedResult",
+    "TypedHandler",
+    "CommandPresenter",
+    # Type variables
+    "TCommand",
+    "TResult",
+    "TCommand_co",
+    "TResult_co",
+    "TTypedCommand",
+    "TTypedResult",
+]

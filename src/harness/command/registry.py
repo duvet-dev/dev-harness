@@ -2,8 +2,6 @@
 
 Provides registration and lookup of command handlers by command type
 string. Used by CommandBus to resolve handlers at dispatch time.
-
-See V7 §5.20 for the design.
 """
 
 from __future__ import annotations
@@ -84,3 +82,6 @@ class CommandRegistry:
     def clear(self) -> None:
         """Remove all registered handlers."""
         self._handlers.clear()
+
+    def __len__(self) -> int:
+        return len(self._handlers)

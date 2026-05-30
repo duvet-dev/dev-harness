@@ -1,12 +1,12 @@
-"""Sprint 1 smoke test — post-deployment validation.
+"""Core infrastructure smoke tests — post-deployment validation.
 
-Validates that Waves A, B, C, and M work together correctly:
+Validates that the core harness infrastructure is correctly wired:
 
-- Config files parse (Wave M)
-- CLI commands route through CommandBus (Wave C)
-- AgentOrchestrator is wired (Wave A)
-- SessionOrchestrator is importable (Wave B)
-- Old legacy runtime files are gone
+- Config files exist and are parseable
+- AgentOrchestrator is importable (replaced legacy AgentRunner)
+- SessionOrchestrator is importable (replaced legacy session_loop)
+- CommandBus dispatch works for engagement lifecycle commands
+- Legacy runtime files (agents/runner.py, session/runners.py) are fully removed
 """
 
 from __future__ import annotations
@@ -17,11 +17,11 @@ smoke = pytest.mark.smoke
 
 
 @smoke
-class TestSprint1Smoke:
-    """Integration smoke tests for Sprint 1 refactoring."""
+class TestCoreInfrastructure:
+    """Core harness wiring and legacy removal verification."""
 
     def test_config_files_exist(self):
-        """Wave M: All 7 config files exist at project root."""
+        """All 7 harness config files exist at project root."""
         from pathlib import Path
         root = Path.cwd()
         config_files = [
@@ -41,12 +41,12 @@ class TestSprint1Smoke:
             assert fpath.is_file(), f"Missing: {fname} at {fpath}"
 
     def test_agent_orchestrator_importable(self):
-        """Wave A: AgentOrchestrator is importable."""
+        """AgentOrchestrator replaces legacy AgentRunner."""
         from harness.agents.orchestrator import AgentOrchestrator
         assert AgentOrchestrator is not None
 
     def test_session_orchestrator_importable(self):
-        """Wave B: SessionOrchestrator module is importable."""
+        """SessionOrchestrator replaces legacy session_loop."""
         from harness.session.session_orchestrator import (
             run_chat_session,
             run_phase_session,
@@ -55,7 +55,7 @@ class TestSprint1Smoke:
         assert callable(run_phase_session)
 
     def test_commandbus_dispatch_importable(self):
-        """Wave C: CommandBus dispatch is wired."""
+        """CLI commands route through CommandBus."""
         from harness.cli.commands import (
             create_engagement_command,
             abort_engagement_command,
@@ -66,16 +66,15 @@ class TestSprint1Smoke:
         assert callable(dispatch_cli_command)
 
     def test_legacy_runner_deleted(self):
-        """Wave A: agents/runner.py is deleted."""
+        """agents/runner.py (legacy AgentRunner) is fully removed."""
         import importlib
 
         with pytest.raises((ImportError, ModuleNotFoundError)):
             importlib.import_module("harness.agents.runner")
 
     def test_legacy_runners_deleted(self):
-        """Wave B: session/runners.py is deleted."""
+        """session/runners.py (legacy session_loop) is fully removed."""
         import importlib
 
         with pytest.raises((ImportError, ModuleNotFoundError)):
             importlib.import_module("harness.session.runners")
-

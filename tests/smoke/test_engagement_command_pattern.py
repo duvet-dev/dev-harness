@@ -1,8 +1,12 @@
-"""Sprint 2 smoke test — validates Waves D + E + J.
+"""Engagement lifecycle and phase management smoke tests.
 
-Wave D: FinishEngagementHandler, ReviewEngagementHandler wired
-Wave E: InitProjectHandler, PhaseManagementHandler wired
-Wave J: SessionType shim gone, AgentRole shim gone
+Validates the engagement lifecycle command pattern:
+
+- FinishEngagementHandler and ReviewEngagementHandler are registered
+- InitProjectHandler and PhaseManagementHandler are registered
+- Corresponding CLI command factory functions exist
+- Legacy shim types (SessionType, AgentRole) are fully removed
+- No remaining Fleet/FleetRegistry imports in source code
 """
 
 from __future__ import annotations
@@ -13,51 +17,51 @@ smoke = pytest.mark.smoke
 
 
 @smoke
-class TestSprint2Smoke:
-    """Integration smoke tests for Sprint 2 refactoring."""
+class TestEngagementCommandPattern:
+    """Engagement lifecycle, init/phase commands, and shim removal."""
 
     def test_finish_handler_importable(self):
-        """Wave D: FinishEngagementHandler is registered."""
+        """FinishEngagementHandler is registered."""
         from harness.command.handlers import FinishEngagementHandler
         assert FinishEngagementHandler is not None
 
     def test_review_handler_importable(self):
-        """Wave D: ReviewEngagementHandler is registered."""
+        """ReviewEngagementHandler is registered."""
         from harness.command.handlers import ReviewEngagementHandler
         assert ReviewEngagementHandler is not None
 
     def test_init_handler_importable(self):
-        """Wave E: InitProjectHandler is registered."""
+        """InitProjectHandler is registered."""
         from harness.command.handlers import InitProjectHandler
         assert InitProjectHandler is not None
 
     def test_phase_handler_importable(self):
-        """Wave E: PhaseManagementHandler is registered."""
+        """PhaseManagementHandler is registered."""
         from harness.command.handlers import PhaseManagementHandler
         assert PhaseManagementHandler is not None
 
     def test_finish_factory_importable(self):
-        """Wave D: finish_engagement_command factory exists."""
+        """finish_engagement_command factory exists."""
         from harness.cli.commands import finish_engagement_command
         assert callable(finish_engagement_command)
 
     def test_review_factory_importable(self):
-        """Wave D: review_engagement_command factory exists."""
+        """review_engagement_command factory exists."""
         from harness.cli.commands import review_engagement_command
         assert callable(review_engagement_command)
 
     def test_init_factory_importable(self):
-        """Wave E: init_project_command factory exists."""
+        """init_project_command factory exists."""
         from harness.cli.commands import init_project_command
         assert callable(init_project_command)
 
     def test_phase_factory_importable(self):
-        """Wave E: manage_phase_command factory exists."""
+        """manage_phase_command factory exists."""
         from harness.cli.commands import manage_phase_command
         assert callable(manage_phase_command)
 
     def test_sessiontype_shim_gone(self):
-        """Wave J: SessionType shim removed from helpers."""
+        """SessionType shim class removed from helpers.py."""
         import inspect
         import harness.session.helpers as helpers_mod
         source = inspect.getsource(helpers_mod)
@@ -66,7 +70,7 @@ class TestSprint2Smoke:
         )
 
     def test_agentrole_shim_gone(self):
-        """Wave J: AgentRole shim removed from agent_registry."""
+        """AgentRole shim type removed from agent_registry.py."""
         import inspect
         import harness.agents.agent_registry as reg_mod
         source = inspect.getsource(reg_mod)
@@ -80,9 +84,8 @@ class TestSprint2Smoke:
         )
 
     def test_fleet_sweep_clean(self):
-        """Wave J: No Fleet/FleetRegistry imports in src/."""
+        """No Fleet/FleetRegistry imports remain in src/."""
         import subprocess
-        # Only flag actual import lines, not comments
         result = subprocess.run(
             ["grep", "-rn", r"^from.*Fleet\|^import.*Fleet",
              "src/", "--include=*.py"],

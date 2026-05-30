@@ -377,6 +377,84 @@ class TestQueryStatusHandlerExceptions:
 # ── CommandHandler ABC body coverage ────────────────────────────────
 
 
+class TestAgentListHandler:
+    """Wave O: AgentListHandler — lists registered agents."""
+
+    def test_importable(self):
+        from harness.command.handlers import AgentListHandler
+        handler = AgentListHandler()
+        assert isinstance(handler, CommandHandler)
+
+    def test_returns_agent_list(self):
+        from harness.command.handlers import AgentListHandler
+        handler = AgentListHandler()
+        cmd = Command(slug="", command_type="agent_list")
+        result = handler.handle(cmd)
+        assert result.success is True
+        data = result.data
+        assert "agents" in data
+        assert isinstance(data["agents"], list)
+        assert data["count"] >= 1
+
+    def test_registered_in_registry(self):
+        registry = CommandRegistry()
+        register_all_handlers(registry)
+        assert registry.has_handler("agent_list")
+
+
+class TestFleetListHandler:
+    """Wave O: FleetListHandler — lists registered teams."""
+
+    def test_importable(self):
+        from harness.command.handlers import FleetListHandler
+        handler = FleetListHandler()
+        assert isinstance(handler, CommandHandler)
+
+    def test_returns_team_list(self):
+        from harness.command.handlers import FleetListHandler
+        handler = FleetListHandler()
+        cmd = Command(slug="", command_type="fleet_list")
+        result = handler.handle(cmd)
+        assert result.success is True
+        data = result.data
+        assert "teams" in data
+        assert isinstance(data["teams"], list)
+        assert data["count"] >= 1
+
+    def test_registered_in_registry(self):
+        registry = CommandRegistry()
+        register_all_handlers(registry)
+        assert registry.has_handler("fleet_list")
+
+
+class TestConsultHandler:
+    """Wave O: ConsultHandler — routes consultation questions."""
+
+    def test_importable(self):
+        from harness.command.handlers import ConsultHandler
+        handler = ConsultHandler()
+        assert isinstance(handler, CommandHandler)
+
+    def test_routes_question(self):
+        """Consult handler should return a result (matched or unmatched)."""
+        from harness.command.handlers import ConsultHandler
+        handler = ConsultHandler()
+        cmd = Command(
+            slug="",
+            command_type="consult",
+            data={"question": "architecture review"},
+        )
+        result = handler.handle(cmd)
+        # Built-in teams may not have consultations; handler should not crash
+        isinstance(result, CommandResult)
+        assert "status" in result.data
+
+    def test_registered_in_registry(self):
+        registry = CommandRegistry()
+        register_all_handlers(registry)
+        assert registry.has_handler("consult")
+
+
 class TestCommandHandlerAbstractBody:
     """Coverage for CommandHandler.handle() abstract body (line 66)."""
 

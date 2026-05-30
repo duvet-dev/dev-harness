@@ -230,6 +230,42 @@ class TestDispatchCliCommand:
         assert "already exists" in result2.error.lower()
 
 
+class TestWaveOCommandFactories:
+    """Tests for Wave O factory functions — agent_list, fleet_list, consult."""
+
+    def test_agent_list_command(self):
+        """agent_list_command() creates correct Command."""
+        from harness.cli.commands import agent_list_command
+        cmd = agent_list_command()
+        assert cmd.command_type == "agent_list"
+        assert cmd.slug == ""
+
+    def test_fleet_list_command(self):
+        """fleet_list_command() creates correct Command."""
+        from harness.cli.commands import fleet_list_command
+        cmd = fleet_list_command()
+        assert cmd.command_type == "fleet_list"
+        assert cmd.slug == ""
+
+    def test_consult_command(self):
+        """consult_command() creates correct Command."""
+        from harness.cli.commands import consult_command
+        cmd = consult_command(question="architecture review", team_filter="architecture", mode="blocking")
+        assert cmd.command_type == "consult"
+        assert cmd.slug == ""
+        assert cmd.data["question"] == "architecture review"
+        assert cmd.data["team_filter"] == "architecture"
+        assert cmd.data["mode"] == "blocking"
+
+    def test_consult_command_minimal(self):
+        """consult_command() with just a question."""
+        from harness.cli.commands import consult_command
+        cmd = consult_command(question="Is this OK?")
+        assert cmd.data["question"] == "Is this OK?"
+        assert cmd.data["team_filter"] is None
+        assert cmd.data["mode"] == "advisory"
+
+
 class TestRoundTripIntegration:
     """Integration: factory + dispatch for all supported command types."""
 
@@ -242,6 +278,9 @@ class TestRoundTripIntegration:
             ("abort_engagement", lambda: abort_engagement_command("test")),
             ("query_status", lambda: query_status_command("test")),
             ("query_whats_next", lambda: query_whats_next_command("test")),
+            ("agent_list", lambda: __import__("harness.cli.commands", fromlist=["agent_list_command"]).agent_list_command()),
+            ("fleet_list", lambda: __import__("harness.cli.commands", fromlist=["fleet_list_command"]).fleet_list_command()),
+            ("consult", lambda: __import__("harness.cli.commands", fromlist=["consult_command"]).consult_command(question="architecture review")),
         ]
         for cmd_type, factory in types_and_factories:
             cmd = factory()

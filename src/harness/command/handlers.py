@@ -2271,6 +2271,111 @@ class SetGovernanceHandler(CommandHandler):
             )
 
 
+# ── Wave O: Agent / Fleet / Consult handlers ────────────────────────
+
+
+class AgentListHandler(CommandHandler):
+    """Lists all registered agent roles with their tags and team."""
+
+    def handle(self, command: Command) -> CommandResult:
+        """List all registered agent roles."""
+        try:
+            from harness.agents.agent_registry import AGENTS, list_agent_roles
+
+            roles = list_agent_roles()
+            agents_data = []
+            for spec in AGENTS:
+                agents_data.append({
+                    "role": spec.role,
+                    "tags": list(getattr(spec, "tags", []) or []),
+                })
+
+            return CommandResult(
+                success=True,
+                message=f"{len(agents_data)} agent(s) registered.",
+                data={"agents": agents_data, "count": len(agents_data)},
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Agent list failed: {exc}",
+            )
+
+
+class FleetListHandler(CommandHandler):
+    """Lists all registered teams with their agent count."""
+
+    def handle(self, command: Command) -> CommandResult:
+        """List all registered teams."""
+        try:
+            from harness.team.registry import TeamRegistry
+            from harness.team.defaults import get_builtin_teams
+
+            registry = TeamRegistry(builtin=get_builtin_teams())
+            team_names = registry.list_teams()
+            teams_data = []
+            for name in team_names:
+                team = registry.resolve(name)
+                teams_data.append({
+                    "name": team.name,
+                    "agent_count": len(team.agents),
+                    "description": team.description,
+                })
+
+            return CommandResult(
+                success=True,
+                message=f"{len(teams_data)} team(s) registered.",
+                data={"teams": teams_data, "count": len(teams_data)},
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Fleet list failed: {exc}",
+            )
+
+
+class ConsultHandler(CommandHandler):
+    """Routes a consultation question to matching teams."""
+
+    def handle(self, command: Command) -> CommandResult:
+        """Route a consultation question."""
+        try:
+            from harness.team.registry import TeamRegistry
+            from harness.team.defaults import get_builtin_teams
+            from harness.agents.consultation import ConsultationOrchestrator
+
+            question = command.data.get("question", "")
+            team_filter = command.data.get("team_filter")
+            mode = command.data.get("mode", "advisory")
+
+            registry = TeamRegistry(builtin=get_builtin_teams())
+            orch = ConsultationOrchestrator(registry)
+            result = orch.route(question, mode=mode, team_filter=team_filter)
+
+            return CommandResult(
+                success=result.status == "matched",
+                message=result.summary,
+                data={
+                    "status": result.status,
+                    "capability": result.capability,
+                    "team_name": result.team_name,
+                    "mode": result.mode,
+                    "response": result.response,
+                },
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Consultation failed: {exc}",
+            )
+
+
 # ── Convenience: register all handlers ──────────────────────────────
 
 
@@ -2319,5 +2424,9 @@ def register_all_handlers(
         "fix_engagement": FixEngagementHandler(),
         "refresh_agents": RefreshAgentsHandler(),
         "set_governance": SetGovernanceHandler(),
+        # Wave O: Agent / Fleet / Consult
+        "agent_list": AgentListHandler(),
+        "fleet_list": FleetListHandler(),
+        "consult": ConsultHandler(),
     }
     registry.register_all(handlers)

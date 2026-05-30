@@ -515,6 +515,49 @@ def set_governance_command(
     )
 
 
+# ── Wave O: Agent / Fleet / Consult ────────────────────────────────────
+
+
+def agent_list_command() -> Command:
+    """Create an ``AgentList`` command for the CommandBus.
+
+    Returns:
+        A Command with ``command_type="agent_list"``.
+    """
+    return Command(slug="", command_type="agent_list")
+
+
+def fleet_list_command() -> Command:
+    """Create a ``FleetList`` command for the CommandBus.
+
+    Returns:
+        A Command with ``command_type="fleet_list"``.
+    """
+    return Command(slug="", command_type="fleet_list")
+
+
+def consult_command(
+    question: str,
+    team_filter: str | None = None,
+    mode: str = "advisory",
+) -> Command:
+    """Create a ``Consult`` command for the CommandBus.
+
+    Args:
+        question: The consultation question text.
+        team_filter: Optional team name to limit the search.
+        mode: Consultation mode ("advisory" or "blocking").
+
+    Returns:
+        A Command with ``command_type="consult"``.
+    """
+    return Command(
+        slug="",
+        command_type="consult",
+        data={"question": question, "team_filter": team_filter, "mode": mode},
+    )
+
+
 # ── Dispatch Helper ────────────────────────────────────────────────────
 
 

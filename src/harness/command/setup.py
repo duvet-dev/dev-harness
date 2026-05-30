@@ -97,6 +97,72 @@ def create_bus() -> CommandBus:
     bus.register_type(SessionTypedHandler(), SessionCommand)
     bus.register_type(ChatTypedHandler(), ChatCommand)
 
+    # ── Register Wave 4 typed handlers (analysis, batch, mgmt) ──────────
+    from harness.command.handlers.analysis_handlers import (
+        AssessTypedHandler,
+        InspectTypedHandler,
+        SummaryTypedHandler,
+    )
+    from harness.command.handlers.batch_handlers import (
+        AnnotateChangelogTypedHandler,
+        CreateWaveFromFindingTypedHandler,
+        CreateWavesFromAssessmentTypedHandler,
+        GenerateDocsTypedHandler,
+        ListWavesTypedHandler,
+        WaveStatusTypedHandler,
+    )
+    from harness.command.handlers.mgmt_handlers import (
+        AgentListTypedHandler,
+        ConsultTypedHandler,
+        FixEngagementTypedHandler,
+        FleetListTypedHandler,
+        RefreshAgentsTypedHandler,
+        RenameEngagementTypedHandler,
+        SetBranchTypedHandler,
+        SetGovernanceTypedHandler,
+    )
+    from harness.command.commands.analysis import (
+        AssessCommand,
+        InspectCommand,
+        SummaryCommand,
+    )
+    from harness.command.commands.batch import (
+        AnnotateChangelogCommand,
+        CreateWaveFromFindingCommand,
+        CreateWavesFromAssessmentCommand,
+        GenerateDocsCommand,
+        ListWavesCommand,
+        WaveStatusCommand,
+    )
+    from harness.command.commands.mgmt import (
+        AgentListCommand,
+        ConsultCommand,
+        FixEngagementCommand,
+        FleetListCommand,
+        RefreshAgentsCommand,
+        RenameEngagementCommand,
+        SetBranchCommand,
+        SetGovernanceCommand,
+    )
+
+    bus.register_type(SummaryTypedHandler(), SummaryCommand)
+    bus.register_type(InspectTypedHandler(), InspectCommand)
+    bus.register_type(AssessTypedHandler(), AssessCommand)
+    bus.register_type(CreateWavesFromAssessmentTypedHandler(), CreateWavesFromAssessmentCommand)
+    bus.register_type(CreateWaveFromFindingTypedHandler(), CreateWaveFromFindingCommand)
+    bus.register_type(ListWavesTypedHandler(), ListWavesCommand)
+    bus.register_type(WaveStatusTypedHandler(), WaveStatusCommand)
+    bus.register_type(GenerateDocsTypedHandler(), GenerateDocsCommand)
+    bus.register_type(AnnotateChangelogTypedHandler(), AnnotateChangelogCommand)
+    bus.register_type(RenameEngagementTypedHandler(), RenameEngagementCommand)
+    bus.register_type(SetBranchTypedHandler(), SetBranchCommand)
+    bus.register_type(FixEngagementTypedHandler(), FixEngagementCommand)
+    bus.register_type(RefreshAgentsTypedHandler(), RefreshAgentsCommand)
+    bus.register_type(SetGovernanceTypedHandler(), SetGovernanceCommand)
+    bus.register_type(AgentListTypedHandler(), AgentListCommand)
+    bus.register_type(FleetListTypedHandler(), FleetListCommand)
+    bus.register_type(ConsultTypedHandler(), ConsultCommand)
+
     return bus
 
 

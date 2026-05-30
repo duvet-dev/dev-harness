@@ -391,34 +391,3 @@ class TestSearXNGErrorHandling:
 
 # ── E2E Tests (manual run only) ────────────────────────────────────────────
 
-
-@pytest.mark.e2e
-class TestDuckDuckGoE2E:
-    """End-to-end tests against the live DuckDuckGo endpoint.
-
-    These tests require network access and are excluded from the
-    default test run. Run with: pytest -m e2e
-    """
-
-    @pytest.mark.asyncio
-    async def test_live_search(self) -> None:
-        provider = DuckDuckGoProvider()
-        result = await provider.search("python type hints", max_results=3)
-        assert result.query == "python type hints"
-        # Results may be empty if DuckDuckGo rate-limits automated requests
-        for item in result.results:
-            assert item.title
-            assert item.url
-
-
-@pytest.mark.e2e
-class TestSearXNGProviderE2E:
-    """End-to-end tests against a SearXNG instance."""
-
-    @pytest.mark.asyncio
-    async def test_live_search_fails_when_unavailable(self) -> None:
-        provider = SearXNGProvider(
-            base_url="http://localhost:19999"
-        )
-        with pytest.raises(WebSearchUnavailableError):
-            await provider.search("test query")

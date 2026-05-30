@@ -16,3 +16,8 @@ def pytest_configure(config):
         "e2e: tests requiring external dependencies (LLM APIs, live services). "
         "Skipped by default. Run with `pytest -m e2e`.",
     )
+    config.addinivalue_line(
+        "markers",
+        "smoke: integration smoke tests for post-deployment validation. "
+        "Run with `pytest -m smoke`.",
+    )

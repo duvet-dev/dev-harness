@@ -118,6 +118,12 @@ test-e2e:
 	@echo ""
 	@echo "✓ E2E tests complete."
 
+.PHONY: test-smoke
+test-smoke:
+	$(PYTHON) -m pytest -m smoke --tb=short -v
+	@echo ""
+	@echo "✓ Smoke tests complete."
+
 .PHONY: test-verbose
 test-verbose:
 	$(PYTHON) -m pytest tests/ -W error::RuntimeWarning --tb=long -v --durations=10 2>&1

@@ -39,6 +39,24 @@ def create_bus() -> CommandBus:
         PhaseManagementTypedHandler,
     )
     from harness.command.handlers.project_handlers import InitProjectTypedHandler
+    from harness.command.handlers.session_handlers import (
+        ChatTypedHandler,
+        SessionTypedHandler,
+    )
+    from harness.command.handlers.wave_handlers import (
+        CreateWaveTypedHandler,
+        ExecuteStepTypedHandler,
+        RunWaveTypedHandler,
+    )
+    from harness.command.handlers.review_handlers import (
+        FinishEngagementTypedHandler,
+        ReviewEngagementTypedHandler,
+    )
+    from harness.command.handlers.misc_handlers import (
+        NextTypedHandler,
+        QueryStatusTypedHandler,
+        QueryWhatsNextTypedHandler,
+    )
     from harness.command.commands.engagement import (
         AbortEngagementCommand,
         CreateEngagementCommand,
@@ -46,6 +64,21 @@ def create_bus() -> CommandBus:
     )
     from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
     from harness.command.commands.project import InitProjectCommand
+    from harness.command.commands.session import ChatCommand, SessionCommand
+    from harness.command.commands.wave import (
+        CreateWaveCommand,
+        ExecuteStepCommand,
+        RunWaveCommand,
+    )
+    from harness.command.commands.review import (
+        FinishEngagementCommand,
+        ReviewEngagementCommand,
+    )
+    from harness.command.commands.misc import (
+        NextCommand,
+        QueryStatusCommand,
+        QueryWhatsNextCommand,
+    )
 
     bus.register_type(CreateEngagementHandler(), CreateEngagementCommand)
     bus.register_type(ResumeEngagementHandler(), ResumeEngagementCommand)
@@ -53,6 +86,16 @@ def create_bus() -> CommandBus:
     bus.register_type(EnterPhaseTypedHandler(), EnterPhaseCommand)
     bus.register_type(PhaseManagementTypedHandler(), ManagePhaseCommand)
     bus.register_type(InitProjectTypedHandler(), InitProjectCommand)
+    bus.register_type(NextTypedHandler(), NextCommand)
+    bus.register_type(CreateWaveTypedHandler(), CreateWaveCommand)
+    bus.register_type(ExecuteStepTypedHandler(), ExecuteStepCommand)
+    bus.register_type(QueryStatusTypedHandler(), QueryStatusCommand)
+    bus.register_type(QueryWhatsNextTypedHandler(), QueryWhatsNextCommand)
+    bus.register_type(FinishEngagementTypedHandler(), FinishEngagementCommand)
+    bus.register_type(ReviewEngagementTypedHandler(), ReviewEngagementCommand)
+    bus.register_type(RunWaveTypedHandler(), RunWaveCommand)
+    bus.register_type(SessionTypedHandler(), SessionCommand)
+    bus.register_type(ChatTypedHandler(), ChatCommand)
 
     return bus
 

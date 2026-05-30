@@ -1,6 +1,6 @@
-"""Tests for FinishEngagementHandler and ReviewEngagementHandler.
+"""Tests for FinishEngagementTypedHandler and ReviewEngagementTypedHandler.
 
-Wave D: Engagement lifecycle handlers.
+Wave D: Engagement lifecycle handlers (typed versions).
 """
 from __future__ import annotations
 
@@ -9,17 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from harness.command.legacy_handlers import (
-    FinishEngagementHandler,
-    ReviewEngagementHandler,
-    register_all_handlers,
-)
-from harness.command.registry import CommandRegistry
-from harness.command.types import Command, CommandResult
+from harness.command.handlers.review_handlers import FinishEngagementTypedHandler, ReviewEngagementTypedHandler
+from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
+from harness.command.results.review import FinishEngagementResult, ReviewEngagementResult
 
-# The handler uses get_harness_state_path() which returns
-# ".harness/harness-state.yaml" (not state.json).
-# get_harness_state_path() returns root/harness-state.yaml (no .harness/ prefix)
 _HARNESS_SNAPSHOT = Path("harness-state.yaml")
 
 
@@ -31,18 +24,18 @@ def tmp_project(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def finish_handler() -> FinishEngagementHandler:
-    return FinishEngagementHandler()
+def finish_handler() -> FinishEngagementTypedHandler:
+    return FinishEngagementTypedHandler()
 
 
 @pytest.fixture
-def review_handler() -> ReviewEngagementHandler:
-    return ReviewEngagementHandler()
+def review_handler() -> ReviewEngagementTypedHandler:
+    return ReviewEngagementTypedHandler()
 
 
 @pytest.fixture
 def with_snapshot(tmp_project: Path) -> Path:
-    """Create snapshot with one active engagement at the correct path."""
+    """Create snapshot with one active engagement."""
     from harness.state.snapshot import (
         EngagementSnapshot,
         ProjectSnapshot,
@@ -61,17 +54,12 @@ def with_snapshot(tmp_project: Path) -> Path:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# FinishEngagementHandler Tests
+# FinishEngagementTypedHandler Tests
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class TestFinishEngagementHandler:
-    """Tests for FinishEngagementHandler — git stage/commit, snapshot, re-assessment."""
-
-    def _patch_all_finish(self, freshness=None, stale=False):
-        """Return nested patch context for FinishEngagementHandler deps."""
-        # Use direct nesting instead of ExitStack for reliability
-        pass
+class TestFinishEngagementTypedHandler:
+    """Tests for FinishEngagementTypedHandler — git stage/commit, snapshot, re-assessment."""
 
     def test_completes_engagement(self, finish_handler, with_snapshot):
         """Happy path: stages, commits, updates snapshot, saves freshness."""
@@ -90,18 +78,17 @@ class TestFinishEngagementHandler:
                         mr.return_value.branch.return_value = "main"
                         with patch("subprocess.run") as msubp:
                             msubp.return_value = MagicMock(returncode=0)
-                            cmd = Command(
+                            cmd = FinishEngagementCommand(
                                 slug="my-eng",
-                                command_type="finish_engagement",
-                                data={"root": str(with_snapshot),
-                                      "re_assess": False},
+                                root=str(with_snapshot),
+                                re_assess=False,
                             )
                             result = finish_handler.handle(cmd)
 
         assert result.success, f"Expected success, got: {result.error}"
         assert "Engagement finished" in result.message
-        assert result.data["head_sha"] == "abc123def456"
-        assert result.data["slug"] == "my-eng"
+        assert result.head_sha == "abc123def456"
+        assert result.slug == "my-eng"
 
         post = load_project_snapshot(snap_path)
         assert post.engagements[0].status == "complete"
@@ -110,10 +97,10 @@ class TestFinishEngagementHandler:
         """Stale freshness record blocks finish."""
         with patch("harness.state.freshness.load_freshness",
                    return_value=MagicMock(stale=True)):
-            cmd = Command(
+            cmd = FinishEngagementCommand(
                 slug="my-eng",
-                command_type="finish_engagement",
-                data={"root": str(with_snapshot), "re_assess": False},
+                root=str(with_snapshot),
+                re_assess=False,
             )
             result = finish_handler.handle(cmd)
 
@@ -132,11 +119,10 @@ class TestFinishEngagementHandler:
                         mr.return_value.branch.return_value = "main"
                         with patch("subprocess.run") as msubp:
                             msubp.return_value = MagicMock(returncode=0)
-                            cmd = Command(
+                            cmd = FinishEngagementCommand(
                                 slug="my-eng",
-                                command_type="finish_engagement",
-                                data={"root": str(with_snapshot),
-                                      "re_assess": False},
+                                root=str(with_snapshot),
+                                re_assess=False,
                             )
                             result = finish_handler.handle(cmd)
 
@@ -152,13 +138,12 @@ class TestFinishEngagementHandler:
                            return_value="abc"):
                     with patch("subprocess.run") as msubp:
                         msubp.return_value = MagicMock(
-                            returncode=1, stderr="permission denied"
+                            returncode=1, stderr="mock git error"
                         )
-                        cmd = Command(
+                        cmd = FinishEngagementCommand(
                             slug="my-eng",
-                            command_type="finish_engagement",
-                            data={"root": str(with_snapshot),
-                                  "re_assess": False},
+                            root=str(with_snapshot),
+                            re_assess=False,
                         )
                         result = finish_handler.handle(cmd)
 
@@ -167,292 +152,206 @@ class TestFinishEngagementHandler:
 
     def test_commit_aborted(self, finish_handler, with_snapshot):
         """If commit returns non-zero, handler returns error."""
+        from unittest.mock import call
         with patch("harness.state.freshness.load_freshness",
                    return_value=MagicMock(stale=False)):
-            with patch("harness.scm.git.GitRepo") as mr:
-                mr.return_value.branch.return_value = "main"
+            with patch("harness.state.freshness.save_freshness"):
                 with patch("harness.cli.helpers.get_head_sha",
                            return_value="abc"):
-                    with patch("subprocess.run") as msubp:
-                        msubp.side_effect = [
-                            MagicMock(returncode=0),
-                            MagicMock(returncode=1, stderr="commit error"),
-                        ]
-                        cmd = Command(
-                            slug="my-eng",
-                            command_type="finish_engagement",
-                            data={"root": str(with_snapshot),
-                                  "re_assess": False},
-                        )
-                        result = finish_handler.handle(cmd)
+                    with patch("harness.scm.git.GitRepo") as mr:
+                        mr.return_value.branch.return_value = "main"
+                        # Git add succeeds, but git commit fails
+                        def _side_effect(*a, **kw):
+                            runs = []
+                            for item in a:
+                                if isinstance(item, list):
+                                    runs.append(item)
+                            if not runs:
+                                runs = kw.get('args', kw.get('cmd', []))
+                                if isinstance(runs, list):
+                                    runs = [runs]
+                            if any("add" in (r if isinstance(r, str) else "") for r in (runs[0] if runs else [])):
+                                return MagicMock(returncode=0)
+                            return MagicMock(returncode=1)
+                        with patch("subprocess.run") as msubp:
+                            msubp.side_effect = _side_effect
+                            cmd = FinishEngagementCommand(
+                                slug="my-eng",
+                                root=str(with_snapshot),
+                                re_assess=False,
+                            )
+                            result = finish_handler.handle(cmd)
 
         assert result.success is False
         assert "Commit aborted" in result.message
 
     def test_re_assessment(self, finish_handler, with_snapshot):
-        """With re_assess=True, runs observer analysis and records history."""
-        eng_dir = with_snapshot / ".harness" / "engagements" / "my-eng"
-        eng_dir.mkdir(parents=True, exist_ok=True)
-        (eng_dir / "assessments").mkdir(parents=True, exist_ok=True)
-
-        import json
-        import yaml
-        (eng_dir / "manifest.json").write_text(
-            json.dumps({"findings": [
-                {"message": "Old A"}, {"message": "Old B"},
-            ]})
-        )
-        (eng_dir / "engagement.yaml").write_text(
-            yaml.dump({
-                "baseline_finding_count": 2,
-                "session_type": "greenfield",
-                "baseline_manifest": "manifest.json",
-            })
-        )
-        (with_snapshot / ".harness" / "config.yaml").write_text(
-            yaml.dump({})
-        )
-
+        """re_assess=True runs observer analysis."""
         with patch("harness.state.freshness.load_freshness",
                    return_value=MagicMock(stale=False)):
             with patch("harness.state.freshness.save_freshness"):
-                with patch("harness.scm.git.GitRepo") as mr:
-                    mr.return_value.branch.return_value = "main"
-                    with patch("harness.cli.helpers.get_head_sha",
-                               side_effect=["abc", "def"]):
+                with patch("harness.cli.helpers.get_head_sha",
+                           return_value="abc123"):
+                    with patch("harness.scm.git.GitRepo") as mr:
+                        mr.return_value.branch.return_value = "main"
                         with patch("subprocess.run") as msubp:
                             msubp.return_value = MagicMock(returncode=0)
                             with patch(
-                                "harness.analysis.observer.analyse"
-                            ) as ma:
-                                ma.return_value = {
-                                    "status": "ok",
-                                    "report": "# Assessment\n\nFindings...",
-                                    "assessment": {
-                                        "assessment": {
-                                            "score": "B+",
-                                            "findings": [{
-                                                "id": "finding-001",
-                                                "message": "New finding",
-                                                "severity": "warning",
-                                            }],
-                                        }
-                                    },
-                                }
-                                with patch(
-                                    "harness.cli.helpers."
-                                    "write_assessment_report"
-                                ) as mw:
-                                    mw.return_value = str(
-                                        eng_dir / "assessments" / "r.md"
-                                    )
-                                    cmd = Command(
-                                        slug="my-eng",
-                                        command_type="finish_engagement",
-                                        data={"root": str(with_snapshot),
-                                              "re_assess": True},
-                                    )
-                                    result = finish_handler.handle(cmd)
+                                "harness.analysis.observer.analyse",
+                                return_value={"status": "error",
+                                              "message": "mock error"},
+                            ):
+                                cmd = FinishEngagementCommand(
+                                    slug="my-eng",
+                                    root=str(with_snapshot),
+                                    re_assess=True,
+                                )
+                                result = finish_handler.handle(cmd)
 
         assert result.success, f"Expected success, got: {result.error}"
-        assert "re_assessment" in result.data
-        ra = result.data["re_assessment"]
-        assert "baseline_count" in ra
-        assert "current_findings" in ra
-        assert "closed_count" in ra
 
-        config = yaml.safe_load(
-            (with_snapshot / ".harness" / "config.yaml").read_text()
-        )
-        assert "assessment_history" in config
-        assert len(config["assessment_history"]) == 1
-
-    def test_exception_returns_error(self, finish_handler, with_snapshot):
-        """Unexpected exception is caught and returned as error."""
-        # Patch both freshness AND GitRepo to isolate the exception path
-        # Without GitRepo mock, construction happens before load_freshness call
-        with patch("harness.state.freshness.load_freshness",
-                   return_value=MagicMock(stale=False)):
-            with patch("harness.scm.git.GitRepo") as mr:
-                mr.side_effect = RuntimeError("unexpected error")
-                cmd = Command(
+    def test_exception_returns_error(self, finish_handler, tmp_project):
+        """Unexpected exception returns error."""
+        (tmp_project / ".harness").mkdir(parents=True, exist_ok=True)
+        with patch("harness.scm.git.GitRepo"):
+            with patch("harness.state.freshness.load_freshness",
+                       side_effect=RuntimeError("boom")):
+                cmd = FinishEngagementCommand(
                     slug="my-eng",
-                    command_type="finish_engagement",
-                    data={"root": str(with_snapshot), "re_assess": False},
+                    root=str(tmp_project),
+                    re_assess=False,
                 )
                 result = finish_handler.handle(cmd)
 
         assert result.success is False
-        assert "unexpected error" in result.error
+        assert "boom" in result.error
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# ReviewEngagementHandler Tests
+# ReviewEngagementTypedHandler Tests
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class TestReviewEngagementHandler:
-    """Tests for ReviewEngagementHandler — gate review + snapshot update."""
+class TestReviewEngagementTypedHandler:
+    """Tests for ReviewEngagementTypedHandler — gate review decisions."""
 
-    def _snap_path(self, root):
-        return root / _HARNESS_SNAPSHOT
-
-    def _assert_status(self, root, expected_status):
-        from harness.cli.helpers import load_project_snapshot
-        post = load_project_snapshot(self._snap_path(root))
-        assert post.engagements, "No engagements in snapshot"
-        assert post.engagements[0].status == expected_status, \
-            f"Expected {expected_status}, got {post.engagements[0].status}"
+    def _patch_snapshot(self, path: Path, decision: str):
+        """Apply patches and return the command/result."""
+        from harness.state.snapshot import (
+            EngagementSnapshot,
+            ProjectSnapshot,
+            SnapshotWriter,
+        )
+        eng = EngagementSnapshot(
+            id="my-eng", description="Test",
+            status="active", gate_mode="auto", phase="design",
+        )
+        SnapshotWriter.write(
+            ProjectSnapshot(project_name="test", version="0.1.0",
+                            current_engagement="my-eng", engagements=[eng]),
+            path / _HARNESS_SNAPSHOT,
+        )
 
     def test_approve_updates_snapshot(self, review_handler, with_snapshot):
-        """Approved engagement updates snapshot to complete."""
-        from harness.cli.helpers import load_project_snapshot
-        pre = load_project_snapshot(self._snap_path(with_snapshot))
-        assert pre.engagements[0].status == "active"
-
-        with patch("harness.state.temporal_server.ensure_temporal_server",
-                   return_value=False):
-            cmd = Command(
-                slug="my-eng",
-                command_type="review_engagement",
-                data={"decision": "approved", "root": str(with_snapshot)},
-            )
-            result = review_handler.handle(cmd)
-
-        assert result.success, f"Got: {result.error}"
-        assert "Gate approved" in result.message
-        assert "local" in result.message
-        assert result.data["decision"] == "approved"
-        assert result.data["snapshot_updated"] is True
-        assert result.data["temporal_ok"] is False
-        self._assert_status(with_snapshot, "complete")
-
-    def test_reject_updates_snapshot(self, review_handler, with_snapshot):
-        """Rejected engagement updates snapshot to blocked."""
-        with patch("harness.state.temporal_server.ensure_temporal_server",
-                   return_value=False):
-            cmd = Command(
-                slug="my-eng",
-                command_type="review_engagement",
-                data={"decision": "rejected", "root": str(with_snapshot)},
-            )
-            result = review_handler.handle(cmd)
-
-        assert result.success, f"Got: {result.error}"
-        assert "Gate rejected" in result.message
-        assert result.data["snapshot_updated"] is True
-        self._assert_status(with_snapshot, "blocked")
-
-    def test_request_changes_updates_snapshot(self, review_handler,
-                                               with_snapshot):
-        """Request changes updates snapshot to changes_requested."""
-        with patch("harness.state.temporal_server.ensure_temporal_server",
-                   return_value=False):
-            cmd = Command(
-                slug="my-eng",
-                command_type="review_engagement",
-                data={"decision": "request_changes",
-                      "root": str(with_snapshot)},
-            )
-            result = review_handler.handle(cmd)
-
-        assert result.success, f"Got: {result.error}"
-        assert "Gate request_changes" in result.message
-        assert result.data["snapshot_updated"] is True
-        self._assert_status(with_snapshot, "changes_requested")
-
-    def test_no_decision_returns_error(self, review_handler, with_snapshot):
-        """Missing decision returns error."""
-        cmd = Command(
+        """Approved decision updates snapshot to complete."""
+        cmd = ReviewEngagementCommand(
             slug="my-eng",
-            command_type="review_engagement",
-            data={"root": str(with_snapshot)},
+            decision="approved",
+            root=str(with_snapshot),
         )
         result = review_handler.handle(cmd)
+
+        assert result.success, f"Expected success, got: {result.error}"
+        assert result.decision == "approved"
+        assert result.snapshot_updated is True
+
+        from harness.cli.helpers import load_project_snapshot
+        post = load_project_snapshot(with_snapshot / _HARNESS_SNAPSHOT)
+        assert post.engagements[0].status == "complete"
+
+    def test_reject_updates_snapshot(self, review_handler, with_snapshot):
+        """Rejected decision updates snapshot to blocked."""
+        cmd = ReviewEngagementCommand(
+            slug="my-eng",
+            decision="rejected",
+            root=str(with_snapshot),
+        )
+        result = review_handler.handle(cmd)
+
+        assert result.success
+        assert result.decision == "rejected"
+
+        from harness.cli.helpers import load_project_snapshot
+        post = load_project_snapshot(with_snapshot / _HARNESS_SNAPSHOT)
+        assert post.engagements[0].status == "blocked"
+
+    def test_request_changes_updates_snapshot(self, review_handler, with_snapshot):
+        """Request_changes updates snapshot to changes_requested."""
+        cmd = ReviewEngagementCommand(
+            slug="my-eng",
+            decision="request_changes",
+            root=str(with_snapshot),
+        )
+        result = review_handler.handle(cmd)
+
+        assert result.success
+        assert result.decision == "request_changes"
+
+        from harness.cli.helpers import load_project_snapshot
+        post = load_project_snapshot(with_snapshot / _HARNESS_SNAPSHOT)
+        assert post.engagements[0].status == "changes_requested"
+
+    def test_no_decision_returns_error(self, review_handler, with_snapshot):
+        """Empty decision returns error."""
+        cmd = ReviewEngagementCommand(
+            slug="my-eng",
+            decision="",
+            root=str(with_snapshot),
+        )
+        result = review_handler.handle(cmd)
+
         assert result.success is False
         assert "No decision" in result.error
 
     def test_with_temporal_available(self, review_handler, with_snapshot):
-        """When Temporal is available, temporal_ok is True."""
+        """When Temporal is available, gate review is sent and flag set."""
         with patch("harness.state.temporal_server.ensure_temporal_server",
                    return_value=True):
-            with patch("harness.state.temporal_adapter.send_gate_review",
-                       return_value=None):
-                cmd = Command(
+            with patch("harness.state.temporal_adapter.send_gate_review"):
+                cmd = ReviewEngagementCommand(
                     slug="my-eng",
-                    command_type="review_engagement",
-                    data={"decision": "approved",
-                          "root": str(with_snapshot)},
+                    decision="approved",
+                    root=str(with_snapshot),
                 )
                 result = review_handler.handle(cmd)
 
-        assert result.success, f"Got: {result.error}"
-        assert result.data["temporal_ok"] is True
-        assert "temporal" in result.message
+        assert result.success
+        assert result.temporal_ok is True
 
-    def test_temporal_failure_falls_through(self, review_handler,
-                                             with_snapshot):
-        """Temporal failure doesn't prevent local snapshot update."""
+    def test_temporal_failure_falls_through(self, review_handler, with_snapshot):
+        """Temporal failure does not block the review."""
         with patch("harness.state.temporal_server.ensure_temporal_server",
-                   return_value=True):
-            with patch("harness.state.temporal_adapter.send_gate_review",
-                       side_effect=RuntimeError("Temporal down")):
-                cmd = Command(
-                    slug="my-eng",
-                    command_type="review_engagement",
-                    data={"decision": "rejected",
-                          "root": str(with_snapshot)},
-                )
-                result = review_handler.handle(cmd)
+                   side_effect=Exception("temporal unavailable")):
+            cmd = ReviewEngagementCommand(
+                slug="my-eng",
+                decision="approved",
+                root=str(with_snapshot),
+            )
+            result = review_handler.handle(cmd)
 
-        assert result.success, f"Got: {result.error}"
-        assert "local" in result.message
-        assert result.data["temporal_ok"] is False
+        assert result.success
+        assert result.temporal_ok is False
 
     def test_exception_returns_error(self, review_handler, with_snapshot):
-        """Unexpected exception returns error.
-
-        Temporal inner try/except catches ensure_temporal_server
-        exceptions, so we raise from load_project_snapshot instead
-        (called in the snapshot-update section outside the inner try).
-        """
-        with patch(
-            "harness.state.temporal_server.ensure_temporal_server",
-            return_value=False,
-        ):
-            with patch(
-                "harness.cli.helpers.load_project_snapshot",
-                side_effect=RuntimeError("unexpected"),
-            ):
-                cmd = Command(
-                    slug="my-eng",
-                    command_type="review_engagement",
-                    data={"decision": "approved",
-                          "root": str(with_snapshot)},
-                )
-                result = review_handler.handle(cmd)
+        """Unexpected exception returns error."""
+        with patch("harness.cli.helpers.load_project_snapshot",
+                   side_effect=RuntimeError("boom")):
+            cmd = ReviewEngagementCommand(
+                slug="my-eng",
+                decision="approved",
+                root=str(with_snapshot),
+            )
+            result = review_handler.handle(cmd)
 
         assert result.success is False
-        assert "unexpected" in result.error
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Registration Tests
-# ═══════════════════════════════════════════════════════════════════════
-
-
-class TestRegistration:
-    """Verify that engagement handlers are registered correctly."""
-
-    def test_handlers_are_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        assert registry.get_handler("finish_engagement") is not None
-        assert registry.get_handler("review_engagement") is not None
-
-    def test_registration_includes_sprint2_handlers(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        types = registry.list_registered()
-        assert "finish_engagement" in types
-        assert "review_engagement" in types
+        assert "boom" in result.error

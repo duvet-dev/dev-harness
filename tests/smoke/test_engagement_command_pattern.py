@@ -21,14 +21,14 @@ class TestEngagementCommandPattern:
     """Engagement lifecycle, init/phase commands, and shim removal."""
 
     def test_finish_handler_importable(self):
-        """FinishEngagementHandler is registered."""
-        from harness.command.legacy_handlers import FinishEngagementHandler
-        assert FinishEngagementHandler is not None
+        """FinishEngagementTypedHandler is importable."""
+        from harness.command.handlers.review_handlers import FinishEngagementTypedHandler
+        assert FinishEngagementTypedHandler is not None
 
     def test_review_handler_importable(self):
-        """ReviewEngagementHandler is registered."""
-        from harness.command.legacy_handlers import ReviewEngagementHandler
-        assert ReviewEngagementHandler is not None
+        """ReviewEngagementTypedHandler is importable."""
+        from harness.command.handlers.review_handlers import ReviewEngagementTypedHandler
+        assert ReviewEngagementTypedHandler is not None
 
     def test_init_handler_importable(self):
         """InitProjectTypedHandler is importable."""
@@ -41,14 +41,14 @@ class TestEngagementCommandPattern:
         assert PhaseManagementTypedHandler is not None
 
     def test_finish_factory_importable(self):
-        """finish_engagement_command factory exists."""
-        from harness.cli.commands import finish_engagement_command
-        assert callable(finish_engagement_command)
+        """FinishEngagementCommand typed command is importable."""
+        from harness.command.commands.review import FinishEngagementCommand
+        assert FinishEngagementCommand is not None
 
     def test_review_factory_importable(self):
-        """review_engagement_command factory exists."""
-        from harness.cli.commands import review_engagement_command
-        assert callable(review_engagement_command)
+        """ReviewEngagementCommand typed command is importable."""
+        from harness.command.commands.review import ReviewEngagementCommand
+        assert ReviewEngagementCommand is not None
 
     def test_init_factory_importable(self):
         """InitProjectCommand typed command is importable."""

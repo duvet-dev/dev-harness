@@ -26,6 +26,10 @@ from harness.command.commands.engagement import (
 )
 from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
 from harness.command.commands.project import InitProjectCommand
+from harness.command.commands.session import ChatCommand, SessionCommand
+from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
+from harness.command.commands.misc import QueryStatusCommand, QueryWhatsNextCommand
+from harness.command.commands.wave import RunWaveCommand
 
 
 # ── History ──────────────────────────────────────────────────────────────────
@@ -207,21 +211,21 @@ COMMAND_MAP: dict[str, tuple[Callable[..., Command], Callable[[list[str]], dict[
     "enter-phase":                    (lambda **kw: EnterPhaseCommand(**kw), lambda a: {"slug": a[0], "phase": a[1]} if len(a) >= 2 else {}),
     "phase":                         (lambda **kw: ManagePhaseCommand(**kw), _phase_args),
     # Session / chat
-    "session":                       (lambda **kw: __import__("harness.cli.commands", fromlist=["session_command"]).session_command(**kw), _session_args),
-    "chat":                          (lambda **kw: __import__("harness.cli.commands", fromlist=["chat_command"]).chat_command(**kw), _chat_args),
+    "session":                       (lambda **kw: SessionCommand(**kw), _session_args),
+    "chat":                          (lambda **kw: ChatCommand(**kw), _chat_args),
     "work":                          (lambda **kw: CreateEngagementCommand(**kw), _work_args),
     "init":                          (lambda **kw: InitProjectCommand(**kw), _init_args),
-    "finish":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["finish_engagement_command"]).finish_engagement_command(**kw), _finish_args),
-    "review":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["review_engagement_command"]).review_engagement_command(**kw), _review_args),
+    "finish":                        (lambda **kw: FinishEngagementCommand(**kw), _finish_args),
+    "review":                        (lambda **kw: ReviewEngagementCommand(**kw), _review_args),
     "summary":                       (lambda **kw: __import__("harness.cli.commands", fromlist=["summary_command"]).summary_command(**kw), _summary_args),
     "inspect":                       (lambda **kw: __import__("harness.cli.commands", fromlist=["inspect_command"]).inspect_command(**kw), _inspect_args),
     "assess":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["assess_command"]).assess_command(**kw), _assess_args),
-    "status":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["query_status_command"]).query_status_command(**kw), _single_arg),
-    "whatsnext":                     (lambda **kw: __import__("harness.cli.commands", fromlist=["query_whats_next_command"]).query_whats_next_command(**kw), _single_arg),
+    "status":                        (lambda **kw: QueryStatusCommand(**kw), _single_arg),
+    "whatsnext":                     (lambda **kw: QueryWhatsNextCommand(**kw), _single_arg),
     "generate-docs":                 (lambda **kw: __import__("harness.cli.commands", fromlist=["generate_docs_command"]).generate_docs_command(**kw), lambda a: {"root": a[0] if a else "."}),
     # Wave management
     "wave list":                     (lambda **kw: __import__("harness.cli.commands", fromlist=["list_waves_command"]).list_waves_command(**kw), _no_args),
-    "wave run":                      (lambda **kw: __import__("harness.cli.commands", fromlist=["run_wave_command"]).run_wave_command(**kw), _run_wave_args),
+    "wave run":                      (lambda **kw: RunWaveCommand(**kw), _run_wave_args),
     "wave status":                   (lambda **kw: __import__("harness.cli.commands", fromlist=["wave_status_command"]).wave_status_command(**kw), _no_args),
     "wave create-from-assessment":   (lambda **kw: __import__("harness.cli.commands", fromlist=["create_waves_from_assessment_command"]).create_waves_from_assessment_command(**kw), _create_wave_from_assessment_args),
     "wave create-from-finding":      (lambda **kw: __import__("harness.cli.commands", fromlist=["create_wave_from_finding_command"]).create_wave_from_finding_command(**kw), _create_wave_from_finding_args),
@@ -492,9 +496,10 @@ class HarnessREPL:
             phase = cmd_args[0] if cmd_args else "assessment-triage"
 
             # Dispatch session command through CommandBus first
-            from harness.cli.commands import session_command
-            cmd = session_command(slug=slug, phase=phase, get_well=True)
-            result = _dispatch_via_bus(cmd)
+            from harness.command.commands.session import SessionCommand
+            bus = _build_command_bus()
+            cmd = SessionCommand(slug=slug, phase=phase, get_well=True)
+            result = bus.dispatch(cmd)
             if not result.success:
                 click.echo(f"Session setup failed: {result.error}", err=True)
                 return True
@@ -534,9 +539,10 @@ class HarnessREPL:
             phase = cleaned[0] if cleaned else ("assessment-triage" if is_get_well else "requirements")
 
             # Dispatch session command through CommandBus
-            from harness.cli.commands import session_command
-            cmd = session_command(slug=slug, phase=phase, get_well=is_get_well)
-            result = _dispatch_via_bus(cmd)
+            from harness.command.commands.session import SessionCommand
+            bus = _build_command_bus()
+            cmd = SessionCommand(slug=slug, phase=phase, get_well=is_get_well)
+            result = bus.dispatch(cmd)
             if not result.success:
                 click.echo(f"Session setup failed: {result.error}", err=True)
                 return True

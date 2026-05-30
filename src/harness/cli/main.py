@@ -19,14 +19,6 @@ import click
 from harness._version import __version__, __build__, __build_date__, __commit__
 from harness.cli.commands import (
     dispatch_cli_command,
-    finish_engagement_command,
-    next_command,
-    query_status_command,
-    query_whats_next_command,
-    review_engagement_command,
-    run_wave_command,
-    session_command,
-    chat_command,
     summary_command,
     inspect_command,
     assess_command,
@@ -50,6 +42,10 @@ from harness.command.commands.engagement import (
 )
 from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
 from harness.command.commands.project import InitProjectCommand
+from harness.command.commands.misc import NextCommand, QueryStatusCommand, QueryWhatsNextCommand
+from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
+from harness.command.commands.session import ChatCommand, SessionCommand
+from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand, RunWaveCommand
 from harness.cli.helpers import (
     bold,
     find_project_root,
@@ -172,8 +168,9 @@ def whatsnext(slug):
         harness whatsnext my-engagement
     """
     try:
-        cmd = query_whats_next_command(slug)
-        result = dispatch_cli_command(cmd)
+        bus = create_bus()
+        cmd = QueryWhatsNextCommand(slug=slug)
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo("WhatsNext query failed: " + result.error, err=True)
@@ -926,8 +923,9 @@ def run_wave(wave_id, no_test, backend, slug):
             )
             raise click.Abort()
 
-        cmd = run_wave_command(slug=slug, wave_id=wave_id, no_test=no_test, backend=backend)
-        result = dispatch_cli_command(cmd)
+        bus = create_bus()
+        cmd = RunWaveCommand(slug=slug, wave_id=wave_id, no_test=no_test, backend=backend)
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo(f"Error running wave cycle: {result.error}", err=True)
@@ -1063,8 +1061,9 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
             click.echo(f"Engagement '{slug}' not found.", err=True)
             raise click.Abort()
 
-        cmd = chat_command(slug=slug, prompt=prompt_text, phase=phase, context_tier=context_tier)
-        result = dispatch_cli_command(cmd)
+        bus = create_bus()
+        cmd = ChatCommand(slug=slug, prompt=prompt_text, phase=phase, context_tier=context_tier)
+        result = bus.dispatch(cmd)
         if not result.success:
             click.echo(f"Chat error: {result.error}", err=True)
             raise click.Abort()
@@ -1128,14 +1127,15 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
         if get_well and effective_phase == "requirements":
             effective_phase = "assessment-triage"
 
-        cmd = session_command(
+        bus = create_bus()
+        cmd = SessionCommand(
             slug=slug,
             phase=effective_phase,
             session_type=resolved_type,
             context_tier=context_tier,
             get_well=get_well,
         )
-        result = dispatch_cli_command(cmd)
+        result = bus.dispatch(cmd)
         if not result.success:
             click.echo(f"Session error: {result.error}", err=True)
             raise click.Abort()
@@ -1192,12 +1192,13 @@ def review(engagement_id, approve, reject, request_changes,
 
     try:
         root = require_project_root(command_name="review")
-        cmd = review_engagement_command(
+        bus = create_bus()
+        cmd = ReviewEngagementCommand(
             slug=engagement_id,
             decision=decision,
             root=root,
         )
-        result = dispatch_cli_command(cmd)
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo(f"Review failed: {result.error}", err=True)
@@ -1227,8 +1228,9 @@ def status(slug, force):
         harness status my-engagement
     """
     try:
-        cmd = query_status_command(slug or "")
-        result = dispatch_cli_command(cmd)
+        bus = create_bus()
+        cmd = QueryStatusCommand(slug=slug or "")
+        result = bus.dispatch(cmd)
         if result.success:
             data = result.data
             click.echo("Engagement: " + str(data.get('slug', slug or '(active)')))
@@ -1558,8 +1560,9 @@ def finish(re_assess):
     try:
         root = require_project_root(command_name="finish")
 
-        cmd = finish_engagement_command(slug="", root=root, re_assess=re_assess)
-        result = dispatch_cli_command(cmd)
+        bus = create_bus()
+        cmd = FinishEngagementCommand(slug="", root=str(root), re_assess=re_assess)
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo(f"Failed: {result.error}", err=True)

@@ -11,16 +11,6 @@ from unittest.mock import patch
 import pytest
 
 from harness.command.legacy_handlers import (
-    CreateWaveHandler,
-    ExecuteStepHandler,
-    NextHandler,
-    QueryStatusHandler,
-    QueryWhatsNextHandler,
-    FinishEngagementHandler,
-    ReviewEngagementHandler,
-    RunWaveHandler,
-    SessionHandler,
-    ChatHandler,
     SummaryHandler,
     InspectHandler,
     AssessHandler,
@@ -44,84 +34,6 @@ from harness.command.registry import CommandRegistry
 from harness.command.types import Command, CommandHandler, CommandResult
 
 
-class TestNextHandler:
-    """Delegates to NextEngine.advance() — async gap, partially wired."""
-
-    def test_returns_delegated_status(self):
-        handler = NextHandler()
-        cmd = Command(slug="my-eng", command_type="next")
-        result = handler.handle(cmd)
-        assert result.success is True
-        assert "dispatched to NextEngine" in result.message
-        assert result.data["status"] == "delegated"
-        assert result.data["delegated_to"] == "NextEngine.advance()"
-
-    def test_notes_async_gap(self):
-        """Handler notes that full async dispatch requires future wave."""
-        handler = NextHandler()
-        cmd = Command(slug="my-eng", command_type="next")
-        result = handler.handle(cmd)
-        assert "async" in result.data["note"].lower()
-
-
-class TestCreateWaveHandler:
-    """Delegates to PlanManager.create_wave()."""
-
-    def test_returns_success(self):
-        handler = CreateWaveHandler()
-        cmd = Command(
-            slug="my-eng", command_type="create_wave",
-            data={"title": "Test Wave"},
-        )
-        result = handler.handle(cmd)
-        assert result.success is True
-        assert "Wave 'Test Wave' created" in result.message
-
-
-class TestExecuteStepHandler:
-    """Delegates to StepDispatcher.dispatch()."""
-
-    def test_returns_success_with_step_data(self):
-        handler = ExecuteStepHandler()
-        cmd = Command(
-            slug="my-eng", command_type="execute_step",
-            data={"step": {"agents": ["architect"], "output": "spec"}},
-        )
-        result = handler.handle(cmd)
-        assert result.success is True
-        assert "Step execution dispatched" in result.message
-
-    def test_without_step_data(self):
-        handler = ExecuteStepHandler()
-        cmd = Command(slug="my-eng", command_type="execute_step", data={})
-        result = handler.handle(cmd)
-        assert result.success is True
-
-
-class TestQueryStatusHandler:
-    """Delegates to EngagementHealthCheck.check()."""
-
-    def test_returns_success(self):
-        handler = QueryStatusHandler()
-        cmd = Command(slug="my-eng", command_type="query_status")
-        result = handler.handle(cmd)
-        # May return all_ok or warnings depending on environment
-        assert result.success is True
-        assert "slug" in result.data
-
-
-class TestQueryWhatsNextHandler:
-    """Delegates to WhatsNextEngine.query() — Wave 6 wired."""
-
-    def test_queries_engagement_via_engine(self):
-        """Handler queries real engine; handles missing engagement gracefully."""
-        handler = QueryWhatsNextHandler()
-        cmd = Command(slug="nonexistent-eng", command_type="query_whats_next")
-        result = handler.handle(cmd)
-        # Will fail gracefully since the engagement doesn't exist on disk
-        assert result.success is False or "available command" in result.message
-
-
 class TestRegisterAllHandlers:
     """Tests for the register_all_handlers convenience function."""
 
@@ -129,84 +41,23 @@ class TestRegisterAllHandlers:
         registry = CommandRegistry()
         register_all_handlers(registry)
         types = registry.list_registered()
-        assert "next" in types
-        assert "create_wave" in types
-        assert "execute_step" in types
-        assert "query_status" in types
-        assert "query_whats_next" in types
-        assert "finish_engagement" in types
-        assert "review_engagement" in types
+        assert "summary" in types
+        assert "inspect" in types
+        assert "assess" in types
+        assert "list_waves" in types
+        assert "rename_engagement" in types
+        assert "agent_list" in types
 
     def test_each_handler_is_distinct_instance(self):
         registry = CommandRegistry()
         register_all_handlers(registry)
         # Each handler should be a different instance
-        h1 = registry.get_handler("next")
-        h2 = registry.get_handler("create_wave")
+        h1 = registry.get_handler("summary")
+        h2 = registry.get_handler("inspect")
         assert h1 is not h2
 
 
 # ── Exception branch coverage ───────────────────────────────────────
-
-
-class TestCreateWaveHandlerExceptions:
-    """Coverage for CreateWaveHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = CreateWaveHandler()
-        cmd = Command(
-            slug="my-eng", command_type="create_wave",
-            data={"title": "Test Wave"},
-        )
-        with patch(
-            "harness.plan.plan_manager.PlanManager",
-            side_effect=ValueError("mocked plan error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked plan error" in result.error
-
-
-class TestExecuteStepHandlerExceptions:
-    """Coverage for ExecuteStepHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = ExecuteStepHandler()
-        cmd = Command(
-            slug="my-eng", command_type="execute_step",
-            data={"step": {"agents": ["architect"]}},
-        )
-        # The handler imports StepDispatcher inside a try block but never
-        # calls it. We mock __import__ to make the import itself fail.
-        original_import = builtins.__import__
-
-        def mock_import(name, *args, **kwargs):
-            if name == "harness.phase.dispatcher":
-                raise ImportError("mocked import error")
-            return original_import(name, *args, **kwargs)
-
-        with patch.object(builtins, "__import__", mock_import):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked import error" in result.error
-
-
-class TestQueryStatusHandlerExceptions:
-    """Coverage for QueryStatusHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = QueryStatusHandler()
-        cmd = Command(slug="my-eng", command_type="query_status")
-        with patch(
-            "harness.engagement.health.EngagementHealthCheck",
-            side_effect=ValueError("mocked health error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked health error" in result.error
-
-
-# ── CommandHandler ABC body coverage ────────────────────────────────
 
 
 class TestAgentListHandler:
@@ -301,114 +152,6 @@ class TestCommandHandlerAbstractBody:
 
 
 # ── Exception branch coverage for all handlers ──────────────────────
-
-
-class TestQueryWhatsNextHandlerExceptions:
-    """Coverage for QueryWhatsNextHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = QueryWhatsNextHandler()
-        cmd = Command(slug="test-eng", command_type="query_whats_next")
-        with patch(
-            "harness.session.whats_next.WhatsNextEngine",
-            side_effect=ValueError("mocked whatsnext error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked whatsnext error" in result.error
-
-
-class TestFinishEngagementHandlerExceptions:
-    """Coverage for FinishEngagementHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = FinishEngagementHandler()
-        cmd = Command(slug="test-eng", command_type="finish_engagement",
-                      data={"root": "/nonexistent"})
-        # The handler tries a lot of imports and file operations
-        # Just verify it doesn't crash and returns some error
-        result = handler.handle(cmd)
-        assert isinstance(result, CommandResult)
-
-
-class TestReviewEngagementHandlerExceptions:
-    """Coverage for ReviewEngagementHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = ReviewEngagementHandler()
-        cmd = Command(slug="test-eng", command_type="review_engagement",
-                      data={"root": "/nonexistent"})
-        result = handler.handle(cmd)
-        assert isinstance(result, CommandResult)
-
-    def test_review_no_decision(self):
-        handler = ReviewEngagementHandler()
-        cmd = Command(slug="test-eng", command_type="review_engagement", data={})
-        result = handler.handle(cmd)
-        assert result.success is False
-        assert "No decision" in result.error
-
-
-class TestRunWaveHandlerExceptions:
-    """Coverage for RunWaveHandler exception branch."""
-
-    def test_no_wave_id_returns_error(self):
-        handler = RunWaveHandler()
-        cmd = Command(slug="my-eng", command_type="run_wave", data={})
-        result = handler.handle(cmd)
-        assert result.success is False
-        assert "No wave_id" in result.error
-
-    def test_exception_returns_error(self):
-        handler = RunWaveHandler()
-        cmd = Command(slug="my-eng", command_type="run_wave",
-                      data={"wave_id": "w1"})
-        with patch(
-            "harness.loop.runner.LoopRunner",
-            side_effect=ValueError("mocked runner error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked runner error" in result.error
-
-
-class TestSessionHandlerExceptions:
-    """Coverage for SessionHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = SessionHandler()
-        cmd = Command(slug="my-eng", command_type="session",
-                      data={"phase": "requirements"})
-        with patch(
-            "harness.engagement.startup.StartupResumeFlow",
-            side_effect=ValueError("mocked session error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked session error" in result.error
-
-
-class TestChatHandlerExceptions:
-    """Coverage for ChatHandler exception branch."""
-
-    def test_engagement_not_found(self):
-        handler = ChatHandler()
-        cmd = Command(slug="nonexistent-eng", command_type="chat")
-        result = handler.handle(cmd)
-        assert result.success is False
-        assert "not found" in result.error or "not found" in result.message
-
-    def test_exception_returns_error(self):
-        handler = ChatHandler()
-        cmd = Command(slug="my-eng", command_type="chat",
-                      data={"phase": "design"})
-        with patch(
-            "harness.session.client.resolve_provider",
-            side_effect=ValueError("mocked chat error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked chat error" in result.error
 
 
 class TestSummaryHandlerExceptions:

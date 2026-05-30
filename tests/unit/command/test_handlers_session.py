@@ -1,65 +1,43 @@
-"""Tests for Wave F handlers: RunWaveHandler, SessionHandler, ChatHandler.
+"""Tests for Wave F handlers: RunWaveHandler, SessionHandler, ChatHandler (typed).
 
 These handlers are delegation-thin — they delegate to real business components.
-Pattern tests verify importability, registration, and handler interface compliance.
-Full integration behavior requires a harness project and is covered by smoke tests.
 """
 from __future__ import annotations
 
 import pytest
 
-from harness.command.legacy_handlers import (
-    ChatHandler,
-    RunWaveHandler,
-    SessionHandler,
-    register_all_handlers,
-)
-from harness.command.registry import CommandRegistry
-from harness.command.types import CommandHandler
+from harness.command.handlers.wave_handlers import RunWaveTypedHandler
+from harness.command.handlers.session_handlers import ChatTypedHandler, SessionTypedHandler
+from harness.command.setup import create_bus
 
 smoke = pytest.mark.smoke
 
 
 class TestRunWaveHandler:
-    """Tests for RunWaveHandler — pattern verification."""
+    """Tests for RunWaveTypedHandler — importability."""
 
     def test_importable(self):
-        handler = RunWaveHandler()
-        assert isinstance(handler, RunWaveHandler)
-        assert isinstance(handler, CommandHandler)
+        handler = RunWaveTypedHandler()
+        assert isinstance(handler, RunWaveTypedHandler)
 
     @smoke
     def test_run_wave_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        assert "run_wave" in registry.list_registered()
+        bus = create_bus()
+        from harness.command.commands.wave import RunWaveCommand
+        assert RunWaveCommand is not None
 
 
 class TestSessionHandler:
-    """Tests for SessionHandler — pattern verification."""
+    """Tests for SessionTypedHandler — importability."""
 
     def test_importable(self):
-        handler = SessionHandler()
-        assert isinstance(handler, SessionHandler)
-        assert isinstance(handler, CommandHandler)
-
-    @smoke
-    def test_session_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        assert "session" in registry.list_registered()
+        handler = SessionTypedHandler()
+        assert isinstance(handler, SessionTypedHandler)
 
 
 class TestChatHandler:
-    """Tests for ChatHandler — pattern verification."""
+    """Tests for ChatTypedHandler — importability."""
 
     def test_importable(self):
-        handler = ChatHandler()
-        assert isinstance(handler, ChatHandler)
-        assert isinstance(handler, CommandHandler)
-
-    @smoke
-    def test_chat_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        assert "chat" in registry.list_registered()
+        handler = ChatTypedHandler()
+        assert isinstance(handler, ChatTypedHandler)

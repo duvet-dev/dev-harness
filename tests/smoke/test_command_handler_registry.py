@@ -16,7 +16,6 @@ import pytest
 from harness.command.legacy_handlers import (
     AnnotateChangelogHandler,
     AssessHandler,
-    ChatHandler,
     CreateWaveFromFindingHandler,
     CreateWavesFromAssessmentHandler,
     FixEngagementHandler,
@@ -25,8 +24,6 @@ from harness.command.legacy_handlers import (
     ListWavesHandler,
     RefreshAgentsHandler,
     RenameEngagementHandler,
-    RunWaveHandler,
-    SessionHandler,
     SetBranchHandler,
     SetGovernanceHandler,
     SummaryHandler,
@@ -45,7 +42,6 @@ ENGAGEMENT_HANDLERS = (
     RefreshAgentsHandler,
     SetGovernanceHandler,
 )
-SESSION_HANDLERS = (RunWaveHandler, SessionHandler, ChatHandler)
 ANALYSIS_HANDLERS = (SummaryHandler, InspectHandler, AssessHandler)
 BATCH_HANDLERS = (
     CreateWavesFromAssessmentHandler,
@@ -56,7 +52,7 @@ BATCH_HANDLERS = (
     AnnotateChangelogHandler,
 )
 ALL_HANDLER_CLASSES = (
-    SESSION_HANDLERS + ANALYSIS_HANDLERS + BATCH_HANDLERS + ENGAGEMENT_HANDLERS
+    ANALYSIS_HANDLERS + BATCH_HANDLERS + ENGAGEMENT_HANDLERS
 )
 
 
@@ -74,13 +70,7 @@ class TestHandlerImportability:
 class TestHandlerTypeRegistration:
     """Each handler's command_type is registered in the CommandRegistry."""
 
-    @smoke
-    def test_session_handlers_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        types = registry.list_registered()
-        for expected in ("run_wave", "session", "chat"):
-            assert expected in types, f"Missing {expected}"
+
 
     @smoke
     def test_analysis_handlers_registered(self):
@@ -121,9 +111,6 @@ class TestFactoryImportability:
     """All CLI command factory functions are importable."""
 
     FACTORY_NAMES = [
-        "run_wave_command",
-        "session_command",
-        "chat_command",
         "summary_command",
         "inspect_command",
         "assess_command",
@@ -166,12 +153,7 @@ class TestHandlerInterface:
             handler = registry.get_handler(t)
             assert handler is not None, f"Handler {t} registered but not found"
 
-    @smoke
-    def test_dispatch_run_wave_returns_handler(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        handler = registry.get_handler("run_wave")
-        assert isinstance(handler, RunWaveHandler)
+
 
     @smoke
     def test_dispatch_summary_returns_handler(self):

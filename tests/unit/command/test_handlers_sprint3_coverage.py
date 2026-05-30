@@ -18,7 +18,6 @@ from harness.command.legacy_handlers import (
     AgentListHandler,
     AnnotateChangelogHandler,
     AssessHandler,
-    ChatHandler,
     ConsultHandler,
     CreateWaveFromFindingHandler,
     CreateWavesFromAssessmentHandler,
@@ -27,8 +26,6 @@ from harness.command.legacy_handlers import (
     ListWavesHandler,
     RefreshAgentsHandler,
     RenameEngagementHandler,
-    RunWaveHandler,
-    SessionHandler,
     SetBranchHandler,
     SetGovernanceHandler,
     FixEngagementHandler,
@@ -49,9 +46,6 @@ class TestQuickReturnHandlers:
     """Handlers that return quickly with empty or nonexistent data."""
 
     HANDLERS: list[tuple[str, object, dict]] = [
-        ("run_wave", RunWaveHandler(), {"data": {}}),
-        ("session", SessionHandler(), {"data": {}}),
-        ("chat", ChatHandler(), {"data": {}}),
         ("list_waves", ListWavesHandler(), {"data": {}}),
         ("wave_status", WaveStatusHandler(), {"data": {}}),
         ("set_governance", SetGovernanceHandler(), {"data": {}}),

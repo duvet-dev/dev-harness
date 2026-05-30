@@ -78,6 +78,23 @@ class TestProviderConfig:
         finally:
             del os.environ["MY_KEY"]
 
+    def test_models_as_string_normalized(self):
+        """String models are converted to single-item list (line 128)."""
+        pc = ProviderConfig(name="test", models="gpt-4o")
+        assert len(pc.models) == 1
+        assert pc.models[0].name == "gpt-4o"
+
+    def test_models_as_set_normalized(self):
+        """Set models fall through to else branch (line 140)."""
+        pc = ProviderConfig(name="test", models={"gpt-4o"})
+        assert len(pc.models) > 0
+
+    def test_models_as_generator_normalized(self):
+        """Generator models are converted via list() (line 140)."""
+        from harness.config.provider_models import ModelDef
+        pc = ProviderConfig(name="test", models=(m for m in ["claude-3"]))
+        assert len(pc.models) == 1
+
     def test_resolve_base_url_empty(self):
         pc = ProviderConfig(name="test")
         assert pc.resolve_base_url() == ""

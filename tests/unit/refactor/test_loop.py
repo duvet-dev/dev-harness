@@ -95,6 +95,14 @@ class TestRefactorSessionLoop:
         loop = RefactorSessionLoop(config)
         assert loop.current_phase == RefactorPhase.INTENT_DISCOVERY
 
+    def test_current_phase_setter(self):
+        """current_phase setter delegates to state (line 309)."""
+        config = RefactorSessionConfig(root=__file__, engagement_slug="test")
+        loop = RefactorSessionLoop(config)
+        loop.current_phase = RefactorPhase.VERIFICATION
+        assert loop.current_phase == RefactorPhase.VERIFICATION
+        assert loop.state.current_phase == RefactorPhase.VERIFICATION
+
     def test_get_phase_prompt(self):
         config = RefactorSessionConfig(root=__file__, engagement_slug="test")
         loop = RefactorSessionLoop(config)

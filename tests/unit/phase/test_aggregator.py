@@ -272,6 +272,22 @@ class TestLeadAggregator:
         assert "Database connection lost" in str(exc.value)
 
     @pytest.mark.asyncio
+    async def test_aggregator_error_re_raised(self) -> None:
+        """AggregatorError is re-raised directly (line 131)."""
+        class RaisesAggregatorError(LeadAggregator):
+            def _do_aggregate(self, results, step=None):
+                raise AggregatorError("Already an aggregator error")
+
+        aggregator = RaisesAggregatorError()
+        results = ParallelDispatchResult(
+            completed=[DispatchResult("a", True, output="ok")],
+        )
+
+        with pytest.raises(AggregatorError) as exc:
+            await aggregator.aggregate(results)
+        assert "Already an aggregator error" in str(exc.value)
+
+    @pytest.mark.asyncio
     async def test_critique_phrases_list(self) -> None:
         """Ensure CRITIC_FLAG_PHRASES is reasonably comprehensive."""
         assert len(CRITIC_FLAG_PHRASES) >= 15

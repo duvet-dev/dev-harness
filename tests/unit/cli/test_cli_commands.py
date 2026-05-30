@@ -269,6 +269,152 @@ class TestWaveOCommandFactories:
 class TestRoundTripIntegration:
     """Integration: factory + dispatch for all supported command types."""
 
+    def test_finish_engagement_command(self):
+        """finish_engagement_command creates correct command (line 116)."""
+        from harness.cli.commands import finish_engagement_command
+        cmd = finish_engagement_command(slug="test-eng", root="/tmp")
+        assert cmd.command_type == "finish_engagement"
+        assert cmd.slug == "test-eng"
+
+    def test_review_engagement_command(self):
+        """review_engagement_command creates correct command (lines 143-152)."""
+        from harness.cli.commands import review_engagement_command
+        cmd = review_engagement_command(slug="test-eng", decision="approve", feedback_items=["needs tests"], notes="Good work")
+        assert cmd.command_type == "review_engagement"
+        assert cmd.slug == "test-eng"
+        assert cmd.data["decision"] == "approve"
+        assert "needs tests" in cmd.data["feedback_items"]
+        assert cmd.data["notes"] == "Good work"
+
+    def test_review_engagement_minimal(self):
+        """review_engagement_command with minimal args."""
+        from harness.cli.commands import review_engagement_command
+        cmd = review_engagement_command(slug="test-eng", decision="reject")
+        assert cmd.slug == "test-eng"
+        assert cmd.data["decision"] == "reject"
+        assert "feedback_items" not in cmd.data
+
+    def test_init_project_command(self):
+        """init_project_command creates correct command (lines 192-204)."""
+        from harness.cli.commands import init_project_command
+        cmd = init_project_command(project_dir="/tmp/proj", no_git=True, force=True, template="backend", seed="abc")
+        assert cmd.command_type == "init_project"
+        assert cmd.data["no_git"] is True
+        assert cmd.data["template"] == "backend"
+        assert cmd.data["seed"] == "abc"
+
+    def test_manage_phase_command(self):
+        """manage_phase_command creates correct command (lines 233-243)."""
+        from harness.cli.commands import manage_phase_command
+        cmd = manage_phase_command(slug="test-eng", action="feedback", target="design", feedback_reason="needs review")
+        assert cmd.command_type == "manage_phase"
+        assert cmd.data["action"] == "feedback"
+        assert cmd.data["target"] == "design"
+        assert cmd.data["feedback_reason"] == "needs review"
+
+    def test_run_wave_command(self):
+        """run_wave_command creates correct command (line 273)."""
+        from harness.cli.commands import run_wave_command
+        cmd = run_wave_command(slug="test-eng", wave_id="wave-01", no_test=True)
+        assert cmd.command_type == "run_wave"
+        assert cmd.slug == "test-eng"
+        assert cmd.data["wave_id"] == "wave-01"
+
+    def test_chat_command(self):
+        """chat_command creates correct command (line 328)."""
+        from harness.cli.commands import chat_command
+        cmd = chat_command(slug="test-eng", prompt="Hello", phase="design")
+        assert cmd.command_type == "chat"
+        assert cmd.data["prompt"] == "Hello"
+        assert cmd.data["phase"] == "design"
+
+    def test_summary_command(self):
+        """summary_command creates correct command (line 357)."""
+        from harness.cli.commands import summary_command
+        cmd = summary_command(engagement="test-eng")
+        assert cmd.command_type == "summary"
+
+    def test_inspect_command(self):
+        """inspect_command creates correct command (line 378)."""
+        from harness.cli.commands import inspect_command
+        cmd = inspect_command(root="/tmp")
+        assert cmd.command_type == "inspect"
+
+    def test_assess_command(self):
+        """assess_command creates correct command (line 391)."""
+        from harness.cli.commands import assess_command
+        cmd = assess_command(root="/tmp", deep_flag=True)
+        assert cmd.command_type == "assess"
+
+    def test_create_waves_from_assessment_command(self):
+        """create_waves_from_assessment_command creates correct command (line 408)."""
+        from harness.cli.commands import create_waves_from_assessment_command
+        cmd = create_waves_from_assessment_command(slug="test-eng", focus="high-risk", limit=5, refactoring=True)
+        assert cmd.command_type == "create_waves_from_assessment"
+        assert cmd.data["refactoring"] is True
+
+    def test_create_wave_from_finding_command(self):
+        """create_wave_from_finding_command creates correct command (line 420)."""
+        from harness.cli.commands import create_wave_from_finding_command
+        cmd = create_wave_from_finding_command(slug="test-eng", finding_id="F-001")
+        assert cmd.command_type == "create_wave_from_finding"
+
+    def test_list_waves_command(self):
+        """list_waves_command creates correct command (line 429)."""
+        from harness.cli.commands import list_waves_command
+        cmd = list_waves_command(slug="test-eng")
+        assert cmd.command_type == "list_waves"
+
+    def test_wave_status_command(self):
+        """wave_status_command creates correct command (line 434)."""
+        from harness.cli.commands import wave_status_command
+        cmd = wave_status_command(slug="test-eng")
+        assert cmd.command_type == "wave_status"
+
+    def test_generate_docs_command(self):
+        """generate_docs_command creates correct command (line 439)."""
+        from harness.cli.commands import generate_docs_command
+        cmd = generate_docs_command(root="/tmp")
+        assert cmd.command_type == "generate_docs"
+
+    def test_annotate_changelog_command(self):
+        """annotate_changelog_command creates correct command (line 448)."""
+        from harness.cli.commands import annotate_changelog_command
+        cmd = annotate_changelog_command(slug="test-eng", wave="wave-01", text="Fixed bug")
+        assert cmd.command_type == "annotate_changelog"
+        assert cmd.data["text"] == "Fixed bug"
+
+    def test_rename_engagement_command(self):
+        """rename_engagement_command creates correct command (line 465)."""
+        from harness.cli.commands import rename_engagement_command
+        cmd = rename_engagement_command(old_slug="old", new_slug="new")
+        assert cmd.command_type == "rename_engagement"
+        assert cmd.slug == "old"
+
+    def test_set_branch_command(self):
+        """set_branch_command creates correct command (line 478)."""
+        from harness.cli.commands import set_branch_command
+        cmd = set_branch_command(slug="test-eng", branch="main")
+        assert cmd.command_type == "set_branch"
+
+    def test_fix_engagement_command(self):
+        """fix_engagement_command creates correct command (line 487)."""
+        from harness.cli.commands import fix_engagement_command
+        cmd = fix_engagement_command(slug="test-eng", fix_type="reset")
+        assert cmd.command_type == "fix_engagement"
+
+    def test_refresh_agents_command(self):
+        """refresh_agents_command creates correct command (line 499)."""
+        from harness.cli.commands import refresh_agents_command
+        cmd = refresh_agents_command(project_dir="/tmp", force=True)
+        assert cmd.command_type == "refresh_agents"
+
+    def test_set_governance_command(self):
+        """set_governance_command creates correct command (line 511)."""
+        from harness.cli.commands import set_governance_command
+        cmd = set_governance_command(level="strict")
+        assert cmd.command_type == "set_governance"
+
     def test_all_registered_command_types(self):
         """All factory command types have registered handlers."""
         types_and_factories = [

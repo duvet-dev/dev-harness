@@ -179,3 +179,13 @@ class TestPhaseStateManager:
         data = yaml.safe_load(mgr.state_path.read_text())
         assert "phases" in data
         assert data["phases"]["design"]["state"] == "active"
+
+    def test_load_corrupt_yaml_graceful(self, tmp_path):
+        """Corrupt YAML in state file doesn't crash _load() (lines 238-239)."""
+        mgr = PhaseStateManager(tmp_path, "test-eng")
+        target_dir = mgr.state_path.parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        mgr.state_path.write_text("invalid: [yaml: broken: [[")
+        # Force re-load by creating a new manager
+        mgr2 = PhaseStateManager(tmp_path, "test-eng")
+        assert mgr2.list_phases() == {}

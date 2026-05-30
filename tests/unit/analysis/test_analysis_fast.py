@@ -93,6 +93,15 @@ class TestScanStructure:
         assert "python" in result.summary
         assert "1 files" in result.summary or "1 file" in result.summary
 
+    def test_oserror_file_handling(self, tmp_path):
+        """OSError reading a file is handled gracefully (lines 99-100)."""
+        from unittest.mock import patch, mock_open
+        (tmp_path / "broken.py").write_text("some code\n")
+        with patch("builtins.open", side_effect=OSError("Permission denied")):
+            result = scan_structure(tmp_path)
+        assert result.metrics["file_count"] == 1
+        assert result.metrics["total_lines"] == 0
+
     def test_unicode_file_handling(self, tmp_path):
         """Handles files that trigger UnicodeDecodeError gracefully."""
         file = tmp_path / "binary.bin"
@@ -179,6 +188,31 @@ class TestScanGitDiff:
         (tmp_path / ".git").mkdir()
         result = scan_git_diff(tmp_path)
         assert result.summary == "Git diff timed out"
+
+    @patch("subprocess.run")
+    def test_git_diff_name_only_timeout(self, mock_run, tmp_path):
+        """Handles timeout from git diff --name-only (lines 225-227)."""
+        from subprocess import TimeoutExpired
+        mock_rev_parse = MagicMock()
+        mock_rev_parse.returncode = 0
+        mock_rev_parse.stdout = ".git\n"
+        mock_diff = MagicMock()
+        mock_diff.returncode = 0
+        mock_diff.stdout = " src/main.py | 10 +++++++++-\n 1 file changed\n"
+        mock_branch = MagicMock()
+        mock_branch.returncode = 0
+        mock_branch.stdout = "main\n"
+        # Fourth call (--name-only) times out
+        mock_run.side_effect = [
+            mock_rev_parse,
+            mock_diff,
+            mock_branch,
+            TimeoutExpired(cmd="git diff --name-only HEAD~1", timeout=5),
+        ]
+        (tmp_path / ".git").mkdir()
+        result = scan_git_diff(tmp_path)
+        assert result.metrics.get("changed_count") == 0
+        assert "0 files changed" in result.summary
 
 
 class TestProduceSummary:

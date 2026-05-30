@@ -134,3 +134,15 @@ class TestConstruction:
         template.team = None
         template.agents = None
         assert template.template_type == "unknown"
+
+    def test_team_and_loop_mutual_exclusion_error(self) -> None:
+        """Having both team/agents AND loop/steps raises error (line 93)."""
+        from harness.phase.model import LoopConfig, Step as PhaseStep
+        with pytest.raises(StepMutualExclusionError) as exc:
+            StepTemplate(
+                name="invalid-template",
+                team="architecture",
+                loop=LoopConfig(count=3),
+                steps=[PhaseStep(agents=["coder"])],
+            )
+        assert "cannot have both" in str(exc.value).lower()

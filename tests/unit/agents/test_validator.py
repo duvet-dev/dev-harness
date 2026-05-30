@@ -116,6 +116,28 @@ class TestSpecValidatorFileRules:
         assert result.passed is False
         assert any("min_lines" in finding for finding in result.findings)
 
+    def test_interface_oserror_graceful(self, tmp_path):
+        """OSError reading a .py file is handled gracefully (lines 123-124)."""
+        from unittest.mock import patch
+        py_file = tmp_path / "broken.py"
+        py_file.write_text("def foo():\n    pass\n")
+        contract = OutputContract(validate_interface=True)
+        with patch.object(Path, "read_text", side_effect=OSError("Permission denied")):
+            result = SpecValidator.validate(tmp_path, contract)
+        assert result.passed is False
+
+    def test_file_rule_oserror_graceful(self, tmp_path):
+        """OSError counting file lines is handled gracefully (lines 174-175)."""
+        from unittest.mock import patch
+        f = tmp_path / "test.txt"
+        f.write_text("line1\n")
+        contract = OutputContract(file_rules=[
+            {"pattern": "test.txt", "min_lines": 1},
+        ])
+        with patch.object(Path, "open", side_effect=OSError("Cannot read")):
+            result = SpecValidator.validate(tmp_path, contract)
+        assert result.passed is False
+
     def test_max_lines_pass(self, tmp_path):
         f = tmp_path / "test.txt"
         f.write_text("line1\nline2\n")

@@ -279,6 +279,15 @@ class TestDispatch:
         assert "No agents resolved" in (result.error or "")
 
     @pytest.mark.asyncio
+    async def test_dispatch_with_default_stub(self, team_registry: TeamRegistry) -> None:
+        """Default _stub_dispatch is used when no custom dispatch_fn given (line 326)."""
+        d = StepDispatcher(team_registry=team_registry)
+        step = Step(agents=["architect"])
+        result = await d.dispatch(step)
+        assert result.success is True
+        assert len(result.artifacts) >= 1
+
+    @pytest.mark.asyncio
     async def test_dispatch_with_parallel_timeout(
         self, team_registry: TeamRegistry
     ) -> None:

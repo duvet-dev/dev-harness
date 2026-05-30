@@ -267,3 +267,12 @@ class TestEstimateEffort:
         violations = [MockDebtViolation(rule_name="default_info")]
         total, fmt = _estimate_effort(violations)
         assert "min" in fmt
+
+    def test_debt_section_no_effort_with_violations(self):
+        """debt_section with effort=False and violations triggers else branch (line 106)."""
+        report = MockDebtReport(
+            violations=[MockDebtViolation(severity="error")],
+            scanned_files=5,
+        )
+        text = debt_section(report, effort=False)
+        assert "⚠️" in text or "Error" in text or "error" in text

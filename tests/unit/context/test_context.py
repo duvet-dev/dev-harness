@@ -141,16 +141,24 @@ class TestContextPacket:
         assert restored.constraint_section == original.constraint_section
 
     def test_to_json_error_handling(self):
-        """to_json raises ContextPacketError on bad data."""
-        packet = ContextPacket(
-            engagement_id="test",
-            phase_name="test",
-            task_id="test",
-            spec_content="test",
-        )
-        # Normal case should work fine
-        result = packet.to_json()
-        assert isinstance(result, str)
+        """to_json raises ContextPacketError on bad data (lines 52-53)."""
+        import builtins
+        original_dumps = json.dumps
+        def broken_dumps(*args, **kwargs):
+            raise TypeError("Non-serialisable value")
+        json.dumps = broken_dumps
+        try:
+            packet = ContextPacket(
+                engagement_id="test",
+                phase_name="test",
+                task_id="test",
+                spec_content="test",
+            )
+            with pytest.raises(ContextPacketError) as exc:
+                packet.to_json()
+            assert "Failed to serialise" in str(exc.value)
+        finally:
+            json.dumps = original_dumps
 
     def test_from_json_invalid(self):
         """from_json raises ContextPacketError on invalid JSON."""

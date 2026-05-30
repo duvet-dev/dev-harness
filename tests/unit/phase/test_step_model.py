@@ -142,6 +142,23 @@ class TestStepCommonFields:
         step = Step(agents=["builder"], auto=True)
         assert step.auto is True
 
+    def test_output_as_string_normalised(self) -> None:
+        """String output is normalised to list[str] (line 185)."""
+        step = Step(agents=["coder"], output="single-line-output")
+        assert isinstance(step.output, list)
+        assert step.output == ["single-line-output"]
+
+    def test_step_type_template(self) -> None:
+        """step_type returns 'template' when template is set (lines 198-199)."""
+        step = Step(template="review-template")
+        assert step.step_type == "template"
+
+    def test_step_type_unknown(self) -> None:
+        """step_type returns 'unknown' as fallback (line 200)."""
+        # Bypass __post_init__ mutex check by using super().__init__
+        step = Step.__new__(Step)
+        assert step.step_type == "unknown"
+
 
 class TestPhase:
     """Phase dataclass tests."""

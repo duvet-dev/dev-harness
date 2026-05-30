@@ -37,6 +37,12 @@ class TestSyncMapper:
         assert result.tools is not None
         assert result.agent_registry == []
 
+    def test_map_tools_empty_source(self):
+        """map_tools with empty source returns template (line 169)."""
+        mapper = SyncMapper()
+        result = mapper.map_tools("")
+        assert "# TOOLS" in result or "Agent" in result or "Tools" in result
+
     def test_map_identity_and_procedures(self):
         mapper = SyncMapper()
         extraction = ExtractionResult(

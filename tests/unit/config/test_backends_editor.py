@@ -46,6 +46,13 @@ class TestEditorBackendConfig:
         config = EditorBackendConfig.from_dict({})
         assert ".cursorrules" in config.output_formats
 
+    def test_from_dict_with_include_contract(self):
+        """from_dict handles include_contract key (line 47)."""
+        config = EditorBackendConfig.from_dict({
+            "include_contract": False,
+        })
+        assert config.include_contract is False
+
 
 class TestEditorBackend:
     """Tests for EditorBackend."""

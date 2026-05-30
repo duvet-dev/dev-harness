@@ -174,3 +174,18 @@ class TestAnalyseAsync:
         result = await analyse_async(tmp_path, report_file=str(report_file))
         assert result["report_file"] == str(report_file)
         assert report_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_deep_async_llm_fallback(self, tmp_path):
+        """Async deep analysis gracefully degrades when LLM fails (lines 186-188)."""
+        from harness.analysis.observer import analyse_async
+        (tmp_path / "hello.py").write_text("x=1\n")
+
+        with patch(
+            "harness.analysis.assessment.assess",
+            side_effect=RuntimeError("API unavailable"),
+        ):
+            result = await analyse_async(tmp_path, deep=True)
+
+        assert result["status"] == "ok"
+        assert "Assessment agents unavailable" in result["report"]

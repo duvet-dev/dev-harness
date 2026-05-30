@@ -132,6 +132,14 @@ class TestConsultationResult:
         )
         assert "API timeout" in result.summary
 
+    def test_summary_with_resolution(self):
+        """Summary shows resolved state when resolution is set (line 177)."""
+        result = ConsultationResult(
+            mode="blocking", status="resolved", resolution="approved"
+        )
+        summary = result.summary
+        assert "resolved: approved" in summary
+
     def test_response_lines(self):
         result = ConsultationResult(response="Line 1\nLine 2\nLine 3")
         assert result.response_lines == ["Line 1", "Line 2", "Line 3"]
@@ -319,3 +327,27 @@ class TestConsultationCapabilityCtor:
         })
         assert cap.name == "test"
         assert cap.match_phrases == ["hello"]
+
+    def test_get_team_capabilities_with_instances(self, registry):
+        """_get_team_capabilities handles ConsultationCapability instances (line 235)."""
+        from harness.team.model import AgentTeam
+        cap = ConsultationCapability(
+            name="direct-cap",
+            match_phrases=["direct"],
+            description="Direct instance",
+            mode="blocking",
+            scope="cross-phase",
+            question="Direct?",
+        )
+        # Create a registry with just this team (uses ConsultationCapability instances)
+        registry2 = TeamRegistry(builtin=[
+            AgentTeam(
+                name="direct-team",
+                consultations=[cap],
+            ),
+        ])
+        orch = ConsultationOrchestrator(registry2)
+        assert orch.can_answer_any("direct question") is True
+        result = orch.route("direct question")
+        assert result.status == "matched"
+        assert result.capability == "direct-cap"

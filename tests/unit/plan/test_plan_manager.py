@@ -62,6 +62,20 @@ class TestPlanManager:
         assert "Feature X" in content
         assert "wave-01" in content
 
+    def test_sync_to_md_with_tasks(self, manager):
+        """sync_to_md includes task list when wave has tasks (lines 93-95)."""
+        from harness.plan.wave_model import Wave, WaveTask
+        plan = Plan()
+        wave = Wave(id="wave-01", title="Feature X")
+        wave.tasks = [WaveTask(id="t1", description="Implement feature")]
+        plan.add_wave(wave)
+        manager.save(plan)
+
+        md_path = manager._plan_dir / "plan.md"
+        content = md_path.read_text()
+        assert "Tasks" in content
+        assert "Implement feature" in content
+
     def test_sync_to_md_with_provenance(self, manager):
         from harness.plan.wave_model import WaveProvenance
         plan = Plan()

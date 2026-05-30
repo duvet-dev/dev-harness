@@ -41,16 +41,14 @@ coverage/
 *.py,cover
 *.py,cover
 
-# Harness — transient regeneratable subdirs only
-# Everything else (config, engagements, agents, plans, assessments) is tracked
-# for multi-user collaboration and history.
+# Harness — runtime data (transient, regeneratable)
+# Config files (constitution.yaml, teams.yaml, etc.) are tracked.
 .harness/agents/*/memory/
 .harness/cache/
 .harness/docs-backups/
 .harness/backups/
+.harness/engagements/
+.harness/test_output/
 
 # Temp
 harness_simple_*
-
-# Harness runtime data
-.harness/

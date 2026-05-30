@@ -1,10 +1,14 @@
 # Dev Harness Step Templates Configuration
 #
 # Reusable step blueprints referenced by name during phase execution.
-# Templates reference teams or agents (mutually exclusive).
+# Templates reference teams or agents (mutually exclusive) or define
+# critic loops (with loop + steps fields).
 # See V7 §7 (Config Schema) and §10.5.
 
+# ── Simple Agent/Team Templates ─────────────────────────────────────────
+
 step_templates:
+
   - name: comprehensive-arch-review
     description: "Full architectural review by the architecture team"
     team: architecture
@@ -52,3 +56,202 @@ step_templates:
     description: "Analyse component dependencies and structure"
     agents: ["component-analyser"]
     output: component-report
+
+# ── Critic Loop Templates (V7 §12 — Wave 18 Migration) ─────────────────
+#
+# Each template is a convergence-aware critic loop with a named strategy,
+# max iterations, timeout behaviour, and ordered sub-steps.
+# Output names are free-form strings (decoupled from ArtifactType enum).
+#
+# Language: Option D (convergence-language-recommendation.md)
+#   gate_judgment  — inspect gate step outputs for convergence keywords
+#   all_gates      — all gate steps must have successful outputs
+#   test_suite     — run external test suite (exit code 0 = converged)
+#   stable         — produce output unchanged between iterations
+#   external_approval — external callback/API check
+
+  - name: architecture-review
+    description: "Architect produce → architecture critic critique → gate (gate_judgment, max=3)"
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: architect
+        max_iterations: 3
+        on_timeout: best_effort
+        convergence_keywords:
+          - "converged"
+          - "no new issues"
+          - "design approved"
+    steps:
+      - agents: ["architect"]
+        role: produce
+        output: "design-proposal"
+      - agents: ["architecture-analyser"]
+        role: critique
+        input: ["design-proposal"]
+        output: "design-review"
+      - agents: ["architect"]
+        role: gate
+        output: "gate-decision"
+
+  - name: discovery-loop
+    description: "Requirements builder → researcher → gate (gate_judgment, max=3)"
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: requirements-builder
+        max_iterations: 3
+        on_timeout: best_effort
+    steps:
+      - agents: ["requirements-builder"]
+        role: produce
+        output: "requirements"
+      - agents: ["researcher"]
+        role: critique
+        input: ["requirements"]
+        output: "research-notes"
+      - agents: ["requirements-builder"]
+        role: gate
+        output: "gate-decision"
+
+  - name: wave-implementation-loop
+    description: "Implement → test → consult → review → fix → gate (all_gates, max=3)"
+    loop:
+      convergence:
+        strategy: all_gates
+        max_iterations: 3
+        on_timeout: fail
+    steps:
+      - agents: ["coding-agent"]
+        role: produce
+        output: "code"
+      - agents: ["testing-agent"]
+        role: critique
+        input: ["code"]
+        output: "test-results"
+      - agents: ["architect"]
+        role: consult
+        output: "consultation"
+      - agents: ["design-reviewer"]
+        role: critique
+        input: ["code", "test-results", "consultation"]
+        output: "review"
+      - agents: ["coding-agent"]
+        role: produce
+        input: ["review", "test-results"]
+        output: "final-code"
+      - agents: ["testing-agent"]
+        role: gate
+        input: ["final-code"]
+        output: "final-test-results"
+
+  - name: testing-verification-loop
+    description: "Test → conformance → validation → gate (gate_judgment, max=3)"
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: testing-agent
+        max_iterations: 3
+        on_timeout: best_effort
+    steps:
+      - agents: ["testing-agent"]
+        role: produce
+        output: "test-scenarios"
+      - agents: ["requirements-conformance-reviewer"]
+        role: critique
+        input: ["test-scenarios"]
+        output: "conformance-review"
+      - agents: ["validation-agent"]
+        role: critique
+        input: ["test-scenarios"]
+        output: "validation-report"
+      - agents: ["testing-agent"]
+        role: gate
+        output: "gate-decision"
+
+  - name: review-loop
+    description: "Multi-agent quality review with convergence (gate_judgment, max=3)"
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: reviewer
+        max_iterations: 3
+        on_timeout: best_effort
+    steps:
+      - agents: ["reviewer"]
+        role: produce
+        output: "quality-assessment"
+      - agents: ["dead-code-analyser"]
+        role: critique
+        input: ["quality-assessment"]
+        output: "dead-code-report"
+      - agents: ["component-analyser"]
+        role: critique
+        input: ["quality-assessment"]
+        output: "component-report"
+      - agents: ["critical-analyser"]
+        role: critique
+        input: ["quality-assessment"]
+        output: "critical-review"
+      - agents: ["validation-agent"]
+        role: critique
+        input: ["quality-assessment"]
+        output: "final-validation"
+      - agents: ["reviewer"]
+        role: gate
+        output: "gate-decision"
+
+  - name: code-review-loop
+    description: "Coder produce → reviewer critique → gate (gate_judgment, max=3)"
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: coding-agent
+        max_iterations: 3
+        on_timeout: best_effort
+    steps:
+      - agents: ["coding-agent"]
+        role: produce
+        output: "code"
+      - agents: ["design-reviewer"]
+        role: critique
+        input: ["code"]
+        output: "review"
+      - agents: ["coding-agent"]
+        role: gate
+        output: "gate-decision"
+
+  - name: quick-fix-loop
+    description: "Coding agent produces fix → gate (gate_judgment, max=2)"
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: coding-agent
+        max_iterations: 2
+        on_timeout: best_effort
+    steps:
+      - agents: ["coding-agent"]
+        role: produce
+        output: "implementation"
+      - agents: ["coding-agent"]
+        role: produce
+        output: "tests"
+      - agents: ["coding-agent"]
+        role: gate
+        output: "fix-report"
+
+  - name: inspect-loop
+    description: "Design reviewer inspect → gate (gate_judgment, max=2)"
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: design-reviewer
+        max_iterations: 2
+        on_timeout: best_effort
+    steps:
+      - agents: ["design-reviewer"]
+        role: produce
+        output: "inspection-report"
+      - agents: ["design-reviewer"]
+        role: gate
+        output: "gate-decision"

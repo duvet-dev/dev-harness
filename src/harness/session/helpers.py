@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from harness.agents.consultation import ConsultationOrchestrator, ConsultationResult
-from harness.agents.cycle import MAX_PHASE_JUMPS_PER_PHASE
+# Max phase jumps per phase (migrated from cycle.py, which is deleted)
+MAX_PHASE_JUMPS_PER_PHASE = 3
 from harness.context.loader import ContextLoader
 
 logger = logging.getLogger(__name__)

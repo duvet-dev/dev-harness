@@ -172,17 +172,31 @@ class TestPhaseJumpLimits:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+class _CycleResult:
+    """Stub for CycleResult — cycle.py (deleted)."""
+    def __init__(self, status="complete", summary=""):
+        self.status = status
+        self.summary = summary
+
+    @property
+    def is_phase_jump(self):
+        return self.status is not None and self.status.startswith("phase_jump:")
+
+    @property
+    def jump_target(self):
+        if self.is_phase_jump:
+            return self.status[len("phase_jump:"):]
+
+
 class TestFormatJumpMarker:
     """Tests for _format_jump_marker() — pure formatting."""
 
     def test_no_jump_returns_empty(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult(status="complete")
+        result = _CycleResult(status="complete")
         assert _format_jump_marker(result) == ""
 
     def test_with_jump_target(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult(
+        result = _CycleResult(
             status="phase_jump:design",
             summary="Architecture review needed",
         )
@@ -191,8 +205,7 @@ class TestFormatJumpMarker:
         assert "Architecture review needed" in marker
 
     def test_without_summary(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult(status="phase_jump:test")
+        result = _CycleResult(status="phase_jump:test")
         marker = _format_jump_marker(result)
         assert "test" in marker
         assert "No reason given" in marker

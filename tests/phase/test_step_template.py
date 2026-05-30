@@ -43,23 +43,55 @@ class TestConstruction:
         assert template.team is None
         assert template.template_type == "agents"
 
-    def test_rejects_both_team_and_agents(self) -> None:
-        """Setting both team: and agents: should raise."""
-        with pytest.raises(StepMutualExclusionError) as exc:
-            StepTemplate(
-                name="invalid",
-                team="architecture",
-                agents=["architect"],
-            )
-        assert "Exactly one" in str(exc.value)
+    def test_accepts_critic_loop_template_with_loop_steps(self) -> None:
+        """A critic loop template with loop+steps is valid, not an error."""
+        from harness.phase.model import (
+            ConvergenceConfig,
+            LoopConfig,
+            Step as PhaseStep,
+        )
+        template = StepTemplate(
+            name="design-cycle",
+            description="Architect produce -> critic -> gate",
+            loop=LoopConfig(
+                convergence=ConvergenceConfig(
+                    strategy="gate_judgment",
+                    max_iterations=3,
+                ),
+            ),
+            steps=[
+                PhaseStep(agents=["architect"], role="produce"),
+                PhaseStep(agents=["architecture-analyser"], role="critique"),
+            ],
+            output_artifact_name="final-design",
+        )
+        assert template.name == "design-cycle"
+        assert template.template_type == "critic_loop"
 
-    def test_rejects_neither_team_nor_agents(self) -> None:
-        """Setting neither team: nor agents: should raise."""
-        with pytest.raises(StepMutualExclusionError) as exc:
-            StepTemplate(
-                name="invalid",
-            )
-        assert "Exactly one" in str(exc.value)
+    def test_accepts_critic_loop_template(self) -> None:
+        """A critic loop template with loop+steps is valid."""
+        from harness.phase.model import (
+            ConvergenceConfig,
+            LoopConfig,
+        )
+        template = StepTemplate(
+            name="design-cycle",
+            description="Architect produce -> critic -> gate",
+            loop=LoopConfig(
+                convergence=ConvergenceConfig(
+                    strategy="gate_judgment",
+                    max_iterations=3,
+                ),
+            ),
+            steps=[],
+            input_artifact_names=[],
+            output_artifact_name="final-design",
+        )
+        assert template.name == "design-cycle"
+        assert template.template_type == "critic_loop"
+        assert template.loop is not None
+        assert template.team is None
+        assert template.agents is None
 
     def test_default_values(self) -> None:
         """Default values should be correct."""

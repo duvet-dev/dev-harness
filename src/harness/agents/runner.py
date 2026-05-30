@@ -38,13 +38,6 @@ from harness.agents.backends.base import (
     Invocation,
 )
 from harness.agents.context import ContextPacket, OutputContract
-from harness.agents.cycle import (
-    CycleConvergence,
-    CycleResult,
-    CycleRunner,
-    CycleRunnerDefinition,
-    CycleStep,
-)
 from harness.agents.plugin_registry import PluginRegistry
 from harness.agents.repo_tool import RepoTool
 from harness.config.provider_registry import load_providers
@@ -553,96 +546,20 @@ class AgentRunner:
             if result.converged:
                 print(f"Converged in {result.iterations} iteration(s)")
         """
-        cfg = config or get_default_critic_loop_config()
-        target_dir = (
-            engagement_dir
-            or Path(tempfile.mkdtemp(prefix="critic_loop_"))
-        )
-        auto_cleanup = engagement_dir is None
-
-        # Build a CycleRunnerDefinition from the critic loop config
-        keywords = cfg.convergence_keywords
-
-        cycle_def = CycleRunnerDefinition(
-            name="critic-loop",
-            steps=[
-                CycleStep(agent=cfg.architect_role, step_type="produce",
-                          artifact="design.md", max_retries=0),
-                CycleStep(agent=cfg.critic_role, step_type="critique",
-                          artifact="critique.md", max_retries=0),
-            ],
-            convergence=CycleConvergence(
-                condition="agent_judgment",
-                max_iterations=cfg.max_iterations,
-                on_timeout="best_effort",
-            ),
-            initial_phase_artifact="requirements.md",
-            final_artifact="design.md",
-        )
-
-        # Custom convergence: use CriticLoopConfig.convergence_keywords
-        def critic_convergence_check(
-            _definition: CycleRunnerDefinition,
-            iteration: int,
-            step_results: list,
-            artifacts: dict[str, str],
-        ) -> bool:
-            """Check critic output for convergence keywords."""
-            for sr in step_results:
-                if sr.step_type == "critique" and sr.status == "success":
-                    text = " ".join(
-                        v.lower() for v in sr.artifacts.values()
-                    )
-                    for kw in keywords:
-                        if kw.lower() in text:
-                            return True
-            return False
-
-        # Run through the CycleRunner engine (reusing self as the agent runner)
-        cycle_runner = CycleRunner(root=target_dir)
-        cycle_runner._agent_runner = self
-
-        try:
-            cycle_result = await cycle_runner.run(
-                definition=cycle_def,
-                engagement_slug="_critic_loop",
-                spec_content=spec_content,
-                architecture_rules=architecture_rules or [],
-                backend_name=backend_name,
-                on_convergence_check=critic_convergence_check,
-            )
-        except Exception as exc:
-            raise CriticLoopError(f"Critic loop failed: {exc}") from exc
-
-        # Build iteration results directly from step results, using the
-        # same convergence keywords for consistency
-        iteration_results = _build_iterations_from_cycle(
-            cycle_result, cfg.convergence_keywords
-        )
-
-        if cycle_result.status == "error":
-            return CriticLoopResult(
-                converged=False,
-                iterations=cycle_result.iterations,
-                iteration_results=iteration_results,
-                final_state=CriticLoopState.ERROR,
-                error_message=cycle_result.error or "Critic loop error",
-            )
-
-        if cycle_result.status == "complete":
-            return CriticLoopResult(
-                converged=True,
-                iterations=cycle_result.iterations,
-                iteration_results=iteration_results,
-                final_state=CriticLoopState.CONVERGED,
-            )
-
-        # timeout (best_effort)
-        return CriticLoopResult(
-            converged=False,
-            iterations=cycle_result.iterations,
-            iteration_results=iteration_results,
-            final_state=CriticLoopState.MAX_ITERATIONS_REACHED,
+        # cycle.py has been deleted — CycleRunner is replaced by
+        # the new config-driven critic loop system.
+        # Use LoopRunner with convergence strategies or template-based
+        # steps instead (see .harness/step_templates.yaml for built-in
+        # critic loop templates).
+        raise CriticLoopError(
+            "run_critic_loop() is deprecated. The CycleRunner engine (cycle.py) "
+            "has been replaced by config-driven critic loops. Use:"
+            "\n  1. Template steps with `template: architecture-review` in "
+            "your phase YAML"
+            "\n  2. Or LoopRunner directly with a GateJudgmentStrategy "
+            "convergence check"
+            "\n  See loop/convergence.py and .harness/step_templates.yaml "
+            "for the new API."
         )
 
     def _check_critic_convergence(
@@ -662,8 +579,8 @@ class AgentRunner:
 
         Note:
             This is kept for backward compatibility. New code should
-            use the CycleRunner engine directly with a custom
-            ``on_convergence_check`` callback.
+            use the LoopRunner engine with a convergence strategy
+            (see loop/convergence.py) or template-based critic loops.
         """
         artifacts_text = " ".join(
             v.lower() for v in critic_result.artifacts.values()
@@ -774,14 +691,13 @@ class AgentRunner:
 
 
 def _build_iterations_from_cycle(
-    cycle_result: CycleResult,
+    cycle_result: Any,
     convergence_keywords: list[str],
 ) -> list[CriticLoopIteration]:
-    """Convert CycleResult step results to CriticLoopIteration list.
+    """Build CriticLoopIteration list from step results (deprecated).
 
-    Groups step results by iteration, pairs produce/critique, and uses
-    the provided convergence_keywords to determine converged status per
-    iteration — matching the same logic as run_critic_loop's callback.
+    This function is no longer used by run_critic_loop() (which now
+    raises an error). It is preserved for any external callers.
     """
     from collections import defaultdict
 
@@ -789,15 +705,18 @@ def _build_iterations_from_cycle(
         lambda: {"arch_arts": {}, "critic_arts": {}}
     )
 
-    for sr in cycle_result.step_results:
-        if sr.step_type == "produce":
-            iteration_map[sr.iteration]["arch_arts"].update(sr.artifacts)
-        elif sr.step_type in ("critique", "gate"):
-            iteration_map[sr.iteration]["critic_arts"].update(sr.artifacts)
+    step_results = getattr(cycle_result, "step_results", [])
+    for sr in step_results:
+        step_type = getattr(sr, "step_type", "")
+        iteration = getattr(sr, "iteration", 0)
+        artifacts = getattr(sr, "artifacts", {})
+        if step_type == "produce":
+            iteration_map[iteration]["arch_arts"].update(artifacts)
+        elif step_type in ("critique", "gate"):
+            iteration_map[iteration]["critic_arts"].update(artifacts)
 
     iterations: list[CriticLoopIteration] = []
     for iter_num, data in sorted(iteration_map.items()):
-        # Use the same convergence keywords as the crit loop callback
         converged = False
         text = " ".join(
             v.lower() for v in data["critic_arts"].values()

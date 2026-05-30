@@ -427,14 +427,41 @@ class TestInitPhaseJumpCounts:
 
 class TestFormatJumpMarker:
     def test_returns_string(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult(status="phase_jump:design")
+        from typing import Optional
+        from dataclasses import dataclass
+        @dataclass
+        class _CycleResultStub:
+            status: str = "complete"
+            iterations: int = 0
+            summary: str = ""
+            error: Optional[str] = None
+            @property
+            def is_phase_jump(self):
+                return self.status is not None and self.status.startswith("phase_jump:")
+            @property
+            def jump_target(self):
+                if self.is_phase_jump:
+                    return self.status[len("phase_jump:"):]
+        result = _CycleResultStub(status="phase_jump:design")
         text = _format_jump_marker(result)
         assert "design" in text
 
     def test_empty_when_not_jump(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult()
+        from typing import Optional
+        from dataclasses import dataclass
+        @dataclass
+        class _CycleResultStub:
+            status: str = "complete"
+            iterations: int = 0
+            summary: str = ""
+            error: Optional[str] = None
+            @property
+            def is_phase_jump(self):
+                return False
+            @property
+            def jump_target(self):
+                return None
+        result = _CycleResultStub()
         assert _format_jump_marker(result) == ""
 
 
@@ -560,17 +587,33 @@ class TestSwitchProvider:
         assert result["model"] == "gpt-4o-mini"
 
 
+class _CycleResult:
+    """Stub for CycleResult — cycle.py (deleted)."""
+    def __init__(self, status="complete", iterations=0, summary="", error=None):
+        self.status = status
+        self.iterations = iterations
+        self.summary = summary
+        self.error = error
+
+    @property
+    def is_phase_jump(self):
+        return self.status is not None and self.status.startswith("phase_jump:")
+
+    @property
+    def jump_target(self):
+        if self.is_phase_jump:
+            return self.status[len("phase_jump:"):]
+
+
 class TestProcessCycleResultForDisplay:
     def test_basic_result(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult(status="complete", iterations=3, summary="Done")
+        result = _CycleResult(status="complete", iterations=3, summary="Done")
         lines = _process_cycle_result_for_display(result)
         assert any("3 iteration" in l for l in lines)
         assert any("Done" in l for l in lines)
 
     def test_with_phase_jump(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult(
+        result = _CycleResult(
             status="phase_jump:design", iterations=2,
             summary="Need to redesign",
         )
@@ -578,7 +621,6 @@ class TestProcessCycleResultForDisplay:
         assert any("design" in l for l in lines)
 
     def test_with_error(self):
-        from harness.agents.cycle import CycleResult
-        result = CycleResult(status="error", error="Something failed")
+        result = _CycleResult(status="error", error="Something failed")
         lines = _process_cycle_result_for_display(result)
         assert any("failed" in l for l in lines)

@@ -18,7 +18,25 @@ from typing import Any
 import click
 
 from harness.agents.consultation import ConsultationResult
-from harness.agents.cycle import CycleResult
+from dataclasses import dataclass
+
+
+@dataclass
+class _CycleResultStub:
+    """Minimal CycleResult stub — migrated from cycle.py (deleted)."""
+    status: str = "complete"
+
+    @property
+    def is_phase_jump(self) -> bool:
+        return False
+
+    @property
+    def jump_target(self) -> str | None:
+        return None
+
+    @property
+    def summary(self) -> str:
+        return ""
 from harness.session.helpers import (
     PHASES,
     _format_jump_marker,
@@ -243,7 +261,7 @@ async def session_loop(
     # ── Phase execution loop ──────────────────────────
     for phase_idx in range(start_idx, len(effective_phases)):
         phase_def = effective_phases[phase_idx]
-        click.echo(str(_format_jump_marker(CycleResult(status="complete"))))
+        click.echo(str(_format_jump_marker(_CycleResultStub(status="complete"))))
 
         _print_header(f"  Phase {phase_idx + 1 - start_idx}/{len(effective_phases) - start_idx}"
                        f" -- {phase_def['title']}")

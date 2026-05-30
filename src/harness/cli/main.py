@@ -18,13 +18,8 @@ import click
 
 from harness._version import __version__, __build__, __build_date__, __commit__
 from harness.cli.commands import (
-    abort_engagement_command,
-    create_engagement_command,
     dispatch_cli_command,
-    enter_phase_command,
     finish_engagement_command,
-    init_project_command,
-    manage_phase_command,
     next_command,
     query_status_command,
     query_whats_next_command,
@@ -47,6 +42,14 @@ from harness.cli.commands import (
     refresh_agents_command,
     set_governance_command,
 )
+from harness.command.setup import create_bus
+from harness.command.commands.engagement import (
+    AbortEngagementCommand,
+    CreateEngagementCommand,
+    ResumeEngagementCommand,
+)
+from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
+from harness.command.commands.project import InitProjectCommand
 from harness.cli.helpers import (
     bold,
     find_project_root,
@@ -221,11 +224,12 @@ def enter_phase(slug, phase):
         harness enter-phase my-engagement requirements
     """
     try:
-        cmd = enter_phase_command(slug, phase)
-        result = dispatch_cli_command(cmd)
+        bus = create_bus()
+        cmd = EnterPhaseCommand(slug=slug, phase=phase)
+        result = bus.dispatch(cmd)
 
         if not result.success:
-            click.echo("Enter phase failed: " + result.error, err=True)
+            click.echo("Enter phase failed: " + (result.error or result.message), err=True)
             raise click.Abort()
 
         click.echo(result.message)
@@ -269,27 +273,34 @@ def init(project_dir, template, seed, no_git, force):
         harness init --force                 # re-init (overwrites state)
     """
     try:
-        cmd = init_project_command(
+        bus = create_bus()
+        cmd = InitProjectCommand(
             project_dir=project_dir,
             template=template,
             seed=seed,
             no_git=no_git,
             force=force,
         )
-        result = dispatch_cli_command(cmd)
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
 
         click.echo(result.message)
-        data = result.data
-        click.echo(f"  Project : {data.get('project', '?')}")
-        click.echo(f"  Template: {data.get('template', '(none)')}")
-        click.echo(f"  Path    : {data.get('path', '?')}")
-
-        if data.get('git_initted'):
-            click.echo("  Git     : initialised")
+        data = getattr(result, 'data', result.__dict__ if hasattr(result, '__dict__') else {})
+        if isinstance(data, dict):
+            click.echo(f"  Project : {data.get('project', '?')}")
+            click.echo(f"  Template: {data.get('template', '(none)')}")
+            click.echo(f"  Path    : {data.get('path', '?')}")
+            if data.get('git_initted'):
+                click.echo("  Git     : initialised")
+        elif hasattr(result, 'project'):
+            click.echo(f"  Project : {result.project}")
+            click.echo(f"  Template: {result.template or '(none)'}")
+            click.echo(f"  Path    : {result.path}")
+            if result.git_initted:
+                click.echo("  Git     : initialised")
 
     except click.Abort:
         raise
@@ -359,27 +370,29 @@ def work(description, mode, backend, max_iterations, partial_approval):
         slug = re.sub(r"[^a-z0-9-]", "-", description.lower().strip())
         slug = re.sub(r"-+", "-", slug).strip("-")
 
-        cmd = create_engagement_command(
+        bus = create_bus()
+        cmd = CreateEngagementCommand(
             slug=slug,
             workflow_name="standard",
             session_type="greenfield",
             mode=mode,
         )
-        result = dispatch_cli_command(cmd)
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo(f"Failed to start engagement: {result.error}", err=True)
             raise click.Abort()
 
         click.echo(result.message)
-        data = result.data
-        click.echo(f"  ID: {data.get('slug', slug)}")
-        click.echo(f"  Branch: {data.get('target_branch', '-')}")
-        if data.get('branch_created'):
-            click.echo("  Branch created: yes")
-        warnings = data.get('warnings', [])
-        for w in warnings:
-            click.echo(f"  {w.get('type', 'warning')}: {w.get('message', '')}")
+        data = getattr(result, 'data', {})
+        if isinstance(data, dict):
+            click.echo(f"  ID: {data.get('slug', slug)}")
+            click.echo(f"  Branch: {data.get('target_branch', '-')}")
+            if data.get('branch_created'):
+                click.echo("  Branch created: yes")
+            warnings = data.get('warnings', [])
+            for w in warnings:
+                click.echo(f"  {w.get('type', 'warning')}: {w.get('message', '')}")
 
     except click.Abort:
         raise
@@ -1323,15 +1336,16 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
             return
 
         root = require_project_root(command_name='phase')
-        cmd = manage_phase_command(
+        bus = create_bus()
+        cmd = ManagePhaseCommand(
             slug=engagement_id or '',
             action=action,
-            target=target,
+            target=target or None,
             feedback_reason=fb_reason,
             force=force_flag,
-            root=root,
+            root=str(root),
         )
-        result = dispatch_cli_command(cmd)
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
@@ -2126,8 +2140,9 @@ def close(slug):
             raise click.Abort()
 
         # Dispatch through CommandBus
-        cmd = abort_engagement_command(slug, mode="graceful")
-        result = dispatch_cli_command(cmd)
+        bus = create_bus()
+        cmd = AbortEngagementCommand(slug=slug, mode="graceful")
+        result = bus.dispatch(cmd)
 
         if not result.success:
             click.echo(f"Failed to close engagement: {result.error}", err=True)

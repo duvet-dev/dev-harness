@@ -10,20 +10,14 @@ from unittest.mock import patch
 
 import pytest
 
-from harness.command.handlers import (
-    AbortEngagementHandler,
-    CreateEngagementHandler,
+from harness.command.legacy_handlers import (
     CreateWaveHandler,
-    EnterPhaseHandler,
     ExecuteStepHandler,
     NextHandler,
     QueryStatusHandler,
     QueryWhatsNextHandler,
-    ResumeEngagementHandler,
     FinishEngagementHandler,
     ReviewEngagementHandler,
-    InitProjectHandler,
-    PhaseManagementHandler,
     RunWaveHandler,
     SessionHandler,
     ChatHandler,
@@ -48,122 +42,6 @@ from harness.command.handlers import (
 )
 from harness.command.registry import CommandRegistry
 from harness.command.types import Command, CommandHandler, CommandResult
-
-
-class TestCreateEngagementHandler:
-    """Delegates to StartupResumeFlow.create() — Wave 10 wired."""
-
-    def test_creates_engagement(self, tmp_path):
-        """Handler creates engagement via StartupResumeFlow."""
-        # Set up a temp project with .harness dir
-        (tmp_path / ".harness").mkdir()
-
-        from unittest.mock import patch
-        with patch("pathlib.Path.cwd", return_value=tmp_path):
-            handler = CreateEngagementHandler()
-            cmd = Command(slug="my-eng", command_type="create_engagement")
-            result = handler.handle(cmd)
-
-        assert result.success is True
-        assert "created" in result.message
-        assert result.data["slug"] == "my-eng"
-        assert result.data["status"] == "active"
-        assert result.data["delegated_to"] == "StartupResumeFlow.create()"
-
-    def test_with_workflow_override(self, tmp_path):
-        """Handler passes workflow_name through to StartupResumeFlow."""
-        (tmp_path / ".harness").mkdir()
-
-        from unittest.mock import patch
-        with patch("pathlib.Path.cwd", return_value=tmp_path):
-            handler = CreateEngagementHandler()
-            cmd = Command(
-                slug="fix-bug", command_type="create_engagement",
-                data={"workflow_name": "quick-fix"},
-            )
-            result = handler.handle(cmd)
-
-        assert result.success is True
-        assert result.data["workflow_name"] == "quick-fix"
-
-    def test_empty_slug_fails(self, tmp_path):
-        """Empty slug is rejected."""
-        (tmp_path / ".harness").mkdir()
-
-        from unittest.mock import patch
-        with patch("pathlib.Path.cwd", return_value=tmp_path):
-            handler = CreateEngagementHandler()
-            cmd = Command(slug="", command_type="create_engagement")
-            result = handler.handle(cmd)
-
-        assert result.success is False
-        assert "cannot be empty" in result.error.lower()
-
-    def test_duplicate_slug_fails(self, tmp_path):
-        """Creating with existing slug fails."""
-        (tmp_path / ".harness").mkdir()
-
-        from unittest.mock import patch
-        with patch("pathlib.Path.cwd", return_value=tmp_path):
-            handler = CreateEngagementHandler()
-            # Create first
-            cmd1 = Command(slug="my-eng", command_type="create_engagement")
-            handler.handle(cmd1)
-            # Try again — should fail
-            cmd2 = Command(slug="my-eng", command_type="create_engagement")
-            result = handler.handle(cmd2)
-
-        assert result.success is False
-        assert "already exists" in result.error.lower()
-
-
-class TestResumeEngagementHandler:
-    """Delegates to StartupResumeFlow.resume() — Wave 10 wired."""
-
-    def test_resumes_engagement(self, tmp_path):
-        """Handler resumes engagement via StartupResumeFlow."""
-        (tmp_path / ".harness").mkdir()
-
-        from unittest.mock import patch
-        with patch("pathlib.Path.cwd", return_value=tmp_path):
-            # First create an engagement
-            create_handler = CreateEngagementHandler()
-            create_cmd = Command(
-                slug="my-eng", command_type="create_engagement",
-            )
-            create_handler.handle(create_cmd)
-
-            # Now resume it
-            handler = ResumeEngagementHandler()
-            cmd = Command(slug="my-eng", command_type="resume_engagement")
-            result = handler.handle(cmd)
-
-        assert result.success is True
-        assert "resumed" in result.message
-        assert result.data["slug"] == "my-eng"
-        assert result.data["status"] == "active"
-        assert result.data["delegated_to"] == "StartupResumeFlow.resume()"
-
-
-class TestEnterPhaseHandler:
-    """Delegates to PhaseOrchestrator.enter_phase()."""
-
-    def test_returns_success_for_valid_phase(self):
-        handler = EnterPhaseHandler()
-        cmd = Command(
-            slug="my-eng", command_type="enter_phase",
-            data={"phase": "design"},
-        )
-        result = handler.handle(cmd)
-        assert result.success is True
-        assert "Phase 'design' entry dispatched" in result.message
-
-    def test_missing_phase_returns_error(self):
-        handler = EnterPhaseHandler()
-        cmd = Command(slug="my-eng", command_type="enter_phase", data={})
-        result = handler.handle(cmd)
-        assert result.success is False
-        assert "No phase specified" in result.error
 
 
 class TestNextHandler:
@@ -220,54 +98,6 @@ class TestExecuteStepHandler:
         assert result.success is True
 
 
-class TestAbortEngagementHandler:
-    """Delegates to AbortHandler — Wave 6 wired."""
-
-    def test_attempts_abort_via_handler(self):
-        """Handler attempts real abort; fails gracefully if engagement missing."""
-        handler = AbortEngagementHandler()
-        cmd = Command(
-            slug="nonexistent-eng", command_type="abort_engagement",
-            data={"mode": "graceful"},
-        )
-        result = handler.handle(cmd)
-        # Will fail gracefully since the engagement doesn't exist on disk
-        assert "Abort failed" in result.message or "aborted" in result.message
-
-    def test_passes_mode_through(self):
-        """Mode is passed to AbortHandler."""
-        handler = AbortEngagementHandler()
-        cmd = Command(
-            slug="nonexistent-eng", command_type="abort_engagement",
-            data={"mode": "hard"},
-        )
-        result = handler.handle(cmd)
-        # If it reaches AbortHandler, mode is in data
-        if result.success:
-            assert result.data.get("mode") == "hard"
-
-    def test_default_mode_is_graceful(self):
-        """No mode specified → defaults to graceful."""
-        handler = AbortEngagementHandler()
-        # Since the handler tries real repo IO, mock Path.cwd to avoid
-        # filesystem dependency for this mode-test only
-        from unittest.mock import patch
-        import pathlib
-        original_cwd = pathlib.Path.cwd
-        pathlib.Path.cwd = lambda: pathlib.Path("/tmp")
-        try:
-            cmd = Command(slug="my-eng", command_type="abort_engagement", data={})
-            result = handler.handle(cmd)
-        finally:
-            pathlib.Path.cwd = original_cwd
-        # Mode is set before repository access attempt
-        # If the handler reaches AbortHandler's _do_abort with None repo,
-        # it uses stub; but the handler creates the repo, so mode check
-        # happens before repo operations
-        # Actually the data dict is built from AbortResult's fields
-        assert "Abort failed" in result.message or "aborted" in result.message
-
-
 class TestQueryStatusHandler:
     """Delegates to EngagementHealthCheck.check()."""
 
@@ -299,13 +129,9 @@ class TestRegisterAllHandlers:
         registry = CommandRegistry()
         register_all_handlers(registry)
         types = registry.list_registered()
-        assert "create_engagement" in types
-        assert "resume_engagement" in types
-        assert "enter_phase" in types
         assert "next" in types
         assert "create_wave" in types
         assert "execute_step" in types
-        assert "abort_engagement" in types
         assert "query_status" in types
         assert "query_whats_next" in types
         assert "finish_engagement" in types
@@ -315,30 +141,12 @@ class TestRegisterAllHandlers:
         registry = CommandRegistry()
         register_all_handlers(registry)
         # Each handler should be a different instance
-        h1 = registry.get_handler("create_engagement")
-        h2 = registry.get_handler("resume_engagement")
+        h1 = registry.get_handler("next")
+        h2 = registry.get_handler("create_wave")
         assert h1 is not h2
 
 
 # ── Exception branch coverage ───────────────────────────────────────
-
-
-class TestEnterPhaseHandlerExceptions:
-    """Coverage for EnterPhaseHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = EnterPhaseHandler()
-        cmd = Command(
-            slug="my-eng", command_type="enter_phase",
-            data={"phase": "design"},
-        )
-        with patch(
-            "harness.phase.orchestrator.PhaseOrchestrator",
-            side_effect=ValueError("mocked orchestrator error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked orchestrator error" in result.error
 
 
 class TestCreateWaveHandlerExceptions:
@@ -405,12 +213,12 @@ class TestAgentListHandler:
     """Wave O: AgentListHandler — lists registered agents."""
 
     def test_importable(self):
-        from harness.command.handlers import AgentListHandler
+        from harness.command.legacy_handlers import AgentListHandler
         handler = AgentListHandler()
         assert isinstance(handler, CommandHandler)
 
     def test_returns_agent_list(self):
-        from harness.command.handlers import AgentListHandler
+        from harness.command.legacy_handlers import AgentListHandler
         handler = AgentListHandler()
         cmd = Command(slug="", command_type="agent_list")
         result = handler.handle(cmd)
@@ -430,12 +238,12 @@ class TestFleetListHandler:
     """Wave O: FleetListHandler — lists registered teams."""
 
     def test_importable(self):
-        from harness.command.handlers import FleetListHandler
+        from harness.command.legacy_handlers import FleetListHandler
         handler = FleetListHandler()
         assert isinstance(handler, CommandHandler)
 
     def test_returns_team_list(self):
-        from harness.command.handlers import FleetListHandler
+        from harness.command.legacy_handlers import FleetListHandler
         handler = FleetListHandler()
         cmd = Command(slug="", command_type="fleet_list")
         result = handler.handle(cmd)
@@ -455,13 +263,13 @@ class TestConsultHandler:
     """Wave O: ConsultHandler — routes consultation questions."""
 
     def test_importable(self):
-        from harness.command.handlers import ConsultHandler
+        from harness.command.legacy_handlers import ConsultHandler
         handler = ConsultHandler()
         assert isinstance(handler, CommandHandler)
 
     def test_routes_question(self):
         """Consult handler should return a result (matched or unmatched)."""
-        from harness.command.handlers import ConsultHandler
+        from harness.command.legacy_handlers import ConsultHandler
         handler = ConsultHandler()
         cmd = Command(
             slug="",
@@ -493,21 +301,6 @@ class TestCommandHandlerAbstractBody:
 
 
 # ── Exception branch coverage for all handlers ──────────────────────
-
-
-class TestAbortEngagementHandlerExceptions:
-    """Coverage for AbortEngagementHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = AbortEngagementHandler()
-        cmd = Command(slug="my-eng", command_type="abort_engagement", data={"mode": "hard"})
-        with patch(
-            "harness.session.abort.AbortHandler",
-            side_effect=ValueError("mocked abort error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "mocked abort error" in result.error
 
 
 class TestQueryWhatsNextHandlerExceptions:
@@ -554,42 +347,6 @@ class TestReviewEngagementHandlerExceptions:
         result = handler.handle(cmd)
         assert result.success is False
         assert "No decision" in result.error
-
-
-class TestInitProjectHandlerExceptions:
-    """Coverage for InitProjectHandler exception branch."""
-
-    def test_exception_returns_error(self, tmp_path):
-        handler = InitProjectHandler()
-        cmd = Command(slug="", command_type="init_project",
-                      data={"root": str(tmp_path)})
-        with patch(
-            "harness.paths.get_harness_dir",
-            side_effect=RuntimeError("init path error"),
-        ):
-            result = handler.handle(cmd)
-        assert result.success is False
-        assert "init path error" in result.error
-
-    def test_project_dir_is_file(self, tmp_path):
-        project_file = tmp_path / "afile"
-        project_file.write_text("not a dir")
-        handler = InitProjectHandler()
-        cmd = Command(slug="", command_type="init_project",
-                      data={"project_dir": str(project_file), "root": str(tmp_path)})
-        result = handler.handle(cmd)
-        assert result.success is False
-        assert "is a file" in result.error
-
-
-class TestPhaseManagementHandlerExceptions:
-    """Coverage for PhaseManagementHandler exception branch."""
-
-    def test_exception_returns_error(self):
-        handler = PhaseManagementHandler()
-        cmd = Command(slug="", command_type="manage_phase", data={"action": "list"})
-        result = handler.handle(cmd)
-        assert isinstance(result, CommandResult)
 
 
 class TestRunWaveHandlerExceptions:

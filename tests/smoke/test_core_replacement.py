@@ -57,12 +57,8 @@ class TestCoreInfrastructure:
     def test_commandbus_dispatch_importable(self):
         """CLI commands route through CommandBus."""
         from harness.cli.commands import (
-            create_engagement_command,
-            abort_engagement_command,
             dispatch_cli_command,
         )
-        assert callable(create_engagement_command)
-        assert callable(abort_engagement_command)
         assert callable(dispatch_cli_command)
 
     def test_legacy_runner_deleted(self):

@@ -17,10 +17,15 @@ from typing import Any, Callable, Optional
 import click
 import click.shell_completion
 
+from harness.command.setup import create_bus
 from harness.command.bus import CommandBus
-from harness.command.registry import CommandRegistry
-from harness.command.handlers import register_all_handlers
 from harness.command.types import Command, CommandResult
+from harness.command.commands.engagement import (
+    AbortEngagementCommand,
+    CreateEngagementCommand,
+)
+from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
+from harness.command.commands.project import InitProjectCommand
 
 
 # ── History ──────────────────────────────────────────────────────────────────
@@ -41,9 +46,7 @@ GROUP_MAP = {
 
 def _build_command_bus() -> CommandBus:
     """Create a fresh CommandBus with all handlers registered."""
-    registry = CommandRegistry()
-    register_all_handlers(registry)
-    return CommandBus(registry=registry)
+    return create_bus()
 
 
 def _dispatch_via_bus(command: Command) -> CommandResult:
@@ -67,10 +70,6 @@ def _single_arg(args: list[str]) -> dict[str, str]:
 
 def _engagement_create_args(args: list[str]) -> dict[str, Any]:
     """Parse args for /engagement create <name> [--slug ...] [...]."""
-    from harness.cli.commands import create_engagement_command
-    # We just pass the name; slug/other opts handled by the handler
-    # The REPL uses a simpler interface than the full CLI
-    # This is a basic mapper — expand as needed
     return {"slug": args[0], "workflow_name": "standard", "session_type": "greenfield", "mode": "auto"} if args else {}
 
 
@@ -111,7 +110,7 @@ def _init_args(args: list[str]) -> dict[str, Any]:
     """Parse /init [project_dir] [--template ...] [--no-git] [--force]."""
     remaining = [a for a in args if not a.startswith("--")]
     project_dir = remaining[0] if remaining else None
-    return {"project_dir": project_dir}
+    return {"project_dir": project_dir, "root": Path.cwd()}
 
 
 def _run_wave_args(args: list[str]) -> dict[str, Any]:
@@ -199,19 +198,19 @@ def _create_wave_from_finding_args(args: list[str]) -> dict[str, Any]:
 # Factory map: command_name -> (factory_fn, arg_parser)
 COMMAND_MAP: dict[str, tuple[Callable[..., Command], Callable[[list[str]], dict[str, Any]]]] = {
     # Engagement lifecycle
-    "engagement create":             (lambda **kw: __import__("harness.cli.commands", fromlist=["create_engagement_command"]).create_engagement_command(**kw), _engagement_create_args),
-    "engagement close":              (lambda **kw: __import__("harness.cli.commands", fromlist=["abort_engagement_command"]).abort_engagement_command(**kw), _single_arg),
+    "engagement create":             (lambda **kw: CreateEngagementCommand(**kw), _engagement_create_args),
+    "engagement close":              (lambda **kw: AbortEngagementCommand(**kw), _single_arg),
     "engagement rename":             (lambda **kw: __import__("harness.cli.commands", fromlist=["rename_engagement_command"]).rename_engagement_command(**kw), lambda a: {"old_slug": a[0], "new_slug": a[1]} if len(a) >= 2 else {}),
     "engagement set-branch":         (lambda **kw: __import__("harness.cli.commands", fromlist=["set_branch_command"]).set_branch_command(**kw), lambda a: {"slug": a[0], "branch": a[1]} if len(a) >= 2 else {"slug": a[0] if a else ""}),
     "engagement fix":                (lambda **kw: __import__("harness.cli.commands", fromlist=["fix_engagement_command"]).fix_engagement_command(**kw), lambda a: {"slug": a[0] if a else ""}),
     # Phase management
-    "enter-phase":                    (lambda **kw: __import__("harness.cli.commands", fromlist=["enter_phase_command"]).enter_phase_command(**kw), lambda a: {"slug": a[0], "phase": a[1]} if len(a) >= 2 else {}),
-    "phase":                         (lambda **kw: __import__("harness.cli.commands", fromlist=["manage_phase_command"]).manage_phase_command(**kw), _phase_args),
+    "enter-phase":                    (lambda **kw: EnterPhaseCommand(**kw), lambda a: {"slug": a[0], "phase": a[1]} if len(a) >= 2 else {}),
+    "phase":                         (lambda **kw: ManagePhaseCommand(**kw), _phase_args),
     # Session / chat
     "session":                       (lambda **kw: __import__("harness.cli.commands", fromlist=["session_command"]).session_command(**kw), _session_args),
     "chat":                          (lambda **kw: __import__("harness.cli.commands", fromlist=["chat_command"]).chat_command(**kw), _chat_args),
-    "work":                          (lambda **kw: __import__("harness.cli.commands", fromlist=["create_engagement_command"]).create_engagement_command(**kw), _work_args),
-    "init":                          (lambda **kw: __import__("harness.cli.commands", fromlist=["init_project_command"]).init_project_command(**kw), _init_args),
+    "work":                          (lambda **kw: CreateEngagementCommand(**kw), _work_args),
+    "init":                          (lambda **kw: InitProjectCommand(**kw), _init_args),
     "finish":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["finish_engagement_command"]).finish_engagement_command(**kw), _finish_args),
     "review":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["review_engagement_command"]).review_engagement_command(**kw), _review_args),
     "summary":                       (lambda **kw: __import__("harness.cli.commands", fromlist=["summary_command"]).summary_command(**kw), _summary_args),

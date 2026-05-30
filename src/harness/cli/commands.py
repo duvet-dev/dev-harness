@@ -7,11 +7,9 @@ naming and produce the correct ``command_type`` and ``data`` fields.
 Usage::
 
     from harness.cli.commands import (
-        create_engagement_command,
         dispatch_cli_command,
     )
 
-    cmd = create_engagement_command(slug="my-eng", workflow="standard")
     result = dispatch_cli_command(cmd)
     if result.success:
         click.echo(result.message)
@@ -26,76 +24,36 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from harness.command.bus import CommandBus
-from harness.command.handlers import register_all_handlers
-from harness.command.registry import CommandRegistry
+from harness.command.setup import create_bus
 from harness.command.types import Command, CommandResult
 
 
-# ── Command Factory Functions ──────────────────────────────────────────
-
-
-def create_engagement_command(slug: str, **kwargs: object) -> Command:
-    """Create a ``CreateEngagement`` command for the CommandBus.
-
-    Args:
-        slug: The engagement slug.
-        **kwargs: Additional data fields (e.g. workflow, template).
-
-    Returns:
-        A Command with ``command_type="create_engagement"``.
-    """
-    return Command(slug=slug, command_type="create_engagement", data=dict(kwargs))
-
-
-def enter_phase_command(slug: str, phase: str) -> Command:
-    """Create an ``EnterPhase`` command for the CommandBus.
-
-    Args:
-        slug: The engagement slug.
-        phase: The phase name to enter (e.g. "design", "requirements").
-
-    Returns:
-        A Command with ``command_type="enter_phase"``.
-    """
-    return Command(slug=slug, command_type="enter_phase", data={"phase": phase})
+# ── Factory Functions (non-migrated) ─────────────────────────────────
 
 
 def next_command(slug: str) -> Command:
-    """Create a ``Next`` command for the CommandBus.
-
-    Args:
-        slug: The engagement slug.
-
-    Returns:
-        A Command with ``command_type="next"``.
-    """
+    """Create a ``Next`` command for the CommandBus."""
     return Command(slug=slug, command_type="next")
 
 
-def abort_engagement_command(slug: str, mode: str = "graceful") -> Command:
-    """Create an ``AbortEngagement`` command for the CommandBus.
+def create_wave_command(slug: str, title: str = "New Wave") -> Command:
+    """Create a ``CreateWave`` command for the CommandBus."""
+    return Command(slug=slug, command_type="create_wave", data={"title": title})
 
-    Args:
-        slug: The engagement slug.
-        mode: Abort mode — ``"graceful"`` (default) or ``"hard"``.
 
-    Returns:
-        A Command with ``command_type="abort_engagement"``.
-    """
-    return Command(slug=slug, command_type="abort_engagement", data={"mode": mode})
+def execute_step_command(slug: str, step_spec: str = "") -> Command:
+    """Create an ``ExecuteStep`` command for the CommandBus."""
+    return Command(slug=slug, command_type="execute_step", data={"step": step_spec})
 
 
 def query_status_command(slug: str) -> Command:
-    """Create a ``QueryStatus`` command for the CommandBus.
-
-    Args:
-        slug: The engagement slug.
-
-    Returns:
-        A Command with ``command_type="query_status"``.
-    """
+    """Create a ``QueryStatus`` command for the CommandBus."""
     return Command(slug=slug, command_type="query_status")
+
+
+def query_whats_next_command(slug: str) -> Command:
+    """Create a ``QueryWhatsNext`` command for the CommandBus."""
+    return Command(slug=slug, command_type="query_whats_next")
 
 
 def finish_engagement_command(
@@ -140,7 +98,6 @@ def review_engagement_command(
     Returns:
         A Command with ``command_type="review_engagement"``.
     """
-    from pathlib import Path
     data: dict[str, Any] = {
         "decision": decision,
         "root": str(root or Path.cwd()),
@@ -154,100 +111,6 @@ def review_engagement_command(
         command_type="review_engagement",
         data=data,
     )
-
-
-def query_whats_next_command(slug: str) -> Command:
-    """Create a ``QueryWhatsNext`` command for the CommandBus.
-
-    Args:
-        slug: The engagement slug.
-
-    Returns:
-        A Command with ``command_type="query_whats_next"``.
-    """
-    return Command(slug=slug, command_type="query_whats_next")
-
-
-def init_project_command(
-    project_dir: str | None = None,
-    template: str | None = None,
-    seed: str | None = None,
-    no_git: bool = False,
-    force: bool = False,
-    root: str | Path | None = None,
-) -> Command:
-    """Create an ``InitProject`` command for the CommandBus.
-
-    Args:
-        project_dir: Subdirectory name (optional).
-        template: Template name (optional).
-        seed: Context to seed from (optional).
-        no_git: Skip git init.
-        force: Re-initialise even if already set up.
-        root: Project root (default: cwd).
-
-    Returns:
-        A Command with ``command_type="init_project"``.
-    """
-    from pathlib import Path
-    data: dict[str, Any] = {
-        "root": str(root or Path.cwd()),
-        "no_git": no_git,
-        "force": force,
-    }
-    if project_dir is not None:
-        data["project_dir"] = project_dir
-    if template is not None:
-        data["template"] = template
-    if seed is not None:
-        data["seed"] = seed
-    return Command(
-        slug="",
-        command_type="init_project",
-        data=data,
-    )
-
-
-def manage_phase_command(
-    slug: str,
-    action: str,
-    target: str | None = None,
-    feedback_reason: str = "",
-    force: bool = False,
-    root: str | Path | None = None,
-) -> Command:
-    """Create a ``ManagePhase`` command for the CommandBus.
-
-    Args:
-        slug: The engagement slug.
-        action: Phase action (list, navigate, feedback, resume, status,
-            feedback_list).
-        target: Target phase for navigate/feedback.
-        feedback_reason: Reason for feedback.
-        force: Bypass checkpoint staleness checks.
-        root: Project root (default: cwd).
-
-    Returns:
-        A Command with ``command_type="manage_phase"``.
-    """
-    from pathlib import Path
-    data: dict[str, Any] = {
-        "action": action,
-        "root": str(root or Path.cwd()),
-        "force": force,
-    }
-    if target is not None:
-        data["target"] = target
-    if feedback_reason:
-        data["feedback_reason"] = feedback_reason
-    return Command(
-        slug=slug,
-        command_type="manage_phase",
-        data=data,
-    )
-
-
-# ── Dispatch Helper ────────────────────────────────────────────────────
 
 
 # ── Wave F: RunWave / Session / Chat ────────────────────────────────
@@ -342,18 +205,7 @@ def summary_command(
     json_flag: bool = False,
     reconcile: bool = False,
 ) -> Command:
-    """Create a ``Summary`` command for the CommandBus.
-
-    Args:
-        deep: Include deep analysis (architecture, coverage, dead code).
-        assess_flag: Run LLM-based independent assessment.
-        engagement: Specific engagement ID.
-        json_flag: Output as JSON.
-        reconcile: Refresh state before summary.
-
-    Returns:
-        A Command with ``command_type="summary"``.
-    """
+    """Create a ``Summary`` command for the CommandBus."""
     return Command(
         slug=engagement or "",
         command_type="summary",
@@ -367,27 +219,12 @@ def summary_command(
 
 
 def inspect_command(root: str = ".") -> Command:
-    """Create an ``Inspect`` command for the CommandBus.
-
-    Args:
-        root: Path to the project root to inspect.
-
-    Returns:
-        A Command with ``command_type="inspect"``.
-    """
+    """Create an ``Inspect`` command for the CommandBus."""
     return Command(slug="", command_type="inspect", data={"root": root})
 
 
 def assess_command(root: str = ".", deep_flag: bool = True) -> Command:
-    """Create an ``Assess`` command for the CommandBus.
-
-    Args:
-        root: Path to the project root.
-        deep_flag: Run deep assessment.
-
-    Returns:
-        A Command with ``command_type="assess"``.
-    """
+    """Create an ``Assess`` command for the CommandBus."""
     return Command(
         slug="",
         command_type="assess",
@@ -499,62 +336,41 @@ def refresh_agents_command(
     return Command(
         slug="",
         command_type="refresh_agents",
-        data={"project_dir": project_dir, "force": force},
+        data={
+            "project_dir": project_dir,
+            "force": force,
+        },
     )
 
 
 def set_governance_command(
-    level: str,
-    slug: str | None = None,
+    level: str = "standard",
+    slug: str = "",
 ) -> Command:
     """Create a ``SetGovernance`` command."""
     return Command(
-        slug=slug or "",
+        slug=slug,
         command_type="set_governance",
         data={"level": level},
     )
 
 
-# ── Wave O: Agent / Fleet / Consult ────────────────────────────────────
-
-
 def agent_list_command() -> Command:
-    """Create an ``AgentList`` command for the CommandBus.
-
-    Returns:
-        A Command with ``command_type="agent_list"``.
-    """
+    """Create an ``AgentList`` command."""
     return Command(slug="", command_type="agent_list")
 
 
 def fleet_list_command() -> Command:
-    """Create a ``FleetList`` command for the CommandBus.
-
-    Returns:
-        A Command with ``command_type="fleet_list"``.
-    """
+    """Create a ``FleetList`` command."""
     return Command(slug="", command_type="fleet_list")
 
 
-def consult_command(
-    question: str,
-    team_filter: str | None = None,
-    mode: str = "advisory",
-) -> Command:
-    """Create a ``Consult`` command for the CommandBus.
-
-    Args:
-        question: The consultation question text.
-        team_filter: Optional team name to limit the search.
-        mode: Consultation mode ("advisory" or "blocking").
-
-    Returns:
-        A Command with ``command_type="consult"``.
-    """
+def consult_command(question: str = "") -> Command:
+    """Create a ``Consult`` command."""
     return Command(
         slug="",
         command_type="consult",
-        data={"question": question, "team_filter": team_filter, "mode": mode},
+        data={"question": question},
     )
 
 
@@ -564,9 +380,8 @@ def consult_command(
 def dispatch_cli_command(command: Command) -> CommandResult:
     """Dispatch a command through the CommandBus from a CLI context.
 
-    Creates a fresh ``CommandBus``, registers all delegation-thin handlers,
-    and dispatches the command. This is the single entry point for all
-    CLI-to-CommandBus interactions.
+    Creates a fresh ``CommandBus`` via ``create_bus()`` with all registered
+    handlers (both legacy and typed), and dispatches the command.
 
     Args:
         command: The Command to dispatch.
@@ -577,7 +392,5 @@ def dispatch_cli_command(command: Command) -> CommandResult:
     Raises:
         harness.errors.UnknownCommandError: If no handler is registered.
     """
-    registry = CommandRegistry()
-    register_all_handlers(registry)
-    bus = CommandBus(registry=registry)
+    bus = create_bus()
     return bus.dispatch(command)

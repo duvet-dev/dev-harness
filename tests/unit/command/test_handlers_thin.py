@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from harness.command.handlers import (
+from harness.command.legacy_handlers import (
     FixEngagementHandler,
     RefreshAgentsHandler,
     RenameEngagementHandler,

@@ -22,23 +22,23 @@ class TestEngagementCommandPattern:
 
     def test_finish_handler_importable(self):
         """FinishEngagementHandler is registered."""
-        from harness.command.handlers import FinishEngagementHandler
+        from harness.command.legacy_handlers import FinishEngagementHandler
         assert FinishEngagementHandler is not None
 
     def test_review_handler_importable(self):
         """ReviewEngagementHandler is registered."""
-        from harness.command.handlers import ReviewEngagementHandler
+        from harness.command.legacy_handlers import ReviewEngagementHandler
         assert ReviewEngagementHandler is not None
 
     def test_init_handler_importable(self):
-        """InitProjectHandler is registered."""
-        from harness.command.handlers import InitProjectHandler
-        assert InitProjectHandler is not None
+        """InitProjectTypedHandler is importable."""
+        from harness.command.handlers.project_handlers import InitProjectTypedHandler
+        assert InitProjectTypedHandler is not None
 
     def test_phase_handler_importable(self):
-        """PhaseManagementHandler is registered."""
-        from harness.command.handlers import PhaseManagementHandler
-        assert PhaseManagementHandler is not None
+        """PhaseManagementTypedHandler is importable."""
+        from harness.command.handlers.phase_handlers import PhaseManagementTypedHandler
+        assert PhaseManagementTypedHandler is not None
 
     def test_finish_factory_importable(self):
         """finish_engagement_command factory exists."""
@@ -51,14 +51,14 @@ class TestEngagementCommandPattern:
         assert callable(review_engagement_command)
 
     def test_init_factory_importable(self):
-        """init_project_command factory exists."""
-        from harness.cli.commands import init_project_command
-        assert callable(init_project_command)
+        """InitProjectCommand typed command is importable."""
+        from harness.command.commands.project import InitProjectCommand
+        assert InitProjectCommand is not None
 
     def test_phase_factory_importable(self):
-        """manage_phase_command factory exists."""
-        from harness.cli.commands import manage_phase_command
-        assert callable(manage_phase_command)
+        """ManagePhaseCommand typed command is importable."""
+        from harness.command.commands.phase import ManagePhaseCommand
+        assert ManagePhaseCommand is not None
 
     def test_sessiontype_shim_gone(self):
         """SessionType shim class removed from helpers.py."""

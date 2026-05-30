@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from harness.command.handlers import (
+from harness.command.legacy_handlers import (
     FinishEngagementHandler,
     ReviewEngagementHandler,
     register_all_handlers,

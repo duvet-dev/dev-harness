@@ -1,7 +1,7 @@
 # Dev Harness
 
-[![Tests](https://img.shields.io/badge/tests-1826%20%E2%9C%85-brightgreen)](#)
-[![Coverage](https://img.shields.io/badge/coverage-74%25-yellowgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-3262%20%E2%9C%85-brightgreen)](#)
+[![Coverage](https://img.shields.io/badge/coverage-79%25-yellowgreen)](#)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](#)
 [![License](https://img.shields.io/badge/license-proprietary-lightgrey)](#)
 
@@ -12,15 +12,17 @@ to plan, implement, test, and review code through structured, gated workflows.
   test → review, with agents for each phase
 - **Engagement model** — every task is a tracked engagement with state,
   checkpoints, feedback loops, and a full audit trail
-- **Observer mode** — analyse any codebase without setup or state
-- **Fleet orchestration** — agents grouped into domain teams with
-  cross-fleet consultation, governance levels, and blocking/advisory mode
+- **CommandBus architecture** — all operations dispatched through a unified
+  command bus with delegation-thin handlers
+- **Team orchestration** — agents grouped into domain teams with
+  cross-team consultation, governance levels, and blocking/advisory mode
 - **Temporal-backed durability** — workflow persistence for long-running
   agent sessions (auto-starts the dev server if available)
 - **LLM-agnostic** — pluggable backends: DeepSeek, OpenAI, Anthropic, CLI, or
   custom
 - **Self-testing** — agents write and run their own tests as part of the
   development cycle
+- **Interactive REPL** — tab-complete shell with command history
 
 ---
 
@@ -53,8 +55,8 @@ export DEEPSEEK_API_KEY="sk-..."
 Analyse any repo instantly, no setup needed:
 
 ```bash
-.venv/bin/harness observe /path/to/repo    # fast scan (15+ checks)
 .venv/bin/harness assess /path/to/repo     # full deep analysis
+.venv/bin/harness status                   # quick project status
 ```
 
 ---
@@ -78,22 +80,6 @@ export PATH=".venv/bin:$PATH"
 - Creates a Python virtual environment in `.venv/`
 - Upgrades pip inside it
 - Installs dev-harness in editable mode with dev dependencies (pytest, ruff, etc.)
-- Downloads the Temporal CLI dev server binary (if not already in PATH)
-
-To download the Temporal binary explicitly:
-
-```bash
-make download-temporal
-```
-
-### Single executable (alpha)
-
-```bash
-make build-exe
-# Output: dist/harness (Linux/macOS) or dist/harness.exe (Windows)
-```
-
-Bundles Temporal's dev server for a zero-install experience.
 
 ### Dependencies
 
@@ -111,7 +97,7 @@ Bundles Temporal's dev server for a zero-install experience.
 ### Quick test run
 
 ```bash
-make test           # 1826 tests, 0 failures, 0 warnings — ~10s
+make test           # 3262 tests, 0 failures, 0 warnings — ~17s
 ```
 
 ### Full CI pipeline (what CI runs)
@@ -127,27 +113,10 @@ make ci
 
 ```bash
 make test-coverage     # Tests + coverage report + HTML in coverage/
-make coverage-html     # Same as above, then opens report path
 make test-e2e          # On-demand end-to-end tests (LLM APIs, live services)
 make test-verbose      # Tests with verbose output + slowest durations
-make test-ci           # Alias for make ci
+make test-smoke        # Fast smoke tests (~1s)
 ```
-
-### Running specific tests
-
-```bash
-# Directly with pytest
-pytest tests/                               # whole suite
-pytest tests/analysis/                      # analysis module
-pytest tests/test_cycle.py                  # single file
-pytest tests/test_validator.py -k "interface"  # by keyword
-pytest tests/ -W error::RuntimeWarning      # CI mode
-pytest -m e2e                               # e2e-marked tests only
-```
-
-All 1826 functional tests run in under 10 seconds with **zero external
-dependencies**. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full
-developer guide.
 
 ---
 
@@ -160,7 +129,8 @@ harness init          Create a new harness project
 harness work          Full auto-pilot engagement
 harness session       Phase-by-phase interactive session
 harness chat          Interactive LLM chat within an engagement
-harness agent run     Run a single agent by name
+harness shell         Launch interactive REPL
+harness health        Run configuration and state validation checks
 ```
 
 ### Engagement lifecycle
@@ -172,53 +142,56 @@ harness engagement set-active      Set active engagement
 harness engagement status          Show engagement details
 harness engagement close           Close an engagement
 harness engagement rename          Rename an engagement
+harness engagement set-branch      Set the branch for an engagement
+harness phase                      Manage phase state (list, navigate, resume)
 harness review                     Review at a gate checkpoint
-harness phase                      Manage phase state
 harness finish                     Complete with final commit
+harness enter-phase                Enter a specific phase
+harness whatsnext                  Show available next actions
 ```
 
 ### Analysis
 
 ```
 harness summary        Project status with phase breakdown
-harness observe        Analyse any codebase (no setup)
 harness assess         Deep analysis with LLM assessment
 ```
 
-### Fleet management
+### Team management
 
 ```
-harness fleet list              List registered fleets
-harness fleet show <name>       Fleet details
-harness fleet add-agent         Add agent to fleet
-harness fleet remove-agent      Remove agent from fleet
+harness fleet list              List registered teams
+harness fleet show <name>       Team details with agents and guidelines
 harness fleet consult           Show consultation capabilities
 harness fleet set-governance    Set governance level
+harness consult                 Ask a cross-team consultation question
 ```
 
 ### Wave cycle
 
 ```
-harness wave list      List plan waves
-harness wave run       Run a wave through implement→test→verify→commit
-harness wave status    Show detailed wave state
+harness wave list           List plan waves
+harness wave run <id>       Run a wave through implement→test→verify→commit
+harness wave status         Show detailed wave state
+harness wave create-from-assessment   Create waves from assessment findings
+harness wave create-from-finding      Create a wave from a specific finding
 ```
 
-### State & sync
+### Agent management
 
 ```
-harness catchup        Reconcile state with git
-harness absorb         Absorb external changes
+harness agent list     List registered agent roles
+harness agent show     Show agent details
+harness agent run      Run an agent by name
+harness refresh-agents Refresh agent profiles from registry
 ```
 
 ### Utilities
 
 ```
-harness shell          Interactive REPL
 harness generate-docs  Auto-generate documentation
-harness changelog      Manage changelogs
-harness agent list     List registered agents
-harness agent show     Agent details
+harness changelog annotate  Append annotation to changelog
+harness version        Show version (--version, --version-full)
 ```
 
 Use `harness workflows` for workflow guidance, or `harness <command> --help`
@@ -231,20 +204,17 @@ for per-command options.
 | Target | Description |
 |---|---|
 | `make install` | Create .venv, install deps, download Temporal |
-| `make test` | Run full test suite (1826 tests, ~10s) |
+| `make test` | Run full test suite (3262 tests, ~17s) |
 | `make ci` | Full CI: lint → tests → coverage (≥70%) |
 | `make test-coverage` | Tests + coverage report + HTML in coverage/ |
-| `make coverage-html` | Generate coverage HTML report |
+| `make test-smoke` | Fast smoke tests (~1s) |
 | `make lint` | Run ruff linter |
 | `make version` | Show current version (e.g. 0.1.0.003) |
 | `make version-full` | Show version, build number, and build date |
-| `make version-bump` | Increment build number (run automatically by build) |
-| `make test-e2e` | End-to-end tests (on-demand, live services) |
-| `make build` | Bump build number + build Python wheel |
+| `make version-bump` | Increment build number |
+| `make build` | Bump version + build Python wheel |
 | `make build-exe` | Single executable binary (alpha) |
-| `make download-temporal` | Download Temporal CLI binary |
-| `make clean` | Remove build artifacts, reset build counter |
-| `make publish` | Build and publish to registry |
+| `make clean` | Remove build artifacts, coverage/ |
 
 ---
 
@@ -252,48 +222,52 @@ for per-command options.
 
 ```
 src/harness/
-├── agents/            Agent runner, backends, fleet, consultation
-│   ├── backends/      LLM providers (API, CLI, editor)
-│   ├── builtin/       Built-in agent implementations
-│   ├── runner.py      Agent execution engine
-│   ├── fleet.py       Fleet definitions and governance
-│   ├── fleet_registry.py
-│   ├── consultation.py
-│   ├── cycle.py       Built-in cycle definitions
-│   └── ...
+├── agents/            Agent runner, backends, teams, consultation
+│   ├── consultation.py    Cross-team consultation routing
+│   ├── orchestrator.py    Agent orchestration engine
+│   ├── agent_registry.py  Agent role catalog
+│   ├── plugin_registry.py Backend plugin discovery
+│   └── builtin/           Built-in agent implementations
+├── cli/               Click CLI definitions (thin dispatching layer)
+│   ├── main.py            CLI entry point
+│   ├── commands.py        Command factory functions
+│   └── helpers.py         CLI utility functions
+├── command/           CommandBus architecture (V7 §5.20)
+│   ├── bus.py             Command dispatcher
+│   ├── handlers.py        30 delegation-thin handlers
+│   ├── types.py           Command, CommandResult, CommandHandler
+│   └── registry.py        Handler registration
+├── session/           Interactive session loops
+│   ├── session_orchestrator.py  Session entry points + InteractiveSession
+│   ├── commands.py           Session command routing
+│   └── helpers.py            Session UI helpers
+├── shell/             Interactive REPL with CommandBus dispatch
+├── team/              Team registry and model
+│   ├── model.py           AgentTeam dataclass
+│   ├── registry.py        TeamRegistry with layered merge semantics
+│   └── defaults.py        Built-in team definitions
+├── engagement/        Engagement lifecycle, checkpoints, feedback
+├── plan/              Wave planning and management
 ├── analysis/          Code scanning, assessment, observer
-│   ├── fast.py        Lightweight structural analysis
-│   ├── deep.py        Architecture conformance, coverage, dead code
-│   ├── summary.py     Report formatting
-│   ├── assessment.py  LLM-based independent assessment (P1-P5)
-│   └── observer.py    Stand-alone analysis entry point
-├── config/            Provider configuration
-├── constitution/      Development constitution, templates
-├── context/           Context loading and caching
-├── docs/              Documentation generation
-├── engagement/        Engagement lifecycle, feedback, checkpoints
-├── plan/              Wave planning
-├── refactor/          Refactoring loop, debt detection
+├── skills/            Skills registry for agent prompt injection
+├── config/            LLM provider configuration
+├── constitution/      Development constitution and templates
+├── phase/             Phase templates and orchestration
 ├── scm/               Git operations
-├── session/           Interactive sessions
-├── shell/             REPL
 ├── state/             Workflow state, Temporal server/worker
-├── sync/              OpenClaw vault sync
-├── templates/         Agent templates
-├── tools/             Web search
 ├── workflows/         Temporal workflow definitions
-├── cli.py             Click-based CLI
-└── entry.py           PyInstaller entry point
+└── skills/            Skills registry for agent prompt injection
 ```
 
-### Layers
+### Key Patterns
 
-| Layer | Responsibility |
+| Pattern | Responsibility |
 |---|---|
-| **Agent** | Runner, backends, fleet orchestration, tool access |
-| **Analysis** | Fast scan, deep analysis, LLM assessment |
-| **Workflow** | Temporal-based engagement lifecycle orchestration |
-| **Infrastructure** | SCM, state management, sync, config |
+| **CommandBus** | Unified dispatch: Click → Command → Handler → Business component |
+| **TeamRegistry** | Agent team management with built-in < project < user merge |
+| **SkillsRegistry** | Static skill content injection into agent prompts |
+| **PhaseOrchestrator** | Multi-phase session orchestration |
+| **ConsultationOrchestrator** | Cross-team question routing |
 
 ---
 
@@ -324,6 +298,7 @@ settings and `constitution.yaml` for project constitution, gates, and rules.
   services (LLM APIs, Temporal server, etc.)
 - **Coverage Threshold** — CI enforces ≥70% line coverage; HTML report in
   `coverage/index.html`
+- **Alpha Mode** — no backward compatibility: old code is removed, not preserved
 - **Commit Conventions** — semantic prefixes: `feat:`, `fix:`, `refactor:`,
   `docs:`, `test:`, `chore:` — see CONTRIBUTING.md
 

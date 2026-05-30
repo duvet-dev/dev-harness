@@ -129,7 +129,10 @@ def _print_version_full(ctx, param, value):
 def main():
     """Dev Harness — agent orchestration for software development.
 
-    See ``harness workflows`` for a guide to choosing the right workflow.
+    CommandBus-based architecture with 30+ handlers. All operations
+    flow through Click -> Command -> Handler -> business component.
+
+    See ``harness workflows`` for workflow guidance.
     """
     pass
 

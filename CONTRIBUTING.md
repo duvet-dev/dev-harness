@@ -53,33 +53,31 @@ api_backend: "deepseek"
 ```
 dev-harness/
 ├── src/harness/          # Source code
-│   ├── agents/           # Agent runner, backends, fleet, consultation
+│   ├── agents/           # Agent runner, backends, teams, consultation
 │   ├── analysis/         # Code scanning, LLM assessment
-│   ├── cli.py            # Click-based CLI
+│   ├── cli/              # Click CLI definitions (thin dispatch layer)
+│   ├── command/          # CommandBus architecture (30 handlers)
 │   ├── config/           # Provider configuration
 │   ├── constitution/     # Development constitution
 │   ├── context/          # Context loading
 │   ├── docs/             # Documentation generation
 │   ├── engagement/       # Engagement lifecycle
 │   ├── plan/             # Wave planning
+│   ├── phase/            # Phase templates
 │   ├── refactor/         # Refactoring, debt detection
 │   ├── scm/              # Git operations
 │   ├── session/          # Interactive sessions
-│   ├── shell/            # REPL
+│   ├── shell/            # REPL with CommandBus dispatch
+│   ├── skills/           # Skills registry
 │   ├── state/            # Temporal server, state management
 │   ├── sync/             # OpenClaw vault sync
-│   ├── templates/        # Agent templates
+│   ├── team/             # Team registry and model
 │   ├── tools/            # Web search
 │   └── workflows/        # Temporal workflows
-├── tests/                # Functional and feature tests (1826+)
-│   ├── analysis/         # Code analysis tests
-│   ├── docs/             # Documentation generation tests
-│   ├── engagement/       # Engagement lifecycle tests
-│   ├── refactor/         # Refactoring tests
-│   ├── session/          # Session tests
-│   └── ...
-├── tests_e2e/            # End-to-end/integration tests (on-demand)
-├── scripts/_temporal/    # Auto-downloaded Temporal CLI binary
+├── tests/
+│   ├── unit/             # Unit tests (mirrors src/harness/ structure)
+│   ├── smoke/            # Fast smoke tests (~1s)
+│   └── e2e/              # On-demand end-to-end tests
 ├── Makefile              # Build, test, lint, package targets
 ├── pyproject.toml        # Project metadata, dependencies, tool config
 ├── README.md
@@ -93,21 +91,18 @@ dev-harness/
 | Target | What it does |
 |---|---|
 | `make install` | Create .venv, install deps, download Temporal |
-| `make test` | Run full suite: `pytest tests/ -W error::RuntimeWarning` |
-| `make ci` | Full CI pipeline: lint → test → coverage (≥70%) |
-| `make test-coverage` | Tests + coverage report + HTML |
+| `make test` | Run unit+smoke: `pytest tests/unit/ tests/smoke/` |
+| `make test-all` | Run all tests including e2e |
+| `make test-smoke` | Fast smoke tests only (~1s) |
 | `make test-e2e` | On-demand end-to-end tests |
-| `make test-verbose` | Tests with verbose output + top 10 slowest |
+| `make ci` | Full CI pipeline: lint → test → coverage (≥70%) |
 | `make lint` | Run ruff linter (src/harness/ + tests/) |
 | `make version` | Show current version (e.g. 0.1.0.003) |
 | `make version-full` | Show version, build number, and build date |
 | `make version-bump` | Increment build number |
-| `make check-types` | Run mypy (if installed) |
-| `make build` | Bump build + build Python wheel in `dist/` |
+| `make build` | Bump version + build Python wheel in `dist/` |
 | `make build-exe` | Single-file executable (requires PyInstaller) |
-| `make download-temporal` | Download Temporal CLI for current platform |
 | `make clean` | Remove build artifacts, coverage/ |
-| `make publish` | Build + publish to internal registry |
 
 Run `make help` for a full list.
 
@@ -118,9 +113,8 @@ Run `make help` for a full list.
 ### Using Make
 
 ```bash
-make test              # Full suite — 1826 tests, ~10s
-make test-coverage     # Tests + coverage with HTML report
-make test-verbose      # Verbose with slowest durations
+make test              # Full suite — 3200+ tests, ~17s
+make test-smoke        # Fast smoke tests
 make test-e2e          # On-demand e2e tests (live services)
 make ci                # CI pipeline (lint → test → coverage)
 ```
@@ -129,31 +123,29 @@ make ci                # CI pipeline (lint → test → coverage)
 
 ```bash
 # Run everything
-pytest tests/
+pytest tests/unit/ tests/smoke/
 
-# CI mode (warnings as errors)
-pytest tests/ -W error::RuntimeWarning
+# Run all (including e2e)
+pytest
 
 # With coverage
-pytest --cov=src/harness tests/
+pytest --cov=src/harness tests/unit/ tests/smoke/
 
 # With coverage + HTML report
-pytest --cov=src/harness --cov-report=html:coverage tests/
+pytest --cov=src/harness --cov-report=html:coverage tests/unit/ tests/smoke/
 
 # Run a specific area
-pytest tests/analysis/
-pytest tests/test_cycle.py
-pytest tests/analysis/test_analysis_observer.py::TestAnalyse
-pytest tests/test_validator.py -k "interface"
+pytest tests/unit/agents/
+pytest tests/unit/shell/
+pytest tests/unit/session/test_session_orchestrator.py
 
 # End-to-end tests (require live services)
-pytest -m e2e
-pytest tests_e2e/
+pytest tests/e2e/
 ```
 
 ### Performance
 
-The full core suite (1826 tests) runs in under 10 seconds with
+The full unit + smoke suite (3200+ tests) runs in under 18 seconds with
 **zero external dependencies**. All LLM calls, Temporal server
 operations, and external services are mocked or patched.
 
@@ -166,14 +158,12 @@ make lint       # Run ruff check on src/harness/ and tests/
 ruff check .    # Lint the whole repository (alt)
 ```
 
-Configuration is in `pyproject.toml` under `[tool.ruff]`. Per-file
-ignores are set for test files (cosmetic rules suppressed) and
-source files (pre-existing issues gradually resolved).
+Configuration is in `pyproject.toml` under `[tool.ruff]`.
 
 ### Coverage
 
 Coverage HTML reports are generated to `coverage/index.html`.
-The threshold is **70%** — CI fails below this.
+The threshold is **70%** — CI fails below this. Current coverage: **~79%**.
 
 ```bash
 make test-coverage               # Run + generate HTML
@@ -198,7 +188,12 @@ open coverage/index.html         # Browse in browser
    must pass with zero failures. Tests may fail before implementation
    (TDD red phase) but never after.
 
+4. **Coverage must not decrease.** Every change should maintain or
+   increase coverage. All new code targets 100% coverage.
+
 ### Writing new tests
+
+New tests go in `tests/unit/[module]/`, mirroring the `src/harness/` structure.
 
 ```python
 # ✅ Good — full isolation, no external deps
@@ -218,34 +213,19 @@ def test_with_llm_mock(self):
 # ❌ Bad — real LLM calls
 def test_bad_example(self):
     result = my_function()  # This calls a real API!
-
-# ❌ Bad — depends on external state
-def test_also_bad(self):
-    os.chdir("/some/external/path")
-    result = my_function()  # Depends on /some/external/path existing
 ```
 
 ### Mock patterns
 
-For async functions (like `assess()` in `harness.analysis.assessment`):
+For async functions:
 
 ```python
-# Patch at the import source — the lazy import in the function body
-# picks up the patched version at call time.
 with patch("harness.analysis.assessment.assess",
            return_value=_mock_report()):
     result = my_function(deep=True)
 ```
 
 For `patch()` on async functions, Python 3.9 auto-creates an `AsyncMock`.
-If you need a plain `MagicMock`, pass `new_callable=MagicMock`.
-
-### Markers
-
-| Marker | Purpose |
-|---|---|
-| `@pytest.mark.asyncio` | For async test functions |
-| `@pytest.mark.e2e` | Tests requiring external dependencies (excluded from CI) |
 
 ---
 
@@ -276,20 +256,17 @@ feat: add web search tool to agent toolkit
 
 fix: patch assess() in observer deep tests
 
-Resolves 10-minute hang when API keys are configured.
+Resolves long hang when API keys are configured.
 ```
 
 Prefixes: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`,
 `build:`, `ci:`, `perf:`, `style:`.
 
-### Branch naming
+### Alpha Mode
 
-```
-feat/web-search-tool
-fix/observer-test-hang
-docs/contributing-guide
-refactor/agent-runner
-```
+This project operates in **alpha mode**: no backward compatibility is
+preserved. Old code is removed immediately, not commented out or aliased.
+If a change breaks a consumer, the consumer updates in the same commit.
 
 ---
 
@@ -308,12 +285,11 @@ refactor/agent-runner
 ### Before submitting a PR
 
 - [ ] `make ci` passes (lint → tests → coverage ≥70%)
-- [ ] No new warnings introduced (`pytest tests/ -W error::RuntimeWarning`)
+- [ ] No new warnings introduced
 - [ ] Code is type-annotated
 - [ ] New features have tests
 - [ ] Documentation updated (README, CLI help, or docstrings)
-- [ ] Changes are backward-compatible or documented as breaking
-- [ ] Remote is set up and changes pushed (never work on a local-only repo)
+- [ ] Changes follow alpha mode (no compat shims)
 
 ---
 
@@ -332,8 +308,8 @@ make version-full     # Full details (version, build, date)
 make version-bump     # Increment build number manually
 ```
 
-`make build` and `make build-exe` automatically run `version-bump`
-before packaging, so every wheel/executable has a unique build
+`make build` automatically runs `version-bump`
+before packaging, so every wheel has a unique build
 number and timestamp embedded.
 
 The version is accessible at runtime:
@@ -342,44 +318,12 @@ The version is accessible at runtime:
 .venv/bin/harness --version-full   # Full build info
 ```
 
-In development (no build run), the version shows `0.1.0.000` with
-an empty date.
-
----
-
-## Build system
-
-### Building the package
-
-```bash
-make clean       # Remove old artifacts, reset build counter
-make build       # Bump build + build wheel → dist/dev_harness-*.whl
-```
-
-### Building a single executable (alpha)
-
-```bash
-make build-exe   # Requires PyInstaller
-```
-
-Output: `dist/harness` (macOS/Linux) or `dist/harness.exe` (Windows).
-The binary bundles the Temporal CLI dev server — no separate install needed.
-
-### Publishing
-
-```bash
-make publish     # Build + upload to internal PyPI registry
-```
-
-Configure your registry URL in the `Makefile`'s `publish` target.
-
 ---
 
 ## Questions?
 
-Open an issue or ask in the project channel. For architecture decisions,
-see the `build/decisions/` directory.
+Open an issue or ask in the project channel.
 
 ---
 
-*Last updated: 2026-05-23*
+*Last updated: 2026-05-30*

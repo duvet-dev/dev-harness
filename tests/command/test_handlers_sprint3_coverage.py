@@ -67,7 +67,16 @@ class TestQuickReturnHandlers:
     )
     def test_returns_command_result(self, name, handler, cmd_kwargs):
         cmd = Command(slug="no-such-slug", command_type=name, **cmd_kwargs)
-        result = handler.handle(cmd)
+        # Handlers that write to .harness config need protection
+        if name == "set_governance":
+            with unittest.mock.patch(
+                "harness.agents.governance.set_project_governance"
+            ), unittest.mock.patch(
+                "harness.agents.governance.get_project_governance"
+            ):
+                result = handler.handle(cmd)
+        else:
+            result = handler.handle(cmd)
         assert isinstance(result, CommandResult), f"{name} did not return CommandResult"
 
     @pytest.mark.parametrize(

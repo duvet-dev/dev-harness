@@ -17,7 +17,6 @@ convergence strategies from harness.loop.convergence instead.
 
 from harness.agents.agent_registry import (
     AGENTS,
-    AgentRole,
     AgentSpec,
     get_agent,
     get_agents_by_tag,
@@ -40,7 +39,7 @@ __all__ = [
     "LanguagePatterns",
     "AGENTS",
     "AgentOrchestrator",
-    "AgentRole",
+    # AgentRole — removed in Wave J; roles are plain strings
     "AgentSpec",
     "AgentTeam",
     "ConsultationOrchestrator",

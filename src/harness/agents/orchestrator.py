@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any
 
 from harness.agents.agent_registry import (
-    AgentRole,
     CriticLoopConfig,
     CriticLoopIteration,
     CriticLoopState,
@@ -583,9 +582,8 @@ class AgentOrchestrator:
             return
 
         # Look up the agent spec
-        try:
-            agent_role = AgentRole(agent_role_str)
-        except ValueError:
+        agent_role = agent_role_str
+        if get_agent(agent_role) is None:
             logger.warning(
                 "Unknown agent role '%s', skipping RepoTool attachment",
                 agent_role_str,

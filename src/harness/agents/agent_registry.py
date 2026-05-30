@@ -75,76 +75,6 @@ class ToolPermissions:
         )
 
 
-# ── AgentRole — deprecated legacy enum ─────────────────────────────────
-# AgentRole is replaced by string-based agent keys via AgentCatalogue.
-# The class below provides backward-compatible attribute access so that
-# existing code like ``AgentRole.ARCHITECT`` continues to resolve to the
-# string ``"architect"``. Do not use AgentRole in new code.
-
-
-class _AgentRoleType(str):
-    """Backward-compatible shim replacing the former AgentRole enum.
-
-    Provides the same attribute access (``AgentRole.ARCHITECT`` →
-    ``"architect"``). No longer an enum — use string keys from
-    AgentCatalogue for new code.
-    """
-
-    COORDINATOR = "coordinator"
-    REQUIREMENTS_BUILDER = "requirements-builder"
-    ARCHITECT = "architect"
-    ARCHITECTURE_ANALYSER = "architecture-analyser"
-    PLANNING_AGENT = "planning-agent"
-    CODING_AGENT = "coding-agent"
-    TESTING_AGENT = "testing-agent"
-    CRITICAL_ANALYSER = "critical-analyser"
-    VALIDATION_AGENT = "validation-agent"
-    DOCUMENTATION_AGENT = "documentation-agent"
-    EXAMPLE_SCENARIOS_AGENT = "example-scenarios-agent"
-    DISCOVERY_AGENT = "discovery-agent"
-    SYNC = "sync"
-    REFACTORING_AGENT = "refactoring-agent"
-    BOUNDARY_TEST_AGENT = "boundary-test-agent"
-    REFACTOR_ORCHESTRATOR = "refactor-orchestrator"
-    DEAD_CODE_ANALYSER = "dead-code-analyser"
-    COMPONENT_ANALYSER = "component-analyser"
-    DOMAIN_INTERFACE_TESTER = "domain-interface-tester"
-    REQUIREMENTS_CONFORMANCE_REVIEWER = "requirements-conformance-reviewer"
-
-    # Short-form role names used by fleet definitions and phase configs
-    RESEARCHER = "researcher"
-    PLANNER = "planner"
-    CODER = "coder"
-    TESTER = "tester"
-    REVIEWER = "reviewer"
-
-    _VALID_ROLES: set[str] = frozenset({
-        "coordinator", "requirements-builder", "architect",
-        "architecture-analyser", "planning-agent", "coding-agent",
-        "testing-agent", "critical-analyser", "validation-agent",
-        "documentation-agent", "example-scenarios-agent", "discovery-agent",
-        "sync", "refactoring-agent", "boundary-test-agent",
-        "refactor-orchestrator", "dead-code-analyser", "component-analyser",
-        "domain-interface-tester", "requirements-conformance-reviewer",
-        "researcher", "planner", "coder", "tester", "reviewer",
-    })
-
-    def __new__(cls, value: str) -> str:
-        """Allow ``AgentRole("architect")`` style construction."""
-        if value in cls._VALID_ROLES:
-            return value
-        raise ValueError(f"'{value}' is not a valid AgentRole")
-
-
-AgentRole = _AgentRoleType
-
-
-warnings.warn(
-    "AgentRole enum is deprecated. Use string-based agent references via "
-    "AgentCatalogue instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 
 class CriticLoopState(str, Enum):
@@ -171,10 +101,10 @@ class CriticLoopConfig:
     See Wave 15 — Phase 4 (Design-Critic Loop).
     """
 
-    architect_role: str = AgentRole.ARCHITECT
+    architect_role: str = "architect"
     """Role of the agent that writes/revises design documents."""
 
-    critic_role: str = AgentRole.CRITICAL_ANALYSER
+    critic_role: str = "critical-analyser"
     """Role of the agent that reviews designs and writes critique reports."""
 
     max_iterations: int = 5
@@ -241,7 +171,7 @@ class AgentSpec:
 
 AGENTS: list[AgentSpec] = [
     AgentSpec(
-        role=AgentRole.COORDINATOR,
+        role="coordinator",
         name="Harness Coordinator",
         description=(
             "Top-level orchestrator. Manages the build plan, dispatches "
@@ -260,7 +190,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.read_only(),
     ),
     AgentSpec(
-        role=AgentRole.REQUIREMENTS_BUILDER,
+        role="requirements-builder",
         name="Requirements Builder",
         description=(
             "Takes raw input (voice notes, briefs, discussions) and "
@@ -278,7 +208,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.ARCHITECT,
+        role="architect",
         name="Architect",
         description=(
             "Produces technical architectures from requirements, "
@@ -304,7 +234,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.ARCHITECTURE_ANALYSER,
+        role="architecture-analyser",
         name="Architecture Analyser",
         description=(
             "Critical second opinion on architectures. Probes for mixed "
@@ -327,7 +257,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.read_only(),
     ),
     AgentSpec(
-        role=AgentRole.PLANNING_AGENT,
+        role="planning-agent",
         name="Planning Agent",
         description=(
             "Decomposes architecture into manageable implementation "
@@ -345,7 +275,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.CODING_AGENT,
+        role="coding-agent",
         name="Coding Agent",
         description=(
             "Implements code per spec and architecture. Follows SOLID, "
@@ -370,7 +300,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.unrestricted(),
     ),
     AgentSpec(
-        role=AgentRole.TESTING_AGENT,
+        role="testing-agent",
         name="Testing Agent",
         description=(
             "Tests code with a behaviour-first philosophy. Tests "
@@ -389,7 +319,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.unrestricted(),
     ),
     AgentSpec(
-        role=AgentRole.CRITICAL_ANALYSER,
+        role="critical-analyser",
         name="Critical Analyser",
         description=(
             "Inspects code, tests, and infrastructure holistically. "
@@ -409,7 +339,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.VALIDATION_AGENT,
+        role="validation-agent",
         name="Validation Agent",
         description=(
             "Checks that implementation matches requirements. "
@@ -425,7 +355,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.read_only(),
     ),
     AgentSpec(
-        role=AgentRole.DOCUMENTATION_AGENT,
+        role="documentation-agent",
         name="Documentation Agent",
         description=(
             "Creates and maintains development and usage documentation "
@@ -443,7 +373,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.EXAMPLE_SCENARIOS_AGENT,
+        role="example-scenarios-agent",
         name="Example Scenarios Agent",
         description=(
             "Creates runnable example scenarios as versioned snapshots "
@@ -461,7 +391,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.DISCOVERY_AGENT,
+        role="discovery-agent",
         name="Discovery Agent",
         description=(
             "Ideation and research. Explores new patterns, evaluates "
@@ -476,7 +406,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.with_web_search(),
     ),
     AgentSpec(
-        role=AgentRole.SYNC,
+        role="sync",
         name="Sync Agent",
         description=(
             "Reads current OpenClaw agent configurations and generates "
@@ -495,7 +425,7 @@ AGENTS: list[AgentSpec] = [
     ),
     # ── Wave 16a: Refactoring / Brownfield Agents ──────────────────────
     AgentSpec(
-        role=AgentRole.REFACTORING_AGENT,
+        role="refactoring-agent",
         name="Refactoring Agent",
         description=(
             "Understands project intent, feeds the architecture loop to "
@@ -517,7 +447,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.BOUNDARY_TEST_AGENT,
+        role="boundary-test-agent",
         name="Boundary Test Agent",
         description=(
             "Generates behaviour-capturing tests at application boundaries. "
@@ -538,7 +468,7 @@ AGENTS: list[AgentSpec] = [
         ),
     ),
     AgentSpec(
-        role=AgentRole.REFACTOR_ORCHESTRATOR,
+        role="refactor-orchestrator",
         name="Refactor Orchestrator",
         description=(
             "Top-level orchestrator for refactoring sessions. Manages the "
@@ -562,7 +492,7 @@ AGENTS: list[AgentSpec] = [
     ),
     # ── Wave 19 Phase 2: Review Agents ──────────────────────────────────
     AgentSpec(
-        role=AgentRole.DEAD_CODE_ANALYSER,
+        role="dead-code-analyser",
         name="Dead Code Analyser",
         description=(
             "Two-pronged analysis: (1) static analysis finds dead code, "
@@ -590,7 +520,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.with_web_search(),
     ),
     AgentSpec(
-        role=AgentRole.COMPONENT_ANALYSER,
+        role="component-analyser",
         name="Component Analyser",
         description=(
             "Evaluates whether interfaces and components are right-sized — "
@@ -615,7 +545,7 @@ AGENTS: list[AgentSpec] = [
     ),
     # ── Wave 19 Phase 3: Domain Interface Tester ────────────────────────
     AgentSpec(
-        role=AgentRole.DOMAIN_INTERFACE_TESTER,
+        role="domain-interface-tester",
         name="Domain Interface Tester",
         description=(
             "Black-box testing against domain object interfaces. Discovers "
@@ -645,7 +575,7 @@ AGENTS: list[AgentSpec] = [
     ),
     # ── Wave 19 Phase 3b: Requirements Conformance Reviewer ────────────
     AgentSpec(
-        role=AgentRole.REQUIREMENTS_CONFORMANCE_REVIEWER,
+        role="requirements-conformance-reviewer",
         name="Requirements Conformance Reviewer",
         description=(
             "Verifies that tests cover every acceptance criterion defined "
@@ -670,7 +600,7 @@ AGENTS: list[AgentSpec] = [
     ),
     # ── Short-form agent role aliases (used by fleet/phase configs) ────
     AgentSpec(
-        role=AgentRole.RESEARCHER,
+        role="researcher",
         name="Researcher",
         description="Researches and gathers information for the current task.",
         sop_summary=[
@@ -682,7 +612,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.unrestricted(),
     ),
     AgentSpec(
-        role=AgentRole.PLANNER,
+        role="planner",
         name="Planner",
         description="Plans implementation steps based on architecture and requirements.",
         sop_summary=[
@@ -694,7 +624,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.unrestricted(),
     ),
     AgentSpec(
-        role=AgentRole.CODER,
+        role="coder",
         name="Coder",
         description=(
             "Implements code per spec and architecture. Follows SOLID, "
@@ -709,7 +639,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.unrestricted(),
     ),
     AgentSpec(
-        role=AgentRole.TESTER,
+        role="tester",
         name="Tester",
         description=(
             "Tests code with a behaviour-first philosophy. Tests "
@@ -724,7 +654,7 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.unrestricted(),
     ),
     AgentSpec(
-        role=AgentRole.REVIEWER,
+        role="reviewer",
         name="Reviewer",
         description="Reviews code, design, and documentation for quality and correctness.",
         sop_summary=[
@@ -746,7 +676,7 @@ AGENTS: list[AgentSpec] = [
 def get_agent(role: str) -> AgentSpec | None:
     """Look up an agent specification by role."""
     try:
-        role = AgentRole(role)
+        role = role
     except ValueError:
         return None
     for agent in AGENTS:
@@ -773,13 +703,13 @@ def list_agent_roles() -> list[str]:
 def has_awareness_role(role: str) -> bool:
     """Check if an agent role is one of the brownfield/refactoring-aware roles."""
     return role in (
-        AgentRole.ARCHITECT,
-        AgentRole.CODING_AGENT,
-        AgentRole.TESTING_AGENT,
-        AgentRole.ARCHITECTURE_ANALYSER,
-        AgentRole.REFACTORING_AGENT,
-        AgentRole.BOUNDARY_TEST_AGENT,
-        AgentRole.REFACTOR_ORCHESTRATOR,
+        "architect",
+        "coding-agent",
+        "testing-agent",
+        "architecture-analyser",
+        "refactoring-agent",
+        "boundary-test-agent",
+        "refactor-orchestrator",
     )
 
 

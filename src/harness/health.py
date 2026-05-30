@@ -29,7 +29,7 @@ _CHECK_DESCRIPTIONS: dict[str, str] = {
     "branch-match": "Current git branch matches engagement's stored branch",
     "git-clean": "Git working tree has no uncommitted changes",
     "plan-consistency": "``plan.yaml`` is consistent with engagement state",
-    "agent-roles": "All agent roles referenced in fleet/phase configs exist in AgentRole enum",
+    "agent-roles": "All agent roles referenced in fleet/phase configs exist in agent registry",
     "manifest-link": "Assessment manifest files referenced by engagement exist",
     "python-version": "Python version meets minimum requirements",
 }
@@ -333,7 +333,7 @@ def check_git_clean(root: Path) -> HealthCheck:
 def check_agent_roles(root: Path) -> HealthCheck:
     """Verify all agent roles referenced in fleet/phase configs exist."""
     try:
-        from harness.agents.agent_registry import AgentRole
+        from harness.agents.agent_registry import AGENTS, AgentSpec
 
         # Scan .harness/fleets.yaml and .harness/engagements/ for role references
         fleet_path = root / ".harness" / "fleets.yaml"
@@ -352,20 +352,20 @@ def check_agent_roles(root: Path) -> HealthCheck:
                             referenced_roles.add(agent)
 
         # Validate each referenced role exists in the enum
-        valid_values = set(e.value for e in AgentRole)
+        valid_values = set(spec.role for spec in AGENTS)
         missing = [r for r in referenced_roles if r and r not in valid_values]
 
         if missing:
             return _result(
                 "agent-roles", "warn",
-                f"Referenced agent roles not in AgentRole enum: {', '.join(missing)}. "
+                f"Referenced agent roles not in agent registry: {', '.join(missing)}. "
                 f"These agents may operate without tool access.",
-                fix=f"Add to AgentRole enum: {', '.join(missing)}",
+                fix=f"Add to agent registry: {', '.join(missing)}",
             )
 
         return _result(
             "agent-roles", "pass",
-            f"All {len(referenced_roles)} referenced agent roles exist in AgentRole enum.",
+            f"All {len(referenced_roles)} referenced agent roles exist in agent registry.",
         )
     except Exception as exc:
         return _result("agent-roles", "warn", f"Cannot check agent roles: {exc}")

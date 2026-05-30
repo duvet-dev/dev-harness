@@ -1095,37 +1095,9 @@ def read_session_type(root: Path, slug: str) -> str | None:
         data = yaml.safe_load(f) or {}
 
     raw = data.get("session_type")
-    if raw is not None and str(raw) in SessionType._VALID:
+    if raw is not None and str(raw) in _SESSION_TYPE_VALUES:
         return str(raw)
     return None
-
-
-# ── SessionType — backward-compatible shim ──────────────────────────────────
-# SessionType was formerly a ``(str, enum.Enum)``. Session types are now
-# config-driven from constitution.yaml. The class below provides backward-
-# compatible attribute access so that existing code like
-# ``SessionType.REFACTORING`` continues to resolve to ``"refactoring"``.
-
-
-class SessionType(str):
-    """Backward-compatible shim replacing the former SessionType enum.
-
-    Provides the same attribute access (``SessionType.REFACTORING`` →
-    ``"refactoring"``). No longer an enum — use string values for new code.
-    """
-
-    GREENFIELD = "greenfield"
-    BROWNFIELD = "brownfield"
-    REFACTORING = "refactoring"
-    GET_WELL = "get-well"
-
-    _VALID = frozenset({"greenfield", "brownfield", "refactoring", "get-well"})
-
-    def __new__(cls, value: str) -> str:
-        """Allow ``SessionType("greenfield")`` style construction."""
-        if value in cls._VALID:
-            return value
-        raise ValueError(f"'{value}' is not a valid SessionType")
 
 
 _REFACTORING_KEYWORDS = {
@@ -1146,13 +1118,13 @@ _BROWNFIELD_KEYWORDS = {
 _SESSION_TYPE_VALUES = ["greenfield", "brownfield", "refactoring", "get-well"]
 
 
-def detect_session_type(prompt: str) -> SessionType | None:
+def detect_session_type(prompt: str) -> str | None:
     """Infer the likely session type from a requirements prompt."""
     lower = prompt.lower()
     if any(kw in lower for kw in _REFACTORING_KEYWORDS):
-        return SessionType.REFACTORING
+        return "refactoring"
     if any(kw in lower for kw in _BROWNFIELD_KEYWORDS):
-        return SessionType.BROWNFIELD
+        return "brownfield"
     return None
 
 

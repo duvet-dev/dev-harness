@@ -1,7 +1,6 @@
-"""Tests for harness.agents.agent_registry — agent specs and registry functions.
+"""Tests for harness.agents.agent_registry.
 
-Tests AgentSpec, AgentRole, ToolPermissions, CriticLoopConfig, and
-all registry lookup functions.
+AgentRole enum has been removed — all roles are now plain strings.
 """
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ import pytest
 
 from harness.agents.agent_registry import (
     AGENTS,
-    AgentRole,
     AgentSpec,
     CriticLoopConfig,
     CriticLoopIteration,
@@ -55,34 +53,16 @@ class TestToolPermissions:
         assert p.write is True
 
 
-class TestAgentRole:
-    """Tests for AgentRole enum."""
-
-    def test_known_roles(self):
-        assert AgentRole.COORDINATOR == "coordinator"
-        assert AgentRole.ARCHITECT == "architect"
-        assert AgentRole.CODING_AGENT == "coding-agent"
-        assert AgentRole.TESTING_AGENT == "testing-agent"
-
-    def test_from_string(self):
-        assert AgentRole("coordinator") == AgentRole.COORDINATOR
-        assert AgentRole("architect") == AgentRole.ARCHITECT
-
-    def test_invalid_string_raises(self):
-        with pytest.raises(ValueError):
-            AgentRole("nonexistent-role")
-
-
 class TestAgentSpec:
     """Tests for AgentSpec dataclass."""
 
     def test_minimal(self):
         spec = AgentSpec(
-            role=AgentRole.COORDINATOR,
+            role="coordinator",
             name="Test Agent",
             description="A test agent",
         )
-        assert spec.role == AgentRole.COORDINATOR
+        assert spec.role == "coordinator"
         assert spec.name == "Test Agent"
         assert spec.sop_summary == []
         assert spec.tags == []
@@ -90,7 +70,7 @@ class TestAgentSpec:
 
     def test_full(self):
         spec = AgentSpec(
-            role=AgentRole.ARCHITECT,
+            role="architect",
             name="Architect",
             description="Designs systems",
             sop_summary=["Analyse requirements", "Produce architecture"],
@@ -107,8 +87,8 @@ class TestCriticLoopConfig:
 
     def test_default_config(self):
         config = CriticLoopConfig()
-        assert config.architect_role == AgentRole.ARCHITECT
-        assert config.critic_role == AgentRole.CRITICAL_ANALYSER
+        assert config.architect_role == "architect"
+        assert config.critic_role == "critical-analyser"
         assert config.max_iterations == 5
         assert "no issues found" in config.convergence_keywords
         assert config.architect_output_subdir == "design/"
@@ -116,14 +96,14 @@ class TestCriticLoopConfig:
 
     def test_custom_config(self):
         config = CriticLoopConfig(
-            architect_role=AgentRole.CODING_AGENT,
-            critic_role=AgentRole.TESTING_AGENT,
+            architect_role="coding-agent",
+            critic_role="testing-agent",
             max_iterations=3,
             convergence_keywords=["approved"],
             architect_output_subdir="output/",
             critic_output_subdir="reviews/",
         )
-        assert config.architect_role == AgentRole.CODING_AGENT
+        assert config.architect_role == "coding-agent"
         assert config.max_iterations == 3
 
 
@@ -143,20 +123,20 @@ class TestCriticLoopIteration:
 
 
 class TestRegistryFunctions:
-    """Tests for registry lookup functions."""
+    """Tests for registry lookup functions (string-based agent keys)."""
 
-    def test_get_agent_by_role_enum(self):
-        agent = get_agent(AgentRole.COORDINATOR)
+    def test_get_agent_by_role_string(self):
+        agent = get_agent("coordinator")
         assert agent is not None
-        assert agent.role == AgentRole.COORDINATOR
+        assert agent.role == "coordinator"
 
-    def test_get_agent_by_string(self):
+    def test_get_agent_by_another_string(self):
         agent = get_agent("architect")
         assert agent is not None
-        assert agent.role == AgentRole.ARCHITECT
+        assert agent.role == "architect"
 
     def test_get_agent_nonexistent(self):
-        """get_agent with a string that's not a valid AgentRole returns None."""
+        """get_agent with an unknown string returns None."""
         result = get_agent("nonexistent-role")
         assert result is None
 
@@ -174,12 +154,12 @@ class TestRegistryFunctions:
         assert "coordinator" in names
         assert "architect" in names
         assert "coding-agent" in names
-        assert len(names) > 10  # Should have many agents
+        assert len(names) > 10
 
     def test_list_agent_roles(self):
         roles = list_agent_roles()
-        assert AgentRole.COORDINATOR in roles
-        assert AgentRole.ARCHITECT in roles
+        assert "coordinator" in roles
+        assert "architect" in roles
 
     def test_registry_summary(self):
         summary = registry_summary()
@@ -193,13 +173,13 @@ class TestHasAwarenessRole:
     """Tests for has_awareness_role()."""
 
     def test_architect_is_aware(self):
-        assert has_awareness_role(AgentRole.ARCHITECT) is True
+        assert has_awareness_role("architect") is True
 
     def test_coding_agent_is_aware(self):
-        assert has_awareness_role(AgentRole.CODING_AGENT) is True
+        assert has_awareness_role("coding-agent") is True
 
     def test_coordinator_is_not_aware(self):
-        assert has_awareness_role(AgentRole.COORDINATOR) is False
+        assert has_awareness_role("coordinator") is False
 
 
 class TestGetDefaultCriticLoopConfig:
@@ -208,7 +188,7 @@ class TestGetDefaultCriticLoopConfig:
     def test_returns_default_config(self):
         config = get_default_critic_loop_config()
         assert isinstance(config, CriticLoopConfig)
-        assert config.architect_role == AgentRole.ARCHITECT
+        assert config.architect_role == "architect"
         assert config.max_iterations == 5
 
 
@@ -218,13 +198,13 @@ class TestGetSessionAwareAgents:
     def test_returns_aware_agents(self):
         agents = get_session_aware_agents()
         assert all(has_awareness_role(a.role) for a in agents)
-        assert len(agents) >= 7  # architect, coding, testing, etc.
+        assert len(agents) >= 7
 
     def test_excludes_non_aware(self):
         agents = get_session_aware_agents()
         roles = [a.role for a in agents]
-        assert AgentRole.COORDINATOR not in roles
-        assert AgentRole.DOCUMENTATION_AGENT not in roles
+        assert "coordinator" not in roles
+        assert "documentation-agent" not in roles
 
 
 class TestAGENTS:

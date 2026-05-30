@@ -1,9 +1,9 @@
 """Sync Agent — agent spec and SOP for the sync/release pipeline."""
 
-from harness.agents.agent_registry import AgentRole, AgentSpec
+from harness.agents.agent_registry import AgentSpec
 
 SYNC_AGENT = AgentSpec(
-    role=AgentRole.SYNC,
+    role="sync",
     name="Sync Agent",
     description=(
         "Reads current OpenClaw agent configurations and generates "

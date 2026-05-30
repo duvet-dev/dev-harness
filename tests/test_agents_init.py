@@ -15,7 +15,8 @@ class TestAgentsExports:
 
     def test_agent_registry_exports(self):
         assert hasattr(agents, "AGENTS")
-        assert hasattr(agents, "AgentRole")
+        # AgentRole enum removed in Wave J — roles are now plain strings
+        assert not hasattr(agents, "AgentRole")
         assert hasattr(agents, "AgentSpec")
         assert hasattr(agents, "get_agent")
         assert hasattr(agents, "get_agents_by_tag")

@@ -1,0 +1,60 @@
+# Dev Harness Skills Configuration
+#
+# Static skill content blocks injected into agent prompts.
+# Skills can be project-wide (no agents list) or scoped to specific agents.
+# See V7 §5.22 and §7.
+
+skills:
+  - name: web-search
+    type: tool
+    description: "Search the web for documentation, patterns, and solutions"
+    content: |
+      You have access to a web search tool using DuckDuckGo (no API keys).
+      Use it when you need to look up documentation, find examples, or
+      research best practices.
+
+  - name: code-review
+    type: knowledge
+    description: "Code review guidelines and standards"
+    content: |
+      ## Code Review Standards
+      - Every function must have at least one test
+      - No global state, no CWD assumptions
+      - All error states must be documented
+    agents: ["architect", "coding-agent", "critical-analyser"]
+
+  - name: security-review
+    type: knowledge
+    description: "Security review checklist"
+    content: |
+      ## Security Review Checklist
+      - Check for injection vulnerabilities (SQL, command, XSS)
+      - Verify authentication and authorization patterns
+      - Check for insecure data storage
+      - Validate input sanitization
+      - Review dependency versions for known CVEs
+    agents: ["security-critic", "critical-analyser"]
+
+  - name: test-writing
+    type: knowledge
+    description: "Test writing guidelines for testing agents"
+    content: |
+      ## Test Writing Guidelines
+      - Write tests before implementation (TDD when possible)
+      - Test public interfaces, not implementation details
+      - Cover edge cases: empty input, invalid input, boundary values
+      - Use descriptive test names that explain the scenario
+      - Aim for >95% coverage on new code
+    agents: ["testing-agent", "test-coverage-analyser"]
+
+  - name: architecture-patterns
+    type: knowledge
+    description: "Reference architecture patterns for the architect team"
+    content: |
+      ## Reference Architecture Patterns
+      - Prefer hexagonal architecture with clear port/adapter boundaries
+      - Domain-driven design: bounded contexts, aggregates, value objects
+      - SOLID principles: single responsibility, open-closed, Liskov substitution
+      - Clean architecture: dependency inversion, use case layers
+      - Event-driven patterns for cross-context communication
+    agents: ["architect", "architecture-critic", "code-critic"]

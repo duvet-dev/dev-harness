@@ -13,8 +13,11 @@ boundary_test_enforcement_default: true
 # Session type configuration
 session_types:
   greenfield:
-    enforce_boundary_tests: false       # Overrides global for greenfield
+    enforce_boundary_tests: false
+    guidance: "Build new features without backward compatibility constraints."
   refactoring:
-    enforce_boundary_tests: true        # Inherits global default
+    enforce_boundary_tests: true
+    guidance: "Preserve existing interfaces. First wave must be boundary tests."
   get-well:
-    enforce_boundary_tests: true        # Inherits global default
+    enforce_boundary_tests: true
+    guidance: "Fix broken tests first. Boundaries may be restructured with explicit override."

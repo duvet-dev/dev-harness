@@ -1,0 +1,139 @@
+# Dev Harness Phases Configuration
+#
+# Defines named phase definitions referenced by workflows.
+# Each phase has a lead agent, a chat agent, and a list of steps.
+# Steps reference agents, teams, or loops (mutually exclusive).
+
+phases:
+  - name: discover
+    lead_agent: discovery-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - agents: ["discovery-agent"]
+        output: research-notes
+      - team: discovery
+        parallel: true
+        output: consolidated-findings
+
+  - name: design
+    lead_agent: design-coordinator
+    chat_agent: technical-conversationalist
+    steps:
+      - agents: ["architect"]
+        output: architectural-overview
+      - team: architecture
+        parallel: true
+        lead: review-coordinator
+        output: consolidated-review
+
+  - name: build
+    lead_agent: coding-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - team: coding
+        output: implementation
+      - team: testing
+        input: implementation
+        output: test-results
+
+  - name: review
+    lead_agent: review-coordinator
+    chat_agent: technical-conversationalist
+    steps:
+      - team: review
+        parallel: true
+        output: review-report
+      - team: architecture
+        output: architectural-conformance
+
+  - name: test
+    lead_agent: testing-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - team: testing
+        output: test-results
+      - team: coding
+        input: test-results
+        output: fix-results
+
+  - name: validate
+    lead_agent: validation-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - team: validation
+        output: validation-report
+      - team: architecture
+        input: validation-report
+        output: final-conformance
+      - agents: ["validation-agent"]
+        output: sign-off
+
+  - name: deliver
+    lead_agent: coding-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - agents: ["coding-agent"]
+        output: release-notes
+      - agents: ["documentation-agent"]
+        output: documentation
+
+  - name: assess
+    lead_agent: refactoring-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - agents: ["refactoring-agent"]
+        output: assessment-report
+      - team: review
+        output: review-report
+
+  - name: refactor
+    lead_agent: coding-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - team: coding
+        lead: refactor-orchestrator
+        output: refactored-code
+      - team: testing
+        output: test-results
+
+  - name: fix
+    lead_agent: coding-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - agents: ["boundary-test-agent"]
+        output: boundary-tests
+      - team: coding
+        input: boundary-tests
+        output: fix-implementation
+      - team: testing
+        output: test-results
+
+  - name: triage
+    lead_agent: critical-analyser
+    chat_agent: technical-conversationalist
+    steps:
+      - agents: ["critical-analyser"]
+        output: triage-report
+      - agents: ["dead-code-analyser"]
+        output: dead-code-report
+      - agents: ["component-analyser"]
+        output: component-report
+
+  - name: audit
+    lead_agent: critical-analyser
+    chat_agent: technical-conversationalist
+    steps:
+      - team: discovery
+        parallel: true
+        output: audit-findings
+      - agents: ["critical-analyser"]
+        output: audit-report
+
+  - name: report
+    lead_agent: documentation-agent
+    chat_agent: technical-conversationalist
+    steps:
+      - agents: ["documentation-agent"]
+        output: report-document
+      - team: validation
+        output: validation-summary

@@ -1,0 +1,43 @@
+# Dev Harness Workflows Configuration
+#
+# Defines named workflows as ordered lists of phase names.
+# Each phase name references a definition in phases.yaml.
+# Matching the DEFAULT_WORKFLOWS in workflow/orchestrator.py.
+
+workflows:
+  - name: standard
+    phases:
+      - discover
+      - design
+      - build
+      - review
+      - test
+      - validate
+      - deliver
+
+  - name: quick-fix
+    phases:
+      - fix
+      - test
+      - validate
+      - deliver
+
+  - name: refactoring
+    phases:
+      - assess
+      - refactor
+      - test
+      - validate
+
+  - name: get-well
+    phases:
+      - triage
+      - fix
+      - test
+      - validate
+      - deliver
+
+  - name: inspect
+    phases:
+      - audit
+      - report

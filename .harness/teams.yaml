@@ -5,18 +5,64 @@
 # Merge semantics: built-in < project < user (full replacement by name).
 #
 # See V7 §10 for the full AgentTeam specification.
-# Populated fully in Wave 1.5.
+# Populated with the 7 built-in teams from V7 §10.1.
 
 teams:
-  # Built-in teams will be added in Wave 1.5
-  # - name: architecture
-  #   agents:
-  #     - architect
-  #     - architecture-critic
-  #   guidelines: "..."
-  #
-  # - name: coding
-  #   agents:
-  #     - coding-agent
-  #     - testing-agent
-  #   guidelines: "..."
+  - name: architecture
+    description: "Architecture design and review"
+    agents:
+      - architect
+      - architecture-critic
+      - code-critic
+      - security-critic
+    guidelines: |
+      ## Architecture Team Guidelines
+      - All architectural designs must consider security, scalability, and maintainability.
+      - Critics should evaluate against SOLID principles and domain-driven design.
+      - When conflicts arise, safety-first: any critic flagging an issue = issue with side note.
+
+  - name: coding
+    description: "Code implementation and testing"
+    agents:
+      - coding-agent
+      - testing-agent
+    guidelines: |
+      ## Coding Team Guidelines
+      - Write tests before implementation (unless overridden by session type).
+      - Follow the project's language-specific style guide.
+      - Ensure all new code has at least 80% test coverage.
+
+  - name: testing
+    description: "Software testing and quality assurance"
+    agents:
+      - testing-agent
+      - test-coverage-analyser
+    guidelines: |
+      ## Testing Team Guidelines
+      - Run full test suite before reporting completion.
+      - Flag any regressions immediately.
+
+  - name: review
+    description: "Code and design review"
+    agents:
+      - design-reviewer
+      - critical-analyser
+      - security-auditor
+
+  - name: planning
+    description: "Planning and task breakdown"
+    agents:
+      - planning-agent
+      - dependency-analyser
+
+  - name: discovery
+    description: "Research and discovery"
+    agents:
+      - discovery-agent
+      - research-agent
+
+  - name: validation
+    description: "Validation and requirements conformance"
+    agents:
+      - validation-agent
+      - example-scenarios-agent

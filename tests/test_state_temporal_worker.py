@@ -101,6 +101,7 @@ class TestEnsureWorker:
         """Return True optimistically even if worker hasn't connected yet."""
         with patch("harness.state.temporal_worker._worker_thread", None), \
              patch("harness.state.temporal_worker._worker_lock"), \
+             patch("harness.state.temporal_worker._WORKER_TIMEOUT", 0.0), \
              patch(
             "harness.state.temporal_worker.ensure_temporal_server",
             return_value=True,

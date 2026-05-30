@@ -327,15 +327,14 @@ class TestTestSuiteStrategy:
         """No command configured means not converged."""
         config = ConvergenceConfig(strategy="test_suite", test_command="")
         strategy = TestSuiteStrategy(config)
-        # Override the project root to a temp dir without test markers
-        root = strategy._resolve_project_root()
-        if root:
-            # If we're in a project with test markers, force no command
-            strategy._test_command = ""
-            strategy._project_root = root
-        verdict = await strategy.check([], {}, 0)
-        # May converge if auto-detected, so just verify it doesn't crash
+        with patch.object(
+            strategy.__class__, "_detect_test_command",
+            return_value=None,
+        ):
+            verdict = await strategy.check([], {}, 0)
         assert isinstance(verdict, ConvergenceVerdict)
+        assert not verdict.converged
+        assert "No test command" in verdict.reason
 
     @pytest.mark.asyncio
     async def test_output_persistence(self, tmp_path) -> None:

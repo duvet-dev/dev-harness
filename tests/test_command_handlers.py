@@ -271,7 +271,7 @@ class TestQueryWhatsNextHandler:
 class TestRegisterAllHandlers:
     """Tests for the register_all_handlers convenience function."""
 
-    def test_registers_all_nine_handlers(self):
+    def test_registers_all_handlers(self):
         registry = CommandRegistry()
         register_all_handlers(registry)
         types = registry.list_registered()
@@ -284,7 +284,9 @@ class TestRegisterAllHandlers:
         assert "abort_engagement" in types
         assert "query_status" in types
         assert "query_whats_next" in types
-        assert len(types) == 9
+        assert "finish_engagement" in types
+        assert "review_engagement" in types
+        assert len(types) == 11
 
     def test_each_handler_is_distinct_instance(self):
         registry = CommandRegistry()

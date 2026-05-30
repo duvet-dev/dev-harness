@@ -95,6 +95,64 @@ def query_status_command(slug: str) -> Command:
     return Command(slug=slug, command_type="query_status")
 
 
+def finish_engagement_command(
+    slug: str,
+    root: str | Path,
+    re_assess: bool = False,
+) -> Command:
+    """Create a ``FinishEngagement`` command for the CommandBus.
+
+    Args:
+        slug: The engagement slug.
+        root: Project root directory path.
+        re_assess: Whether to run post-engagement observer analysis.
+
+    Returns:
+        A Command with ``command_type="finish_engagement"``.
+    """
+    return Command(
+        slug=slug,
+        command_type="finish_engagement",
+        data={"root": str(root), "re_assess": re_assess},
+    )
+
+
+def review_engagement_command(
+    slug: str,
+    decision: str,
+    root: str | Path | None = None,
+    feedback_items: list[dict] | None = None,
+    notes: str = "",
+) -> Command:
+    """Create a ``ReviewEngagement`` command for the CommandBus.
+
+    Args:
+        slug: The engagement slug.
+        decision: Review decision — "approved", "rejected", or
+            "request_changes".
+        root: Project root directory (default: cwd).
+        feedback_items: Optional structured feedback items.
+        notes: Optional review notes.
+
+    Returns:
+        A Command with ``command_type="review_engagement"``.
+    """
+    from pathlib import Path
+    data: dict[str, Any] = {
+        "decision": decision,
+        "root": str(root or Path.cwd()),
+    }
+    if feedback_items:
+        data["feedback_items"] = feedback_items
+    if notes:
+        data["notes"] = notes
+    return Command(
+        slug=slug,
+        command_type="review_engagement",
+        data=data,
+    )
+
+
 def query_whats_next_command(slug: str) -> Command:
     """Create a ``QueryWhatsNext`` command for the CommandBus.
 

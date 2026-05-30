@@ -22,9 +22,11 @@ from harness.cli.commands import (
     create_engagement_command,
     dispatch_cli_command,
     enter_phase_command,
+    finish_engagement_command,
     next_command,
     query_status_command,
     query_whats_next_command,
+    review_engagement_command,
 )
 from harness.cli.helpers import (
     bold,
@@ -1656,11 +1658,8 @@ def review(engagement_id, approve, reject, request_changes,
            finding, severity, artifact_ref, notes):
     """Review an engagement at a gate checkpoint.
 
-    Supports structured feedback via --finding, --severity, and --artifact-ref.
-    When at least one --finding is provided, the decision is "request_changes"
-    and structured feedback items are created.
-
-    Existing --approve and --reject flags remain for backward compatibility.
+    Dispatches a ``ReviewEngagement`` command via the CommandBus.
+    Handler manages Temporal gate review and local snapshot update.
 
     Examples:
 
@@ -1668,14 +1667,13 @@ def review(engagement_id, approve, reject, request_changes,
 
         harness review eng-main-def456 --reject
 
-        harness review eng-main-abc123 --request-changes \\
-            --finding "Missing error handling" --severity blocker --artifact-ref auth.py \\
-            --finding "Rename variable x" --severity minor --artifact-ref utils.py \\
+        harness review eng-main-abc123 --request-changes \
+            --finding "Missing error handling" --severity blocker --artifact-ref auth.py \
+            --finding "Rename variable x" --severity minor --artifact-ref utils.py \
             --notes "Surface-level issues only; logic is solid"
     """
     # Determine decision
     if finding:
-        # Structured feedback \u2192 request_changes
         decision = "request_changes"
     elif request_changes:
         decision = "request_changes"
@@ -1687,54 +1685,23 @@ def review(engagement_id, approve, reject, request_changes,
         click.echo("Specify --approve, --reject, --request-changes, or --finding(s).")
         return
 
-    # Build structured feedback items
-    feedback_items = []
-    if finding:
-        for i, f_text in enumerate(finding):
-            ref = artifact_ref[i] if i < len(artifact_ref) else ""
-            sev = severity
-            feedback_items.append({
-                "finding": f_text,
-                "severity": sev,
-                "artifact_ref": ref or "(general)",
-                "suggestion": "",
-            })
-
     try:
-        from harness.state.temporal_adapter import send_gate_review
-        from harness.state.temporal_server import ensure_temporal_server
-
-        temporal_ok = False
-        try:
-            if ensure_temporal_server():
-                asyncio.run(send_gate_review(engagement_id, "", decision))
-                temporal_ok = True
-        except Exception:
-            pass
-
-        # Also update local snapshot
         root = require_project_root(command_name="review")
-        snapshot_path = get_harness_state_path(root)
-        snapshot = load_project_snapshot(snapshot_path)
-        for eng in snapshot.engagements:
-            if eng.id == engagement_id:
-                if decision == "approved":
-                    eng.status = "complete"
-                elif decision == "rejected":
-                    eng.status = "blocked"
-                elif decision == "request_changes":
-                    eng.status = "changes_requested"
-        SnapshotWriter.write(snapshot, snapshot_path)
+        cmd = review_engagement_command(
+            slug=engagement_id,
+            decision=decision,
+            root=root,
+        )
+        result = dispatch_cli_command(cmd)
 
-        if temporal_ok:
-            click.echo(f"Gate {decision} for engagement {engagement_id}.")
+        if not result.success:
+            click.echo(f"Review failed: {result.error}", err=True)
         else:
-            click.echo(f"Gate {decision} (local state only).")
+            gateway = "temporal" if result.data.get("temporal_ok") else "local state"
+            click.echo(f"Gate {decision} for engagement {engagement_id} ({gateway}).")
 
     except Exception:
         click.echo(f"Gate {decision} (local state only).")
-
-
 # ---------------------------------------------------------------------------
 # Status command
 # ---------------------------------------------------------------------------
@@ -2230,212 +2197,72 @@ def health(verbose, fix):
 def finish(re_assess):
     """Complete the current engagement with a commit.
 
-    Stages all changes, opens git commit editor (user writes message),
-    and updates the harness summary. Designed for the squash+rebase
-    workflow (R15.3).
-
-    When --re-assess is set, runs the observer after committing,
-    compares findings to the baseline stored at engagement creation,
-    and updates the project's assessment history.
-
-    Run `harness catchup` first if state may be stale.
+    Dispatches a ``FinishEngagement`` command via the CommandBus.
+    Handler manages git stage/commit, snapshot update, and optional
+    observer re-assessment.
 
     Examples:
         harness finish
         harness finish --re-assess
     """
     try:
-        from harness.state.freshness import (
-            FreshnessRecord,
-            load_freshness,
-            save_freshness,
-        )
-
         root = require_project_root(command_name="finish")
-        repo = GitRepo(root)
-        current_branch = repo.branch()
 
-        # Check freshness
-        freshness = load_freshness(root)
-        if freshness and freshness.stale:
-            click.echo("\u26a0\ufe0f  State is stale. Run `harness catchup` first.")
-            return
+        cmd = finish_engagement_command(slug="", root=root, re_assess=re_assess)
+        result = dispatch_cli_command(cmd)
 
-        # Stage all
-        click.echo("Staging all changes...")
-        result = subprocess.run(
-            ["git", "add", "-A"], cwd=root, capture_output=True, text=True
-        )
-        if result.returncode != 0:
-            click.echo(f"  Git add failed: {result.stderr.strip()}")
-            return
+        if not result.success:
+            click.echo(f"Failed: {result.error}", err=True)
+            raise click.Abort()
 
-        # Write freshness before commit
-        current_head = get_head_sha(root)
-        new_record = FreshnessRecord(
-            branch=current_branch,
-            head_sha=current_head,
-            last_reconciled="",
-            stale=False,
-        ).mark_fresh(current_head)
-        save_freshness(new_record, root)
+        data = result.data
+        click.echo(f"Engagement finished @ {data.get('head_sha', '')[:8]} on {data.get('branch', '-')}.")
 
-        # Commit (user writes message via editor)
-        click.echo("Opening commit editor...")
-        result = subprocess.run(["git", "commit"], cwd=root, capture_output=False)
-
-        if result.returncode != 0:
-            click.echo("Commit aborted or failed.")
-            return
-
-        # Update summary
-        head_after = get_head_sha(root)
-
-        # Update snapshot status
-        snapshot_path = get_harness_state_path(root)
-        snapshot = load_project_snapshot(snapshot_path)
-        completed_engagement_id = None
-        for eng in snapshot.engagements:
-            if eng.id == snapshot.current_engagement:
-                eng.status = "complete"
-                completed_engagement_id = eng.id
-        SnapshotWriter.write(snapshot, snapshot_path)
-
-        click.echo(f"Engagement finished @ {head_after[:8]} on {current_branch}.")
-
-        # --re-assess: run observer and compare to baseline
-        if re_assess:
-            click.echo()
-            click.echo("Running post-engagement re-assessment...")
-
-            # Determine the active slug from the current branch pattern
-            slug = None
-            if current_branch.startswith("eng/"):
-                slug = current_branch[4:]
-
-            if not slug:
-                click.echo(
-                    "  Skipping re-assessment (not on an eng/ branch).",
-                )
+        re_assessment = data.get("re_assessment")
+        if re_assessment:
+            if "error" in re_assessment:
+                click.echo(f"  Re-assessment failed: {re_assessment['error']}")
             else:
-                from harness.analysis.observer import analyse
-
-                # Determine the engagement's assessments dir
-                eng_dir = get_engagement_dir(root, slug)
-                assess_dir = eng_dir / "assessments"
-
-                if not assess_dir.is_dir():
-                    assess_dir.mkdir(parents=True, exist_ok=True)
-
-                # Run the observer
-                from datetime import datetime, timezone
-                now = datetime.now(timezone.utc)
-                timestamp = now.strftime("%Y%m%d-%H%M%S")
-
-                result = analyse(
-                    path=root,
-                    deep=True,
+                click.echo()
+                click.echo(
+                    "  \u250c\u2500 Re-Assessment Results "
+                    "\u2500\u2500\u2500\u2500\u2500\u2500"
+                    "\u2500\u2500\u2500\u2500\u2500\u2500"
+                    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
                 )
-
-                if result["status"] == "error":
-                    click.echo(f"  Re-assessment failed: {result['message']}")
-                else:
-                    import json as _json
-
-                    # Write report to engagement
-                    report_path = assess_dir / f"{timestamp}-assessment.md"
-                    report_path.write_text(result["report"])
-
-                    # Build closure metrics
-                    assessment_dict = result.get("assessment")
-                    current_findings_count = 0
-                    if assessment_dict:
-                        current_findings_count = len(
-                            assessment_dict.get("assessment", {}).get("findings", [])
-                        )
-
-                    # Write manifest with findings
-                    written = write_assessment_report(
-                        report_text=result["report"],
-                        repo_path=str(root),
-                        assessment_dict=assessment_dict,
-                    )
-
-                    # Load baseline from engagement.yaml for comparison
-                    eng_yaml_path = eng_dir / "engagement.yaml"
-                    baseline_findings = None
-                    baseline_count = "?"
-                    if eng_yaml_path.is_file():
-                        import yaml as _yaml
-                        with open(eng_yaml_path) as f:
-                            yaml_data = _yaml.safe_load(f) or {}
-                        baseline_count = yaml_data.get("baseline_finding_count", "?")
-
-                        # Load baseline manifest for detailed comparison
-                        baseline_manifest_path = yaml_data.get("baseline_manifest")
-                        if baseline_manifest_path:
-                            bp = eng_dir / baseline_manifest_path
-                            if bp.is_file():
-                                baseline_manifest = _json.loads(bp.read_text())
-                                baseline_findings = baseline_manifest.get("findings", [])
-
-                    # Compute closure stats
-                    closed_count = "?"
-                    if baseline_findings is not None:
-                        # A finding is 'closed' if its message is not present in current
-                        current_messages = set(
-                            f.get("message", "")[:80]
-                            for f in (assessment_dict.get("assessment", {}).get("findings", []) if assessment_dict else [])
-                        )
-                        closed_in_baseline = [
-                            f for f in baseline_findings
-                            if f.get("message", "")[:80] not in current_messages
-                        ]
-                        closed_count = len(closed_in_baseline)
-
-                    click.echo()
-                    click.echo("  \u250c\u2500 Re-Assessment Results \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
-                    click.echo(f"  \u2502 Baseline findings:  {baseline_count}")
-                    click.echo(f"  \u2502 Current findings:   {current_findings_count}")
-                    if isinstance(closed_count, int):
-                        click.echo(f"  \u2502 Findings closed:    {closed_count}")
-                        pct = (
-                            round(closed_count / len(baseline_findings) * 100)
-                            if baseline_findings else 0
-                        )
-                        click.echo(f"  \u2502 Closure rate:       {pct}%")
-                    click.echo(f"  \u2502 Report:            {report_path.name}")
-                    click.echo("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
-                    click.echo()
-                    click.echo(f"  See: cat {report_path}")
-
-                # Update assessment history in .harness/config.yaml
-                config_path = root / ".harness" / "config.yaml"
-                if config_path.is_file():
-                    import yaml as _yaml
-                    with open(config_path) as f:
-                        config = _yaml.safe_load(f) or {}
-
-                    history = config.setdefault("assessment_history", [])
-                    entry = {
-                        "date": now.strftime("%Y-%m-%d"),
-                        "engagement": slug,
-                        "findings": current_findings_count,
-                        "report": f"assessments/{timestamp}-assessment.md",
-                    }
-                    if isinstance(closed_count, int):
-                        entry["closed"] = closed_count
-                    history.append(entry)
-
-                    with open(config_path, "w") as f:
-                        _yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+                click.echo(
+                    "  \u2502 Baseline findings:  "
+                    f"{re_assessment.get('baseline_count', '?')}"
+                )
+                click.echo(
+                    "  \u2502 Current findings:   "
+                    f"{re_assessment.get('current_findings', '?')}"
+                )
+                closed = re_assessment.get("closed_count", "?")
+                if isinstance(closed, int):
+                    click.echo(f"  \u2502 Findings closed:    {closed}")
+                click.echo(
+                    "  \u2502 Report:            "
+                    f"{re_assessment.get('report', '-')}"
+                )
+                click.echo(
+                    "  \u2514\u2500\u2500\u2500\u2500"
+                    "\u2500\u2500\u2500\u2500\u2500\u2500"
+                    "\u2500\u2500\u2500\u2500\u2500\u2500"
+                    "\u2500\u2500\u2500\u2500\u2500\u2500"
+                    "\u2500\u2500\u2500\u2500\u2500\u2500"
+                    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+                )
 
         click.echo()
         click.echo("Tip: Use `harness summary` to view the final state.")
 
+    except click.Abort:
+        raise
     except Exception as exc:
         click.echo(f"Finish failed: {exc}", err=True)
         raise click.Abort()
+
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,9 @@ R30 (§6 DDD Layering): CLI is a thin translator — no business logic here.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 from harness.command.bus import CommandBus
 from harness.command.handlers import register_all_handlers
 from harness.command.registry import CommandRegistry

@@ -195,7 +195,8 @@ class TestFinishEngagementHandler:
         eng_dir.mkdir(parents=True, exist_ok=True)
         (eng_dir / "assessments").mkdir(parents=True, exist_ok=True)
 
-        import json, yaml
+        import json
+        import yaml
         (eng_dir / "manifest.json").write_text(
             json.dumps({"findings": [
                 {"message": "Old A"}, {"message": "Old B"},
@@ -452,4 +453,4 @@ class TestRegistration:
     def test_registration_keeps_11_handlers(self):
         registry = CommandRegistry()
         register_all_handlers(registry)
-        assert len(registry.list_registered()) == 11
+        assert len(registry.list_registered()) == 13

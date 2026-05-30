@@ -1814,7 +1814,7 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
             if not entries:
                 click.echo('No feedback history.')
                 return
-            click.echo(f"Feedback history:")
+            click.echo("Feedback history:")
             for fb in entries:
                 click.echo(f"  [{fb.get('status', '?')}] {fb.get('from', '?')} -> {fb.get('to', '?')}: {fb.get('title', '')}")
 

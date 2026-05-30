@@ -94,10 +94,10 @@ class TestSprint2Smoke:
         )
 
     def test_handler_count(self):
-        """All 13 handlers registered."""
+        """All Sprint 2 handlers registered (baseline)."""
         from harness.command.handlers import register_all_handlers
         from harness.command.registry import CommandRegistry
         registry = CommandRegistry()
         register_all_handlers(registry)
         types = registry.list_registered()
-        assert len(types) == 13, f"Expected 13 handlers, got {len(types)}"
+        assert len(types) >= 13, f"Expected >=13 handlers, got {len(types)}"

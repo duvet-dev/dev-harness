@@ -250,6 +250,274 @@ def manage_phase_command(
 # ── Dispatch Helper ────────────────────────────────────────────────────
 
 
+# ── Wave F: RunWave / Session / Chat ────────────────────────────────
+
+
+def run_wave_command(
+    slug: str,
+    wave_id: str,
+    no_test: bool = False,
+    backend: str | None = None,
+) -> Command:
+    """Create a ``RunWave`` command for the CommandBus.
+
+    Args:
+        slug: The engagement slug.
+        wave_id: The wave ID to run.
+        no_test: Skip automated test execution.
+        backend: Optional agent backend name.
+
+    Returns:
+        A Command with ``command_type="run_wave"``.
+    """
+    return Command(
+        slug=slug,
+        command_type="run_wave",
+        data={"wave_id": wave_id, "no_test": no_test, "backend": backend},
+    )
+
+
+def session_command(
+    slug: str,
+    phase: str = "requirements",
+    session_type: str | None = None,
+    context_tier: int = 2,
+    get_well: bool = False,
+) -> Command:
+    """Create a ``Session`` command for the CommandBus.
+
+    Args:
+        slug: The engagement slug.
+        phase: Starting phase name.
+        session_type: Session type (greenfield, brownfield, refactoring).
+        context_tier: Context load tier (1-3).
+        get_well: Get-well remediation mode.
+
+    Returns:
+        A Command with ``command_type="session"``.
+    """
+    return Command(
+        slug=slug,
+        command_type="session",
+        data={
+            "phase": phase,
+            "session_type": session_type,
+            "context_tier": context_tier,
+            "get_well": get_well,
+        },
+    )
+
+
+def chat_command(
+    slug: str,
+    prompt: str | None = None,
+    phase: str = "design",
+    context_tier: int = 2,
+) -> Command:
+    """Create a ``Chat`` command for the CommandBus.
+
+    Args:
+        slug: The engagement slug.
+        prompt: Optional one-shot prompt text.
+        phase: Phase context.
+        context_tier: Context load tier (1-3).
+
+    Returns:
+        A Command with ``command_type="chat"``.
+    """
+    return Command(
+        slug=slug,
+        command_type="chat",
+        data={"prompt": prompt, "phase": phase, "context_tier": context_tier},
+    )
+
+
+# ── Wave G: Summary / Inspect / Assess ──────────────────────────────
+
+
+def summary_command(
+    deep: bool = False,
+    assess_flag: bool = False,
+    engagement: str | None = None,
+    json_flag: bool = False,
+    reconcile: bool = False,
+) -> Command:
+    """Create a ``Summary`` command for the CommandBus.
+
+    Args:
+        deep: Include deep analysis (architecture, coverage, dead code).
+        assess_flag: Run LLM-based independent assessment.
+        engagement: Specific engagement ID.
+        json_flag: Output as JSON.
+        reconcile: Refresh state before summary.
+
+    Returns:
+        A Command with ``command_type="summary"``.
+    """
+    return Command(
+        slug=engagement or "",
+        command_type="summary",
+        data={
+            "deep": deep,
+            "assess_flag": assess_flag,
+            "json_flag": json_flag,
+            "reconcile": reconcile,
+        },
+    )
+
+
+def inspect_command(root: str = ".") -> Command:
+    """Create an ``Inspect`` command for the CommandBus.
+
+    Args:
+        root: Path to the project root to inspect.
+
+    Returns:
+        A Command with ``command_type="inspect"``.
+    """
+    return Command(slug="", command_type="inspect", data={"root": root})
+
+
+def assess_command(root: str = ".", deep_flag: bool = True) -> Command:
+    """Create an ``Assess`` command for the CommandBus.
+
+    Args:
+        root: Path to the project root.
+        deep_flag: Run deep assessment.
+
+    Returns:
+        A Command with ``command_type="assess"``.
+    """
+    return Command(
+        slug="",
+        command_type="assess",
+        data={"root": root, "deep_flag": deep_flag},
+    )
+
+
+# ── Wave H: Batch + Lower Priority ─────────────────────────────────
+
+
+def create_waves_from_assessment_command(
+    focus: str = "high-risk",
+    limit: int = 0,
+    slug: str = "",
+    refactoring: bool = False,
+) -> Command:
+    """Create a ``CreateWavesFromAssessment`` command."""
+    return Command(
+        slug=slug,
+        command_type="create_waves_from_assessment",
+        data={"focus": focus, "limit": limit, "refactoring": refactoring},
+    )
+
+
+def create_wave_from_finding_command(
+    finding_id: str,
+    slug: str = "",
+) -> Command:
+    """Create a ``CreateWaveFromFinding`` command."""
+    return Command(
+        slug=slug,
+        command_type="create_wave_from_finding",
+        data={"finding_id": finding_id},
+    )
+
+
+def list_waves_command(slug: str = "") -> Command:
+    """Create a ``ListWaves`` command."""
+    return Command(slug=slug, command_type="list_waves")
+
+
+def wave_status_command(slug: str = "") -> Command:
+    """Create a ``WaveStatus`` command."""
+    return Command(slug=slug, command_type="wave_status")
+
+
+def generate_docs_command(root: str = ".") -> Command:
+    """Create a ``GenerateDocs`` command."""
+    return Command(slug="", command_type="generate_docs", data={"root": root})
+
+
+def annotate_changelog_command(
+    slug: str,
+    wave: str,
+    text: str,
+) -> Command:
+    """Create an ``AnnotateChangelog`` command."""
+    return Command(
+        slug=slug,
+        command_type="annotate_changelog",
+        data={"wave": wave, "text": text},
+    )
+
+
+# ── Wave I: Thin Wrappers ───────────────────────────────────────────
+
+
+def rename_engagement_command(
+    old_slug: str,
+    new_slug: str,
+    branch_strategy: str = "keep",
+    dry_run: bool = False,
+) -> Command:
+    """Create a ``RenameEngagement`` command."""
+    return Command(
+        slug=old_slug,
+        command_type="rename_engagement",
+        data={
+            "new_slug": new_slug,
+            "branch_strategy": branch_strategy,
+            "dry_run": dry_run,
+        },
+    )
+
+
+def set_branch_command(slug: str, branch: str) -> Command:
+    """Create a ``SetBranch`` command."""
+    return Command(
+        slug=slug,
+        command_type="set_branch",
+        data={"branch": branch},
+    )
+
+
+def fix_engagement_command(slug: str, fix_type: str = "metadata") -> Command:
+    """Create a ``FixEngagement`` command."""
+    return Command(
+        slug=slug,
+        command_type="fix_engagement",
+        data={"fix_type": fix_type},
+    )
+
+
+def refresh_agents_command(
+    project_dir: str | None = None,
+    force: bool = False,
+) -> Command:
+    """Create a ``RefreshAgents`` command."""
+    return Command(
+        slug="",
+        command_type="refresh_agents",
+        data={"project_dir": project_dir, "force": force},
+    )
+
+
+def set_governance_command(
+    level: str,
+    slug: str | None = None,
+) -> Command:
+    """Create a ``SetGovernance`` command."""
+    return Command(
+        slug=slug or "",
+        command_type="set_governance",
+        data={"level": level},
+    )
+
+
+# ── Dispatch Helper ────────────────────────────────────────────────────
+
+
 def dispatch_cli_command(command: Command) -> CommandResult:
     """Dispatch a command through the CommandBus from a CLI context.
 

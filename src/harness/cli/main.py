@@ -29,6 +29,23 @@ from harness.cli.commands import (
     query_status_command,
     query_whats_next_command,
     review_engagement_command,
+    run_wave_command,
+    session_command,
+    chat_command,
+    summary_command,
+    inspect_command,
+    assess_command,
+    create_waves_from_assessment_command,
+    create_wave_from_finding_command,
+    list_waves_command,
+    wave_status_command,
+    generate_docs_command,
+    annotate_changelog_command,
+    rename_engagement_command,
+    set_branch_command,
+    fix_engagement_command,
+    refresh_agents_command,
+    set_governance_command,
 )
 from harness.cli.helpers import (
     bold,
@@ -284,56 +301,30 @@ def init(project_dir, template, seed, no_git, force):
     help="Overwrite existing agent profile files (not just missing ones).",
 )
 def refresh_agents(project_dir, force):
-    """Refresh agent profiles from the harness's current agent registry.
-
-    Synchronises the project's ``agents/`` directory with the authoritative
-    agent definitions in ``harness.agents.agent_registry.AGENTS``.
-
-    This is useful after upgrading the harness or adding new agent roles
-    to the registry — it updates local agent definitions without nuking
-    the rest of the project (engagements, constitution, state).
-
-    What it DOES:
-    - Creates/updates ``agents/<role>/identity.md`` and ``procedures.md``
-    - Creates/updates ``agents/standards/community-standards.md``
-    - Creates ``agents/<role>/memory/.gitkeep`` if missing
-    - Reports which agents were created, updated, or skipped
-
-    What it does NOT do:
-    - Does NOT touch ``.harness/engagements/`` (engagement state is preserved)
-    - Does NOT overwrite ``.harness/providers.yaml``
-    - Does NOT delete agent directories (even unused ones, unless --force)
-
-    Without ``--force``, only creates profiles for agents that don't already
-    have them. With ``--force``, overwrites all profile files.
-
-    Examples::
-
-        harness refresh-agents
-        harness refresh-agents path/to/project
-        harness refresh-agents --force
-    """
-    project_path = require_project_root(
-        explicit_path=Path.cwd() / project_dir if project_dir else None,
-        command_name="refresh-agents",
-    )
-
-    result = refresh_agent_profiles(project_path, force=force)
-
-    click.echo("Agent profiles refreshed.")
-    for action, label in [("created", "Created"), ("updated", "Updated"), ("existing", "Already up-to-date")]:
-        agents = result.get(action, [])
-        if agents:
-            click.echo(f"  {label}: {len(agents)}")
-            for name in agents:
-                click.echo(f"    - {name}")
-
-
-# ---------------------------------------------------------------------------
-# Work command
-# ---------------------------------------------------------------------------
-
-
+    """Refresh agent profiles from the harness's current agent registry."""
+    try:
+        from harness.cli.commands import dispatch_cli_command, refresh_agents_command
+        cmd = refresh_agents_command(
+            project_dir=project_dir,
+            force=force,
+        )
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+        data = result.data
+        click.echo("Agent profiles refreshed.")
+        for action, label in [("created", "Created"), ("updated", "Updated"), ("existing", "Already up-to-date")]:
+            agents = data.get(action, [])
+            if agents:
+                click.echo(f"  {label}: {len(agents)}")
+                for name in agents:
+                    click.echo(f"    - {name}")
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Refresh agents failed: {exc}", err=True)
+        raise click.Abort()
 @main.command()
 @click.argument("description")
 @click.option(
@@ -406,91 +397,26 @@ def work(description, mode, backend, max_iterations, partial_approval):
 @click.option("--json", "json_flag", is_flag=True, help="Output as JSON")
 @click.option("--reconcile", is_flag=True, help="Refresh state before summary")
 def summary(deep, assess_flag, engagement, json_flag, reconcile):
-    """Show project status summary.
-
-    Always runs a fast scan (structure + git diff). With --deep, also
-    checks architecture conformance, test coverage, and dead code.
-
-    With --assess, runs the LLM-based independent assessment (P1-P5)
-    for a comprehensive codebase evaluation.
-
-    Use --reconcile to refresh state before analysis (handy after merges).
-
-    Examples:
-
-        harness summary
-
-        harness summary --deep --json
-
-        harness summary --assess --json
-
-        harness summary --reconcile
-    """
+    """Show project status summary."""
     try:
-        from harness.analysis.deep import (
-            assess_coverage,
-            check_architecture_conformance,
-            find_dead_code,
+        from harness.cli.commands import dispatch_cli_command, summary_command
+        from pathlib import Path
+        cmd = summary_command(
+            deep=deep,
+            assess_flag=assess_flag,
+            engagement=engagement,
+            json_flag=json_flag,
+            reconcile=reconcile,
         )
-        from harness.analysis.fast import scan_git_diff, scan_structure
-        from harness.analysis.summary import format_report
-
-        root = require_project_root(command_name="summary")
-
-        # Optional: reconcile state first
-        if reconcile:
-            reconcile_before_summary(root)
-
-        results = []
-
-        # Always run fast scan
-        structure = scan_structure(root)
-        results.append(structure)
-
-        diff = scan_git_diff(root)
-        results.append(diff)
-
-        if deep:
-            conformance = check_architecture_conformance(root, project_type="python")
-            results.append(conformance)
-            coverage = assess_coverage(root)
-            results.append(coverage)
-            dead = find_dead_code(root)
-            results.append(dead)
-
-        output_format = "json" if json_flag else "markdown"
-        report = format_report(results, format=output_format)
-
-        # R22: LLM-based assessment when --assess
-        if assess_flag:
-            try:
-                from harness.analysis.assessment import assess as run_assessment
-                assessment = asyncio.run(run_assessment(root, deep=True))
-                if output_format == "json":
-                    import json as json_mod
-                    base = json_mod.loads(report)
-                    base["assessment"] = assessment.to_dict().get("assessment", {})
-                    report = json_mod.dumps(base, indent=2, default=str)
-                else:
-                    report += "\n\n---\n\n" + assessment.report_text
-            except Exception as exc:
-                report += (
-                    "\n\n## LLM-Based Assessment\n\n"
-                    f"\u26a0\ufe0f Assessment agents unavailable: {exc}\n"
-                )
-
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Summary failed: {result.error}", err=True)
+            raise click.Abort()
+        report = result.data.get("report", "")
         click.echo(report)
-
     except Exception as exc:
         click.echo(f"Analysis failed: {exc}", err=True)
         raise click.Abort()
-
-
-# ---------------------------------------------------------------------------
-# Agent commands
-# ---------------------------------------------------------------------------
-
-
 @main.group()
 def agent():
     """List, show, and run harness agents."""
@@ -836,47 +762,21 @@ def fleet_consult(team_name, no_truncate):
 @fleet.command(name="set-governance")
 @click.argument("level", type=click.Choice(["exploration", "standard", "strict"]))
 @click.option("--engagement", "slug", help="Apply to a specific engagement instead of project")
-def set_fleet_governance(level, slug):
-    """Set the governance level for the project or an engagement.
-
-    Governance controls which agents are active:
-
-    \b
-      exploration  — lead agent only
-      standard     — lead + sub-agents matched by project type
-      strict       — full fleet + extra reviewers
-
-    Examples::
-
-        harness fleet set-governance standard
-
-        harness fleet set-governance strict --engagement my-eng
-
-        harness fleet set-governance exploration
-    """
-    from harness.agents.governance import GovernanceLevel
-    root = require_project_root(command_name="fleet set-governance")
-
-    gov = GovernanceLevel(level)
-
-    if slug:
-        from harness.agents.governance import set_engagement_governance
-        set_engagement_governance(root, slug, gov)
-        click.echo(
-            f"Engagement '{slug}' governance set to '{level}'."
-        )
-    else:
-        from harness.agents.governance import (
-            get_project_governance,
-            set_project_governance,
-        )
-        set_project_governance(root, gov)
-        current = get_project_governance(root)
-        click.echo(
-            f"Project governance set to '{level}'."
-        )
-
-
+def set_governance(level, slug):
+    """Set the governance level for the project or an engagement."""
+    try:
+        from harness.cli.commands import dispatch_cli_command, set_governance_command
+        cmd = set_governance_command(level=level, slug=slug)
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+        click.echo(result.message)
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Failed to set governance: {exc}", err=True)
+        raise click.Abort()
 @main.command()
 @click.argument("question", nargs=-1, required=True)
 @click.option("--team", help="Limit consultation to a specific team")
@@ -953,265 +853,131 @@ def wave():
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def list_waves(slug):
     """List waves from the engagement plan."""
-    root = require_project_root(command_name="wave list")
+    try:
+        from harness.cli.commands import dispatch_cli_command, list_waves_command
 
-    if not slug:
-        from harness.engagement.resolver import resolve_active_engagement
-        slug = resolve_active_engagement(root)
-
-    if not slug:
-        click.echo(
-            "No active engagement. Create one with:\n"
-            "  harness engagement create \"your task\"",
-            err=True,
-        )
+        cmd = list_waves_command(slug=slug or "")
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+        waves = result.data.get("waves", [])
+        if not waves:
+            click.echo("No waves defined in the plan.")
+            return
+        click.echo()
+        click.echo(f"  {'Wave ID':<12} {'Title':<36} {'Type':<14} {'State':<16}")
+        click.echo(f"  {'-'*11}  {'-'*34}  {'-'*12}  {'-'*14}")
+        for s in waves:
+            marker = "*" if s.get("is_modifiable") and not s.get("is_committed") else " "
+            click.echo(
+                f"  {marker} {s.get('id', '?') :<10} {s.get('title', ''):<34} "
+                f"{s.get('type', ''):<12} {s.get('state', ''):<14}"
+            )
+        click.echo()
+        click.echo("Legend: * = active (modifiable, not yet committed)")
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"List waves failed: {exc}", err=True)
         raise click.Abort()
-
-    from harness.plan.plan_manager import PlanManager
-
-    pm = PlanManager(root, slug)
-    statuses = pm.get_status()
-
-    if not statuses:
-        click.echo("No waves defined in the plan.")
-        return
-
-    click.echo()
-    click.echo(f"  {'Wave ID':<12} {'Title':<36} {'Type':<14} {'State':<16}")
-    click.echo(f"  {'-'*11}  {'-'*34}  {'-'*12}  {'-'*14}")
-    for s in statuses:
-        marker = "*" if s["is_modifiable"] and not s["is_committed"] else " "
-        click.echo(
-            f"  {marker} {s['id']:<10} {s['title']:<34} "
-            f"{s['type']:<12} {s['state']:<14}"
-        )
-    click.echo()
-    click.echo("Legend: * = active (modifiable, not yet committed)")
-
-
 @wave.command()
 @click.argument("wave_id")
 @click.option("--no-test", is_flag=True, help="Skip automated test suite execution")
 @click.option("--backend", help="Agent backend name")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def run_wave(wave_id, no_test, backend, slug):
-    """Run a wave through the implement\u2192test\u2192verify\u2192commit cycle.
+    """Run a wave through the implement-test-verify-commit cycle.
 
     Usage:
         harness wave run wave-01
         harness wave run wave-01 --no-test
         harness wave run wave-01 --backend claude
     """
-    root = require_project_root(command_name="wave run")
-
-    if not slug:
-        from harness.engagement.resolver import resolve_active_engagement
-        slug = resolve_active_engagement(root)
-
-    if not slug:
-        click.echo(
-            "No active engagement. Create one with:\n"
-            "  harness engagement create \"your task\"",
-            err=True,
-        )
-        raise click.Abort()
-
-    from harness.phase.model import LoopConfig, Step
-    from harness.loop.runner import LoopRunner
-
-    # Build a LoopRunner with loop config for implement-test-verify cycle
-    loop_config = LoopConfig(
-        count=1,
-        description=f"Wave {wave_id} implement-test-verify cycle",
-    )
-    # Create steps: implement, test, verify
-    steps = [
-        Step(agents=["coding-agent"], action=f"Implement {wave_id}", auto=True),
-        Step(agents=["testing-agent"], action=f"Test {wave_id}", auto=True),
-        Step(agents=["validation-agent"], action=f"Verify {wave_id}", auto=True),
-    ]
-    runner = LoopRunner()
-
-    click.echo(f"\nRunning wave '{wave_id}' through code+test cycle...\n")
-
     try:
-        result = asyncio.run(runner.run(
-            loop_config=loop_config,
-            steps=steps,
-            context={"slug": slug, "wave_id": wave_id, "mode": "auto"},
-        ))
+        from harness.cli.commands import dispatch_cli_command, run_wave_command
+
+        if not slug:
+            from harness.engagement.resolver import resolve_active_engagement
+            from pathlib import Path
+            slug = resolve_active_engagement(Path.cwd())
+
+        if not slug:
+            click.echo(
+                "No active engagement. Create one with:\n"
+                "  harness engagement create \"your task\"",
+                err=True,
+            )
+            raise click.Abort()
+
+        cmd = run_wave_command(slug=slug, wave_id=wave_id, no_test=no_test, backend=backend)
+        result = dispatch_cli_command(cmd)
+
+        if not result.success:
+            click.echo(f"Error running wave cycle: {result.error}", err=True)
+            raise click.Abort()
+
+        click.echo()
+        click.echo(f"  Wave {wave_id} completed successfully!")
+        click.echo(f"     Iterations: {result.data.get('iteration_count', '?')}")
+        click.echo()
+        click.echo("  Ready to commit and raise a PR.")
+
+    except click.Abort:
+        raise
     except Exception as exc:
         click.echo(f"Error running wave cycle: {exc}", err=True)
         raise click.Abort()
-
-    if result.success:
-        click.echo()
-        click.echo(f"  Wave {wave_id} completed successfully!")
-        click.echo(f"     Iterations: {result.iteration_count}")
-        click.echo()
-        click.echo("  Ready to commit and raise a PR.")
-    else:
-        click.echo()
-        click.echo(f"  Wave {wave_id} failed.")
-        click.echo(f"     Iterations: {result.iteration_count}")
-        if result.error:
-            click.echo(f"     - {result.error}")
-        click.echo()
-        click.echo(
-            "  Fix the issues and re-run: harness wave run "
-            f"{wave_id}"
-        )
-        raise click.Abort()
-
-
 @wave.command()
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def wave_status(slug):
     """Show detailed wave status from the engagement plan."""
-    root = require_project_root(command_name="wave status")
+    try:
+        from harness.cli.commands import dispatch_cli_command, wave_status_command
 
-    if not slug:
-        from harness.engagement.resolver import resolve_active_engagement
-        slug = resolve_active_engagement(root)
-
-    if not slug:
-        click.echo(
-            "No active engagement. Create one with:\n"
-            "  harness engagement create \"your task\"",
-            err=True,
-        )
+        cmd = wave_status_command(slug=slug or "")
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+        summary = result.data.get("summary", "")
+        click.echo()
+        click.echo(summary)
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Wave status failed: {exc}", err=True)
         raise click.Abort()
-
-    from harness.plan.plan_manager import PlanManager
-
-    pm = PlanManager(root, slug)
-    click.echo()
-    click.echo(pm.summary())
-
-
 @wave.command(name="create-from-finding")
 @click.argument("finding_id")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def create_wave_from_finding(finding_id, slug):
-    """Create a wave from an assessment finding.
+    """Create a wave from an assessment finding."""
+    try:
+        from harness.cli.commands import dispatch_cli_command, create_wave_from_finding_command
 
-    Reads the latest assessment manifest for the active engagement,
-    finds the specified finding by ID, and creates a wave with its
-    description as the wave spec.
-
-    Usage:
-        harness wave create-from-finding finding-001
-        harness wave create-from-finding finding-001 --engagement my-engagement
-    """
-    import json
-    from harness.plan.plan_manager import PlanManager
-
-    root = require_project_root(command_name="wave create-from-finding")
-
-    if not slug:
-        from harness.engagement.resolver import resolve_active_engagement
-        slug = resolve_active_engagement(root)
-
-    if not slug:
-        click.echo(
-            "No active engagement. Create one with:\n"
-            "  harness engagement create \"your task\"",
-            err=True,
-        )
+        cmd = create_wave_from_finding_command(finding_id=finding_id, slug=slug or "")
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+        data = result.data
+        click.echo()
+        wave_id = data.get("wave_id", "?")
+        click.echo(f"  Created wave '{wave_id}' from finding '{finding_id}'")
+        title_val = data.get("title", "")
+        click.echo(f"  Title: {title_val}")
+        sev = data.get("severity", "?")
+        cat = data.get("category", "?")
+        click.echo(f"  Severity: {sev}, Category: {cat}")
+        click.echo()
+        click.echo(f"  Run it with:  harness wave run {wave_id}")
+        click.echo("  See plan:     harness wave list")
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Failed to create wave from finding: {exc}", err=True)
         raise click.Abort()
-
-    # Find the latest assessment manifest
-    assess_dir = get_engagements_dir(root) / slug / "assessments"
-    if not assess_dir.is_dir():
-        click.echo(
-            f"No assessments found for engagement '{slug}'.\n"
-            f"Run an assessment first:\n"
-            f"  harness assess . --deep",
-            err=True,
-        )
-        raise click.Abort()
-
-    # Scan manifests in descending order (newest first)
-    manifests = sorted(
-        assess_dir.glob("*-manifest.json"),
-        reverse=True,
-    )
-    if not manifests:
-        click.echo(
-            f"No assessment manifests found in {assess_dir}.",
-            err=True,
-        )
-        raise click.Abort()
-
-    # Load the latest manifest
-    manifest = json.loads(manifests[0].read_text())
-    findings = manifest.get("findings", [])
-
-    if not findings:
-        click.echo(
-            "The latest assessment does not contain structured findings.\n"
-            "Re-run the assessment with --deep to get structured findings:\n"
-            "  harness assess . --deep",
-            err=True,
-        )
-        raise click.Abort()
-
-    # Find the requested finding
-    target = None
-    for f in findings:
-        if f.get("id") == finding_id:
-            target = f
-            break
-
-    if target is None:
-        available = [f.get("id", "?") for f in findings]
-        click.echo(
-            f"Finding '{finding_id}' not found in the latest assessment.\n"
-            f"Available findings: {', '.join(available[:20])}",
-            err=True,
-        )
-        raise click.Abort()
-
-    if target.get("wave_slug"):
-        click.echo(
-            f"Finding '{finding_id}' already has a wave "
-            f"({target['wave_slug']}). Skipping."
-        )
-        return
-
-    # Build the wave title from the finding
-    category = target.get("category", "other")
-    message = target.get("message", "")
-    severity = target.get("severity", "info")
-
-    # Truncate the message to a reasonable title (first 50 chars)
-    title = message[:72] + ("..." if len(message) > 72 else "")
-
-    # Create the wave via PlanManager
-    pm = PlanManager(root, slug)
-    wave_obj = pm.add_wave(
-        title=title,
-        wave_type="refactor",
-        trigger_phase="assessment",
-        trigger_reason=(
-            f"Finding {finding_id}: [{severity}] {category} \u2014 {message[:100]}"
-        ),
-    )
-
-    # Update the manifest to record the wave association
-    target["wave_slug"] = wave_obj.id
-    target["wave_status"] = "open"
-    manifests[0].write_text(json.dumps(manifest, indent=2))
-
-    click.echo()
-    click.echo(f"  Created wave '{wave_obj.id}' from finding '{finding_id}'")
-    click.echo(f"  Title: {title}")
-    click.echo(f"  Severity: {severity}, Category: {category}")
-    click.echo()
-    click.echo(f"  Run it with:  harness wave run {wave_obj.id}")
-    click.echo("  See plan:     harness wave list")
-
-
 @wave.command(name="create-from-assessment")
 @click.option("--focus", type=click.Choice(["high-risk", "medium", "all"]),
               default="high-risk",
@@ -1222,175 +988,27 @@ def create_wave_from_finding(finding_id, slug):
               help="Mark the engagement as a refactoring engagement")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def create_waves_from_assessment(focus, limit, slug, refactoring):
-    """Create waves from all matching assessment findings.
+    """Create waves from all matching assessment findings."""
+    try:
+        from harness.cli.commands import dispatch_cli_command, create_waves_from_assessment_command
 
-    Reads the latest assessment manifest, filters findings by the
-    given focus level, and creates a wave for each finding that
-    doesn't already have one. Updates the manifest to track
-    finding-to-wave associations.
-
-    Use --limit to cap the number of waves created (useful for
-    starting with just the top N findings).
-
-    Use --refactoring to mark the engagement as a refactoring
-    engagement (sets session_type + refactoring flag in
-    engagement.yaml, records baseline reference).
-
-    Examples:
-
-        harness wave create-from-assessment
-        harness wave create-from-assessment --focus medium
-        harness wave create-from-assessment --focus all --limit 5
-        harness wave create-from-assessment --refactoring
-        harness wave create-from-assessment --engagement my-engagement
-    """
-    import json
-    from harness.plan.plan_manager import PlanManager
-
-    root = require_project_root(command_name="wave create-from-assessment")
-
-    if not slug:
-        from harness.engagement.resolver import resolve_active_engagement
-        slug = resolve_active_engagement(root)
-
-    if not slug:
-        click.echo(
-            "No active engagement. Create one with:\n"
-            "  harness engagement create \"your task\"",
-            err=True,
+        cmd = create_waves_from_assessment_command(
+            focus=focus, limit=limit, slug=slug or "", refactoring=refactoring,
         )
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+        click.echo()
+        click.echo(result.message)
+        click.echo()
+        click.echo("  Run:  harness wave list")
+        click.echo("  Run:  harness wave run <wave-id>")
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Failed to create waves from assessment: {exc}", err=True)
         raise click.Abort()
-
-    # Find the latest assessment manifest
-    assess_dir = get_engagements_dir(root) / slug / "assessments"
-    if not assess_dir.is_dir():
-        click.echo(
-            f"No assessments found for engagement '{slug}'.\n"
-            f"Run an assessment first:\n"
-            f"  harness assess . --deep",
-            err=True,
-        )
-        raise click.Abort()
-
-    manifests = sorted(
-        assess_dir.glob("*-manifest.json"),
-        reverse=True,
-    )
-    if not manifests:
-        click.echo(
-            f"No assessment manifests found in {assess_dir}.",
-            err=True,
-        )
-        raise click.Abort()
-
-    manifest = json.loads(manifests[0].read_text())
-    findings = manifest.get("findings", [])
-
-    if not findings:
-        click.echo(
-            "The latest assessment does not contain structured findings.\n"
-            "Re-run with:\n"
-            "  harness assess . --deep",
-            err=True,
-        )
-        raise click.Abort()
-
-    # Filter findings by severity
-    def _matches_focus(f: dict) -> bool:
-        sev = f.get("severity", "info")
-        if focus == "high-risk":
-            return sev in ("error", "critical")
-        elif focus == "medium":
-            return sev in ("error", "critical", "warning")
-        return True  # all
-
-    matching = [f for f in findings if _matches_focus(f)]
-
-    if not matching:
-        click.echo(f"No findings match focus level '{focus}'.")
-        return
-
-    # Filter out findings that already have waves
-    unassigned = [f for f in matching if not f.get("wave_slug")]
-
-    if not unassigned:
-        click.echo(
-            f"All {len(matching)} matching findings already have "
-            f"waves assigned. Nothing to create."
-        )
-        return
-
-    # Apply limit
-    if limit > 0:
-        unassigned = unassigned[:limit]
-
-    # Create waves
-    pm = PlanManager(root, slug)
-    created = 0
-    skipped = 0
-    manifest_updated = False
-
-    for f in unassigned:
-        fid = f.get("id", "?")
-        severity = f.get("severity", "info")
-        category = f.get("category", "other")
-        message = f.get("message", "")
-        title = message[:72] + ("..." if len(message) > 72 else "")
-
-        wave_obj = pm.add_wave(
-            title=title,
-            wave_type="refactor",
-            trigger_phase="assessment",
-            trigger_reason=(
-                f"Finding {fid}: [{severity}] {category} \u2014 {message[:100]}"
-            ),
-        )
-
-        f["wave_slug"] = wave_obj.id
-        f["wave_status"] = "open"
-        manifest_updated = True
-        created += 1
-
-        click.echo(f"  \u2713 {fid}: created wave '{wave_obj.id}' \u2014 {title[:50]}")
-
-    if manifest_updated:
-        manifests[0].write_text(json.dumps(manifest, indent=2))
-
-    # If --refactoring flag is set, update engagement.yaml
-    if refactoring and created > 0:
-        eng_yaml_path = get_engagement_dir(root, slug) / "engagement.yaml"
-        if eng_yaml_path.is_file():
-            import yaml as _yaml
-            with open(eng_yaml_path) as f:
-                yaml_data = _yaml.safe_load(f) or {}
-            yaml_data["refactoring"] = True
-            yaml_data["session_type"] = "refactoring"
-            yaml_data["baseline_manifest"] = str(
-                manifests[0].relative_to(get_engagement_dir(root, slug))
-            )
-            yaml_data["baseline_finding_count"] = len(findings)
-            yaml_data["focus"] = focus
-            with open(eng_yaml_path, "w") as f:
-                _yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
-
-    skipped = len(matching) - len(unassigned) - (len(unassigned) - created)
-    click.echo()
-    click.echo(
-        f"  Created {created} wave(s) from {focus} findings "
-        f"({len(matching)} matched, {skipped} already assigned)"
-    )
-    if limit > 0 and created == limit:
-        click.echo(f"  Reached --limit {limit}. Run again to create more.")
-    click.echo()
-    click.echo("  Run:  harness wave list")
-    click.echo("  Run:  harness wave run <wave-id>")
-
-
-# ---------------------------------------------------------------------------
-# Chat and Session
-# ---------------------------------------------------------------------------
-
-
 @main.command()
 @click.argument("prompt_text", required=False, default=None)
 @click.option("--engagement", "engagement_slug", help="Engagement slug (default: active)")
@@ -1404,25 +1022,16 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
     help="Context load tier: 1=inventory only, 2=+summaries, 3=+snippets",
 )
 def chat(prompt_text, engagement_slug, phase, context_tier):
-    """Interactive LLM chat session within an engagement.
-
-    Opens a live chat with the configured LLM provider, saving the
-    conversation to the engagement transcript directory.
-
-    Examples::
-
-        harness chat                                 # interactive mode
-        harness chat "Design a user auth system"     # one-shot
-        harness chat --phase requirements            # start in requirements phase
-        harness chat --engagement my-feature         # specific engagement
-    """
+    """Interactive LLM chat session within an engagement."""
     try:
-        root = require_project_root(command_name="chat")
-        from harness.session.client import resolve_provider, SessionClient
+        from harness.cli.commands import dispatch_cli_command, chat_command
+        from harness.engagement.resolver import resolve_active_engagement
+        from harness.paths import get_engagement_dir
+        from pathlib import Path
 
+        root = Path.cwd()
         slug = engagement_slug
         if not slug:
-            from harness.engagement.resolver import resolve_active_engagement
             slug = resolve_active_engagement(root)
 
         if not slug:
@@ -1433,29 +1042,23 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
             )
             raise click.Abort()
 
-        # Verify the engagement directory exists
         eng_dir = get_engagement_dir(root, slug)
         if not eng_dir.is_dir():
-            click.echo(
-                f"Engagement '{slug}' not found. "
-                f"Expected directory: {eng_dir}",
-                err=True,
-            )
+            click.echo(f"Engagement '{slug}' not found.", err=True)
             raise click.Abort()
 
-        provider = resolve_provider(root)
-        SessionClient(root, provider=provider, verbose=True)
+        cmd = chat_command(slug=slug, prompt=prompt_text, phase=phase, context_tier=context_tier)
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Chat error: {result.error}", err=True)
+            raise click.Abort()
         click.echo(f"Opening chat session for engagement '{slug}'...")
-        click.echo("(Chat sessions now use the new session client; for full phase orchestration, use `harness session`)")
         raise click.Abort()
-
     except click.Abort:
         raise
     except Exception as exc:
         click.echo(f"Chat error: {exc}", err=True)
         raise click.Abort()
-
-
 @main.command()
 @click.option("--engagement", "engagement_slug", help="Engagement slug (default: active)")
 @click.option("--phase", default="requirements",
@@ -1477,40 +1080,17 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
 @click.option("--get-well", "get_well", is_flag=True,
               help="Get-well remediation session (assessment-driven)")
 def session(engagement_slug, phase, context_tier, session_type, get_well):
-    """Run a full phase-by-phase session.
-
-    Walks through each development phase sequentially:
-    requirements \u2192 research \u2192 design \u2192 implementation \u2192 testing \u2192 review.
-    Each phase runs the appropriate agent with context from previous phases.
-
-    Session type (greenfield/brownfield/refactoring) controls the phase
-    sequence and agent behaviour. If not specified, the harness attempts
-    to auto-detect from the engagement context.
-
-    Commands during session:
-      /next     \u2014 advance to next phase
-      /approve  \u2014 approve and advance
-      /changes  \u2014 request revisions
-      /save     \u2014 save transcript
-      /help     \u2014 show commands
-      /exit     \u2014 quit
-
-    Examples::
-
-        harness session                              # auto-detect type
-        harness session --greenfield                 # explicit greenfield
-        harness session --brownfield                 # explicit brownfield
-        harness session --refactoring                # explicit refactoring
-        harness session --get-well                   # assessment-driven remediation
-        harness session --phase design               # start from design phase
-    """
+    """Run a full phase-by-phase session."""
     try:
-        root = require_project_root(command_name="session")
-        from harness.engagement.startup import StartupResumeFlow
+        from harness.cli.commands import dispatch_cli_command, session_command
+        from harness.engagement.resolver import resolve_active_engagement
+        from harness.paths import get_engagement_dir
+        from harness.cli.helpers import resolve_session_type_flag
+        from pathlib import Path
 
+        root = Path.cwd()
         slug = engagement_slug
         if not slug:
-            from harness.engagement.resolver import resolve_active_engagement
             slug = resolve_active_engagement(root)
 
         if not slug:
@@ -1521,50 +1101,38 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
             )
             raise click.Abort()
 
-        # Verify the engagement directory exists
         eng_dir = get_engagement_dir(root, slug)
         if not eng_dir.is_dir():
-            click.echo(
-                f"Engagement '{slug}' not found. "
-                f"Expected directory: {eng_dir}",
-                err=True,
-            )
+            click.echo(f"Engagement '{slug}' not found.", err=True)
             raise click.Abort()
 
         resolved_type = resolve_session_type_flag(session_type, root, slug)
 
-        # --get-well overrides: forces get-well mode regardless of other flags
-        if get_well:
-            if not phase:
-                phase = "assessment-triage"
+        effective_phase = phase
+        if get_well and effective_phase == "requirements":
+            effective_phase = "assessment-triage"
 
-        # Use the new StartupResumeFlow to create and enter the engagement
-        flow = StartupResumeFlow(root=root)
-        start_result = flow.create(
+        cmd = session_command(
             slug=slug,
-            session_type=resolved_type or "greenfield",
-            mode="auto",
+            phase=effective_phase,
+            session_type=resolved_type,
+            context_tier=context_tier,
+            get_well=get_well,
         )
-        if start_result.success:
-            click.echo(f"Session started for engagement '{slug}'")
-            click.echo(f"  Phase: {start_result.phase_entered}")
-            click.echo("  (Full phase-by-phase orchestration is a WIP in the new architecture)")
-        else:
-            click.echo(f"Failed to start session: {start_result.error}", err=True)
-        raise click.Abort()
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Session error: {result.error}", err=True)
+            raise click.Abort()
 
+        click.echo(f"Session started for engagement '{slug}'")
+        click.echo(f"  Phase: {effective_phase}")
+        click.echo("  (Full phase-by-phase orchestration is a WIP in the new architecture)")
+        raise click.Abort()
     except click.Abort:
         raise
     except Exception as exc:
         click.echo(f"Session error: {exc}", err=True)
         raise click.Abort()
-
-
-# ---------------------------------------------------------------------------
-# Review command
-# ---------------------------------------------------------------------------
-
-
 @main.command()
 @click.argument("engagement_id")
 @click.option("--approve", is_flag=True)
@@ -1824,137 +1392,65 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
         click.echo(f"Phase command failed: {exc}", err=True)
         raise click.Abort()
 def inspect(repo_path, report_file, deep, verbose, project_type):
-    """Analyse a codebase as an external observer.
-
-    Pure analysis mode \u2014 never writes state, never modifies the repo,
-    doesn't require `harness init`. When --deep is used, also runs
-    the LLM-based independent assessment (P1-P5) for comprehensive
-    codebase evaluation.
-
-    By default, only a summary is shown. Use --verbose to print the
-    full report to the terminal. The report is always written to file
-    when --report is specified or when inside an active engagement.
-
-    Examples:
-
-        harness observe .
-
-        harness observe /path/to/project --deep --report analysis.md
-
-        harness observe . --deep --verbose
-    """
+    """Analyse a codebase as an external observer."""
     try:
-        from harness.analysis.observer import analyse
+        from harness.cli.commands import dispatch_cli_command, inspect_command
+        from harness.cli.helpers import write_assessment_report
 
-        result = analyse(
-            path=repo_path,
-            deep=deep,
-            project_type=project_type,
-        )
+        cmd = inspect_command(root=repo_path)
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
 
-        if result["status"] == "error":
-            click.echo(f"Error: {result['message']}", err=True)
-            return
-
-        # Print summary by default; full report only with --verbose
-        assessment_dict = result.get("assessment")
+        findings = result.data.get("findings_count", "?")
+        score = result.data.get("score", "?")
         if verbose:
-            click.echo(result["report"])
+            click.echo(result.data.get("report", ""))
         else:
-            # Show a brief summary
-            score = "?"
-            findings = "?"
-            if assessment_dict:
-                ad = assessment_dict.get("assessment", {})
-                score = ad.get("score", "?")
-                findings = len(ad.get("findings", []))
             click.echo(f"Assessment complete: {findings} findings, score: {score}")
 
         written = write_assessment_report(
-            result["report"], repo_path, report_file,
-            assessment_dict=assessment_dict,
+            result.data.get("report", ""), repo_path, report_file,
+            assessment_dict=None,
         )
         if written:
             click.echo(f"Report written to: {written}")
-
     except Exception as exc:
         click.echo(f"Inspect analysis failed: {exc}", err=True)
         raise click.Abort()
-
-
 @main.command()
 @click.argument("repo_path", default=".")
 @click.option("--report", "report_file", default=None, help="Write report to file")
 @click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
 def assess(repo_path, report_file, verbose):
-    """Run the full assessment on the current project.
-
-    Runs the observer (P1-P11 + P9 synthesis) on the current directory,
-    produces structured findings with IDs, and writes them to the
-    engagement's assessments directory when inside an active engagement.
-
-    Use this to establish baselines, drive refactoring engagements,
-    and track improvement over time. Findings from this command are
-    consumed by:
-      - ``harness engagement create --refactoring`` (auto-waves)
-      - ``harness wave create-from-finding`` (per-finding waves)
-      - ``harness engagement diff`` (baseline comparison)
-
-    By default, only a summary is shown. Use --verbose to print the
-    full report to the terminal.
-
-    Examples:
-
-        harness assess .
-
-        harness assess . --verbose
-
-        harness assess . --report baseline.md
-    """
+    """Run the full assessment on the current project."""
     try:
-        from harness.analysis.observer import analyse
+        from harness.cli.commands import dispatch_cli_command, assess_command
+        from harness.cli.helpers import write_assessment_report
 
-        result = analyse(
-            path=repo_path,
-            deep=True,
-            project_type="python",
-        )
+        cmd = assess_command(root=repo_path, deep_flag=True)
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
 
-        if result["status"] == "error":
-            click.echo(f"Error: {result['message']}", err=True)
-            return
-
-        # Print summary by default; full report only with --verbose
-        assessment_dict = result.get("assessment")
+        findings = result.data.get("findings_count", "?")
+        score = result.data.get("score", "?")
         if verbose:
-            click.echo(result["report"])
+            click.echo(result.data.get("report", ""))
         else:
-            # Show a brief summary
-            score = "?"
-            findings = "?"
-            if assessment_dict:
-                ad = assessment_dict.get("assessment", {})
-                score = ad.get("score", "?")
-                findings = len(ad.get("findings", []))
             click.echo(f"Assessment complete: {findings} findings, score: {score}")
 
         written = write_assessment_report(
-            result["report"], repo_path, report_file,
-            assessment_dict=assessment_dict,
+            result.data.get("report", ""), repo_path, report_file,
+            assessment_dict=None,
         )
         if written:
             click.echo(f"Report written to: {written}")
-
     except Exception as exc:
         click.echo(f"Assessment failed: {exc}", err=True)
         raise click.Abort()
-
-
-# ---------------------------------------------------------------------------
-# Shell
-# ---------------------------------------------------------------------------
-
-
 @main.command()
 def shell():
     """Launch an interactive REPL with tab completion and command history.
@@ -2536,79 +2032,40 @@ def engagement_status(engagement_slug):
 )
 @click.option("--dry-run", is_flag=True, help="Show what would change without making changes")
 def rename(old_slug, new_slug, branch_strategy, dry_run):
-    """Rename an existing engagement.
-
-    Renames the engagement slug, moves the engagement directory,
-    updates references, and optionally handles the git branch.
-
-    Branch strategies:
-
-    \b
-        keep   \u2014 Leave git branch unchanged (default)
-        rename \u2014 Rename the current git branch to match
-        new    \u2014 Create a new branch and switch to it
-
-    Examples:
-
-        harness engagement rename typo-eng correct-eng
-
-        harness engagement rename my-old-name new-name --branch-strategy rename
-
-        harness engagement rename test-eng prod-eng --dry-run
-    """
+    """Rename an existing engagement."""
     try:
-        root = require_project_root(command_name="engagement rename")
+        from harness.cli.commands import dispatch_cli_command, rename_engagement_command
 
-        from harness.engagement.rename import (
-            BranchStrategy,
-            rename_engagement,
-        )
-
-        strategy = BranchStrategy(branch_strategy)
-        result = rename_engagement(
+        cmd = rename_engagement_command(
             old_slug=old_slug,
             new_slug=new_slug,
-            root=root,
-            branch_strategy=strategy,
+            branch_strategy=branch_strategy,
             dry_run=dry_run,
         )
-
-        if result.errors:
-            for err in result.errors:
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            for err in result.data.get("errors", [result.error]):
                 click.echo(f"Error: {err}", err=True)
             raise click.Abort()
 
         if dry_run:
-            click.echo(f"DRY RUN \u2014 Would rename '{old_slug}' \u2192 '{new_slug}'")
-            click.echo("")
-            for change in result.changes_made:
-                click.echo(f"  \u2022 {change}")
-            if result.warnings:
-                click.echo("")
-                click.echo("Warnings:")
-                for w in result.warnings:
-                    click.echo(f"  \u26a0 {w}")
+            click.echo(f"DRY RUN - Would rename '{old_slug}' -> '{new_slug}'")
+            for change in result.data.get("changes_made", []):
+                click.echo(f"  * {change}")
+            for w in result.data.get("warnings", []):
+                click.echo(f"  Warning: {w}")
             return
 
-        click.echo(f"Engagement renamed: {old_slug} \u2192 {new_slug}")
-        for change in result.changes_made:
-            click.echo(f"  \u2022 {change}")
-
-        if result.warnings:
-            click.echo("")
-            click.echo("Warnings:")
-            for w in result.warnings:
-                click.echo(f"  \u26a0 {w}")
-
+        click.echo(f"Engagement renamed: {old_slug} -> {new_slug}")
+        for change in result.data.get("changes_made", []):
+            click.echo(f"  * {change}")
+        for w in result.data.get("warnings", []):
+            click.echo(f"  Warning: {w}")
     except click.Abort:
         raise
     except Exception as exc:
-        click.echo(
-            f"Failed to rename engagement: {exc}", err=True
-        )
+        click.echo(f"Failed to rename engagement: {exc}", err=True)
         raise click.Abort()
-
-
 @engagement.command()
 @click.argument("slug")
 def close(slug):
@@ -2836,95 +2293,44 @@ def diff(slug):
 @click.argument("slug")
 @click.argument("branch")
 def set_branch(slug, branch):
-    """Set the branch for an engagement (explicit repoint).
-
-    Updates the engagement's stored branch reference in engagement.yaml.
-    Use this when working on a different branch intentionally (e.g.,
-    after a rebase or merge).
-
-    Examples:
-
-        harness engagement set-branch my-engagement eng/my-engagement
-
-        harness engagement set-branch bug-fixes main
-    """
+    """Set the branch for an engagement (explicit repoint)."""
     try:
-        root = require_project_root(command_name="engagement set-branch")
+        from harness.cli.commands import dispatch_cli_command, set_branch_command
 
-        eng_dir = get_engagement_dir(root, slug)
-        eng_yaml_path = eng_dir / "engagement.yaml"
-
-        if not eng_yaml_path.is_file():
-            click.echo(f"Engagement '{slug}' has no engagement.yaml.", err=True)
+        cmd = set_branch_command(slug=slug, branch=branch)
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
-
-        import yaml
-        with open(eng_yaml_path) as f:
-            yaml_data = yaml.safe_load(f) or {}
-
-        old_branch = yaml_data.get("branch", "(not set)")
-        yaml_data["branch"] = branch
-
-        with open(eng_yaml_path, "w") as f:
-            yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
-
+        data = result.data
         click.echo(f"Engagement '{slug}' branch updated:")
-        click.echo(f"  {old_branch} \u2192 {branch}")
-
+        old_branch = data.get("old_branch", "(not set)")
+        new_branch = data.get("new_branch", branch)
+        click.echo(f"  {old_branch} -> {new_branch}")
     except click.Abort:
         raise
     except Exception as exc:
         click.echo(f"Failed to set branch: {exc}", err=True)
         raise click.Abort()
-
-
 @engagement.command()
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def fix(slug):
-    """Fix missing engagement metadata and state issues.
-
-    Creates missing files and directories needed for the engagement to
-    function: engagement.yaml, engagement.md, plan.yaml, plan.md, and
-    the assessments directory. Also syncs plan state and refreshes
-    freshness records.
-
-    Examples:
-
-        harness engagement fix
-
-        harness engagement fix --engagement my-engagement
-    """
+    """Fix missing engagement metadata and state issues."""
     try:
-        root = require_project_root(command_name="engagement fix")
+        from harness.cli.commands import dispatch_cli_command, fix_engagement_command
 
-        if not slug:
-            from harness.engagement.resolver import resolve_active_engagement
-            slug = resolve_active_engagement(root)
-
-        if not slug:
-            click.echo(
-                "No active engagement. Specify one with --engagement.",
-                err=True,
-            )
+        cmd = fix_engagement_command(slug=slug or "")
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
-
-        from harness.health import fix_engagement
-        messages = fix_engagement(root, slug)
-        for msg in messages:
+        for msg in result.data.get("messages", []):
             click.echo(f"  {msg}")
-
     except click.Abort:
         raise
     except Exception as exc:
         click.echo(f"Fix failed: {exc}", err=True)
         raise click.Abort()
-
-
-# ---------------------------------------------------------------------------
-# Doc generation commands
-# ---------------------------------------------------------------------------
-
-
 @main.command()
 @click.option("--output-dir", type=click.Path(path_type=Path), default=None,
               help="Output directory (default: project root)")
@@ -2937,70 +2343,25 @@ def fix(slug):
 @click.option("--source-tier", type=int, default=3,
               help="Source material tier (1-5, higher = richer)")
 def generate_docs(output_dir, overwrite, doc_type, source_tier):
-    """Generate project documentation from harness analysis data.
-
-    Produces README.md, CONTRIBUTING.md, architecture docs, usage
-    examples, and changelogs from existing project data.
-
-    Examples:
-
-        harness generate-docs
-
-        harness generate-docs --type readme --overwrite all
-
-        harness generate-docs --output-dir docs/ --type full
-
-        harness generate-docs --type changelog
-    """
+    """Generate project documentation from harness analysis data."""
     try:
-        root = require_project_root(command_name="generate-docs")
+        from harness.cli.commands import dispatch_cli_command, generate_docs_command
+        from pathlib import Path
 
-        from harness.docs.generator import (
-            DocType,
-            OverwriteMode,
-            SourceTier,
-            generate_all_docs,
-            generate_doc,
-            populate_context_from_project,
-        )
-
-        overwrite_mode = OverwriteMode(overwrite)
-        source_tier_enum = SourceTier(source_tier)
-
-        if doc_type == "full":
-            generated = generate_all_docs(
-                root=root,
-                output_dir=output_dir or root,
-                overwrite_mode=overwrite_mode,
-                interactive=True,
-                source_tier=source_tier_enum,
-            )
-        else:
-            doc_type_enum = DocType(doc_type)
-            context = populate_context_from_project(
-                root, source_tier_enum
-            )
-            generated = generate_doc(
-                doc_type=doc_type_enum,
-                context=context,
-                output_dir=output_dir or root,
-                root=root,
-                overwrite_mode=overwrite_mode,
-                interactive=True,
-                source_tier=source_tier_enum,
-            )
-
+        cmd = generate_docs_command(root=str(Path.cwd()))
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+        generated = result.data.get("generated", [])
         click.echo(f"Generated {len(generated)} document(s):")
         for p in generated:
-            click.echo(f"  \u2022 {p.relative_to(root)}")
-
+            click.echo(f"  * {p}")
     except Exception as exc:
         click.echo(f"Failed to generate docs: {exc}", err=True)
         import traceback as _tb
         _tb.print_exc()
         raise click.Abort()
-
-
 @main.group()
 def changelog():
     """Manage engagement changelogs."""
@@ -3011,61 +2372,19 @@ def changelog():
 @click.argument("engagement_slug")
 @click.argument("text")
 def annotate(engagement_slug, text):
-    """Append a human annotation to the latest changelog entry.
-
-    Annotations are appended to the existing entry without modifying
-    the auto-generated content.
-
-    Examples:
-
-        harness changelog annotate my-engagement "Reviewed and approved"
-
-        harness changelog annotate billing-fix "Added edge case handling"
-    """
+    """Append a human annotation to the latest changelog entry."""
     try:
-        root = require_project_root(command_name="changelog annotate")
+        from harness.cli.commands import dispatch_cli_command, annotate_changelog_command
 
-        from harness.docs.changelog import annotate_changelog
-
-        eng_dir = get_engagement_dir(root, engagement_slug)
-        if not eng_dir.is_dir():
-            click.echo(
-                f"Error: Engagement '{engagement_slug}' not found.",
-                err=True,
-            )
+        cmd = annotate_changelog_command(slug=engagement_slug, wave="", text=text)
+        result = dispatch_cli_command(cmd)
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
-
-        # Find the latest changelog entry
-        changelog_dir = eng_dir / "changelog"
-        if not changelog_dir.is_dir():
-            click.echo(
-                f"No changelog entries found for '{engagement_slug}'.",
-                err=True,
-            )
-            raise click.Abort()
-
-        entry_files = sorted(changelog_dir.iterdir(), reverse=True)
-        if not entry_files:
-            click.echo(
-                f"No changelog entries found for '{engagement_slug}'.",
-                err=True,
-            )
-            raise click.Abort()
-
-        latest = entry_files[0]
-        wave = latest.stem
-
-        updated = annotate_changelog(eng_dir, wave, text)
-        click.echo(f"Annotation added to {wave} changelog entry.")
-        click.echo(f"  {updated.relative_to(root)}")
-
-    except FileNotFoundError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        raise click.Abort()
+        click.echo("Annotation added to changelog entry.")
+        click.echo(f"  {result.data.get('path', '')}")
     except click.Abort:
         raise
     except Exception as exc:
-        click.echo(
-            f"Failed to annotate changelog: {exc}", err=True
-        )
+        click.echo(f"Failed to annotate changelog: {exc}", err=True)
         raise click.Abort()

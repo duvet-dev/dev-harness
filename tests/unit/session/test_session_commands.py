@@ -158,7 +158,7 @@ class TestRouteSessionCommand:
     def test_next_blocked_by_consult(self):
         from harness.agents.consultation import ConsultationResult
         blocking = ConsultationResult(
-            question="test", fleet_name="arch", status="pending",
+            question="test", team_name="arch", status="pending",
             mode="blocking",
         )
         state = self.make_state(
@@ -280,7 +280,7 @@ class TestRouteSessionCommand:
     def test_consult_resolve_valid(self):
         from harness.agents.consultation import ConsultationResult
         consult = ConsultationResult(
-            question="test", fleet_name="arch", status="pending"
+            question="test", team_name="arch", status="pending"
         )
         state = self.make_state(
             blocking_consults={"implementation": [consult]}

@@ -8,6 +8,7 @@ not agent creation time (D36). See V7 §10 for full specification.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -23,9 +24,13 @@ class AgentTeam:
         agents: List of agent string names in this team.
         guidelines: Optional shared guidelines injected at step dispatch
             (D36). Stored here, injected in Wave 2 (StepDispatcher).
+        consultations: Optional list of ConsultationCapability dicts
+            that this team can answer. Each dict has keys:
+            name, match_phrases, description, mode, scope, question.
     """
 
     name: str
     description: str | None = None
     agents: list[str] = field(default_factory=list)
     guidelines: str | None = None
+    consultations: list[dict[str, Any]] | None = None

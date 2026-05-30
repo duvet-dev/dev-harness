@@ -417,7 +417,7 @@ class TestFormatConsultResult:
         result = _format_consult_result(
             ConsultationResult(
                 question="test",
-                fleet_name="test",
+                team_name="test",
                 status="error",
                 error="Something went wrong",
             )

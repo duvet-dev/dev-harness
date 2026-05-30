@@ -1,7 +1,7 @@
 """Tests for harness.agents.consultation — consultation orchestrator.
 
 Tests ConsultationResult and ConsultationOrchestrator routing, dispatch,
-auto-consults, and available questions.
+auto-consults, and available questions using AgentTeam + TeamRegistry.
 """
 
 from __future__ import annotations
@@ -15,78 +15,61 @@ from harness.agents.consultation import (
     ConsultationOrchestrator,
     ConsultationResult,
 )
+from harness.team.model import AgentTeam
+from harness.team.registry import TeamRegistry
 
 
-# ── Minimal Fleet-like adapter for tests ──────────────────────────────────
-
-
-@dataclass
-class _TestFleet:
-    """Minimal Fleet-like object for ConsultationOrchestrator tests."""
-    name: str = ""
-    consultations: list = field(default_factory=list)
-
-
-class _TestRegistry:
-    """Minimal registry adapter for test ConsultationOrchestrator."""
-
-    def __init__(self):
-        self._fleets: dict[str, _TestFleet] = {}
-
-    def add_fleet(self, name: str, consultations: list) -> None:
-        self._fleets[name] = _TestFleet(name=name, consultations=list(consultations))
-
-    def list_fleets(self) -> list[_TestFleet]:
-        return list(self._fleets.values())
-
-    def get_fleet(self, name: str) -> _TestFleet | None:
-        return self._fleets.get(name)
+def _make_registry() -> TeamRegistry:
+    """Create a TeamRegistry with consultation capabilities on teams."""
+    return TeamRegistry(builtin=[
+        AgentTeam(
+            name="architecture",
+            consultations=[
+                {
+                    "name": "arch-review",
+                    "match_phrases": ["architecture", "design"],
+                    "description": "Review architecture decisions",
+                    "mode": "advisory",
+                    "scope": "cross-phase",
+                    "question": "Is the architecture sound?",
+                },
+                {
+                    "name": "blocking-check",
+                    "match_phrases": ["must check", "blocking review"],
+                    "description": "Blocking review",
+                    "mode": "blocking",
+                    "scope": "trigger:design",
+                    "question": "Blocking check question",
+                },
+                {
+                    "name": "phase-only",
+                    "match_phrases": ["phase-specific"],
+                    "description": "Only in this phase",
+                    "mode": "advisory",
+                    "scope": "phase:implementation",
+                    "question": "Phase question",
+                },
+            ],
+        ),
+        AgentTeam(
+            name="coding",
+            consultations=[
+                {
+                    "name": "code-review-request",
+                    "match_phrases": ["code review"],
+                    "description": "Review code",
+                    "mode": "advisory",
+                    "scope": "wave-build",
+                    "question": "Review the code.",
+                },
+            ],
+        ),
+    ])
 
 
 @pytest.fixture
 def registry():
-    """Create a test registry with consultation capabilities."""
-    reg = _TestRegistry()
-
-    reg.add_fleet("architecture", [
-        ConsultationCapability(
-            name="arch-review",
-            match_phrases=["architecture", "design"],
-            description="Review architecture decisions",
-            mode="advisory",
-            scope="cross-phase",
-            question="Is the architecture sound?",
-        ),
-        ConsultationCapability(
-            name="blocking-check",
-            match_phrases=["must check", "blocking review"],
-            description="Blocking review",
-            mode="blocking",
-            scope="trigger:design",
-            question="Blocking check question",
-        ),
-        ConsultationCapability(
-            name="phase-only",
-            match_phrases=["phase-specific"],
-            description="Only in this phase",
-            mode="advisory",
-            scope="phase:implementation",
-            question="Phase question",
-        ),
-    ])
-
-    reg.add_fleet("coding", [
-        ConsultationCapability(
-            name="code-review-request",
-            match_phrases=["code review"],
-            description="Review code",
-            mode="advisory",
-            scope="wave-build",
-            question="Review the code.",
-        ),
-    ])
-
-    return reg
+    return _make_registry()
 
 
 class TestConsultationResult:
@@ -124,7 +107,7 @@ class TestConsultationResult:
         result = ConsultationResult(
             question="Test?",
             capability="arch-review",
-            fleet_name="architecture",
+            team_name="architecture",
             status="matched",
         )
         summary = result.summary
@@ -135,7 +118,7 @@ class TestConsultationResult:
         result = ConsultationResult(
             question="Test?",
             capability="check",
-            fleet_name="fleet",
+            team_name="team",
             mode="blocking",
             status="matched",
         )
@@ -154,6 +137,47 @@ class TestConsultationResult:
         assert result.response_lines == ["Line 1", "Line 2", "Line 3"]
 
 
+class TestConsultationCapability:
+    """Tests for ConsultationCapability."""
+
+    def test_from_dict(self):
+        cap = ConsultationCapability.from_dict({
+            "name": "test-cap",
+            "match_phrases": ["hello"],
+            "description": "Test",
+            "mode": "blocking",
+            "scope": "trigger:design",
+            "question": "Test question?",
+        })
+        assert cap.name == "test-cap"
+        assert cap.match_phrases == ["hello"]
+        assert cap.mode == "blocking"
+        assert cap.scope == "trigger:design"
+        assert cap.question == "Test question?"
+
+    def test_from_dict_minimal(self):
+        cap = ConsultationCapability.from_dict({"name": "minimal"})
+        assert cap.name == "minimal"
+        assert cap.match_phrases == []
+        assert cap.mode == "advisory"
+
+    def test_matches(self):
+        cap = ConsultationCapability(
+            name="test",
+            match_phrases=["architecture review"],
+        )
+        assert cap.matches("Can I get an architecture review?") is True
+        assert cap.matches("How is the weather?") is False
+
+    def test_matches_case_insensitive(self):
+        cap = ConsultationCapability(
+            name="test",
+            match_phrases=["ARCHITECTURE"],
+        )
+        assert cap.matches("architecture review") is True
+        assert cap.matches("Architecture review") is True
+
+
 class TestConsultationOrchestrator:
     """Tests for ConsultationOrchestrator."""
 
@@ -164,20 +188,20 @@ class TestConsultationOrchestrator:
     def test_can_answer_matches(self, orch):
         matches = orch.can_answer("Can I get an architecture review?")
         assert len(matches) >= 1
-        cap, fleet_name = matches[0]
+        cap, team_name = matches[0]
         assert cap.name == "arch-review"
-        assert fleet_name == "architecture"
+        assert team_name == "architecture"
 
     def test_can_answer_no_match(self, orch):
         matches = orch.can_answer("What is the weather?")
         assert matches == []
 
-    def test_can_answer_with_fleet_filter(self, orch):
-        matches = orch.can_answer("architecture review", fleet_filter="architecture")
+    def test_can_answer_with_team_filter(self, orch):
+        matches = orch.can_answer("architecture review", team_filter="architecture")
         assert len(matches) >= 1
 
-    def test_can_answer_with_wrong_fleet_filter(self, orch):
-        matches = orch.can_answer("architecture review", fleet_filter="coding")
+    def test_can_answer_with_wrong_team_filter(self, orch):
+        matches = orch.can_answer("architecture review", team_filter="coding")
         assert matches == []
 
     def test_can_answer_any_true(self, orch):
@@ -190,7 +214,7 @@ class TestConsultationOrchestrator:
         result = orch.route("What about the architecture design?")
         assert result.status == "matched"
         assert result.capability == "arch-review"
-        assert result.fleet_name == "architecture"
+        assert result.team_name == "architecture"
 
     def test_route_unmatched(self, orch):
         result = orch.route("How's the weather?")
@@ -201,12 +225,12 @@ class TestConsultationOrchestrator:
         result = orch.route("architecture review", mode="blocking")
         assert result.mode == "blocking"
 
-    def test_route_with_fleet_filter(self, orch):
-        result = orch.route("architecture review", fleet_filter="architecture")
+    def test_route_with_team_filter(self, orch):
+        result = orch.route("architecture review", team_filter="architecture")
         assert result.status == "matched"
 
-    def test_route_with_wrong_fleet(self, orch):
-        result = orch.route("architecture review", fleet_filter="coding")
+    def test_route_with_wrong_team(self, orch):
+        result = orch.route("architecture review", team_filter="coding")
         assert result.status == "unmatched"
 
     def test_dispatch_sequential_all_matched(self, orch):
@@ -257,9 +281,41 @@ class TestConsultationOrchestrator:
         assert "Is the architecture sound?" in texts
 
     def test_get_available_questions_with_filter(self, orch):
-        questions = orch.get_available_questions(fleet_filter="architecture")
+        questions = orch.get_available_questions(team_filter="architecture")
         assert len(questions) >= 3
 
     def test_get_available_questions_wrong_filter(self, orch):
-        questions = orch.get_available_questions(fleet_filter="nonexistent")
+        questions = orch.get_available_questions(team_filter="nonexistent")
         assert questions == []
+
+
+class TestConsultationOrchestratorInit:
+    """Tests for ConsultationOrchestrator construction."""
+
+    def test_init_with_team_registry(self):
+        """Should accept a TeamRegistry directly."""
+        registry = _make_registry()
+        orch = ConsultationOrchestrator(registry)
+        assert orch._registry is registry
+        assert orch.can_answer_any("architecture") is True
+
+    def test_init_with_empty_registry(self):
+        """Should handle empty TeamRegistry gracefully."""
+        registry = TeamRegistry()
+        orch = ConsultationOrchestrator(registry)
+        assert orch.can_answer("anything") == []
+        result = orch.route("anything")
+        assert result.status == "unmatched"
+
+
+class TestConsultationCapabilityCtor:
+    """Tests for from_dict factory."""
+
+    def test_from_dict_with_capability(self, registry):
+        """from_dict should work with a real capability dict."""
+        cap = ConsultationCapability.from_dict({
+            "name": "test",
+            "match_phrases": ["hello"],
+        })
+        assert cap.name == "test"
+        assert cap.match_phrases == ["hello"]

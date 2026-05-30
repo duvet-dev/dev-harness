@@ -352,7 +352,7 @@ class TestFormatConsultResult:
         result = ConsultationResult(
             question="test question",
             status="matched",
-            fleet_name="architecture",
+            team_name="architecture",
             capability="analyze",
             response="Here is my analysis.",
         )

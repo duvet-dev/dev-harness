@@ -834,8 +834,8 @@ def _format_consult_result(result: ConsultationResult) -> str:
     """Format a :class:`ConsultationResult` for terminal display."""
     lines = ["\u2500\u2500 Consultation \u2500\u2500", f"  Question: {result.question}"]
     lines.append(f"  Status: {result.status}")
-    if result.fleet_name:
-        lines.append(f"  Fleet: {result.fleet_name}")
+    if result.team_name:
+        lines.append(f"  Team: {result.team_name}")
     if result.capability:
         lines.append(f"  Capability: {result.capability}")
     if result.mode == "blocking":

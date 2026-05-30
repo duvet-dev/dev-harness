@@ -1,26 +1,24 @@
-"""Consultation orchestrator — cross-fleet consultation routing.
+"""Consultation orchestrator — cross-team consultation routing.
 
-Routes consultation questions to the appropriate fleet using structured
-phrase matching against each fleet's declared :class:`ConsultationCapability`.
+Routes consultation questions to the appropriate team using structured
+phrase matching against each team's declared consultation capabilities.
 
 Handles advisory and blocking consults, sequential dispatch with ALL-pass
 blocking rules, auto-consult triggering, and error handling (never block
 on infrastructure failure).
 
-Phase 3 of Wave 18 (Option G — Fleet & Cycle).
-
 Usage::
 
     from harness.agents.consultation import ConsultationOrchestrator
     from harness.team.registry import TeamRegistry
-from harness.team.defaults import BUILTIN_TEAMS
+    from harness.team.defaults import get_builtin_teams
 
-    registry = TeamRegistry(builtin=BUILTIN_TEAMS)
+    registry = TeamRegistry(builtin=get_builtin_teams())
     orch = ConsultationOrchestrator(registry)
 
     # Route a single question
     result = orch.route("Is this architecture still sound?")
-    print(result.fleet_name, result.mode)
+    print(result.team_name, result.mode)
 
     # Dispatch multiple blocking consults sequentially
     results = orch.dispatch_sequential([
@@ -38,6 +36,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
+from harness.team.registry import TeamRegistry
+from harness.team.model import AgentTeam
+
 
 # ---------------------------------------------------------------------------
 # ConsultationCapability
@@ -46,7 +47,7 @@ from typing import Literal, Optional
 
 @dataclass
 class ConsultationCapability:
-    """A cross-fleet consultation that a fleet/team can answer.
+    """A cross-team consultation that a team can answer.
 
     Matching uses **structured phrase matching** (deterministic,
     testable, no NLP infra). A question matches if any
@@ -71,6 +72,25 @@ class ConsultationCapability:
     scope: str = "cross-phase"
     question: str = ""
 
+    @classmethod
+    def from_dict(cls, d: dict) -> ConsultationCapability:
+        """Create a ConsultationCapability from a dictionary.
+
+        Args:
+            d: Dictionary with capability fields.
+
+        Returns:
+            A new ConsultationCapability instance.
+        """
+        return cls(
+            name=d.get("name", ""),
+            match_phrases=d.get("match_phrases", []),
+            description=d.get("description", ""),
+            mode=d.get("mode", "advisory"),
+            scope=d.get("scope", "cross-phase"),
+            question=d.get("question", ""),
+        )
+
     def matches(self, question: str) -> bool:
         """Return True if this capability can answer the question.
 
@@ -90,7 +110,7 @@ class ConsultationCapability:
 class ConsultationResult:
     """Result of a single consultation dispatch.
 
-    Tracks the question, which fleet handled it, the mode
+    Tracks the question, which team handled it, the mode
     (advisory/blocking), the response from the consulted agent,
     and resolution state for blocking consults.
 
@@ -98,14 +118,14 @@ class ConsultationResult:
         question: The question that was asked.
         capability: The name of the matched capability, or ``None``
             if no match was found.
-        fleet_name: The fleet that handled the consultation.
+        team_name: The team that handled the consultation.
         response: The LLM's response text, or an informational
             message if no match was found or dispatch failed.
         mode: ``"advisory"`` or ``"blocking"`` (from the matched
             capability; defaults to ``"advisory"``).
         status: One of:
-            - ``"matched"`` — successfully matched to a fleet.
-            - ``"unmatched"`` — no fleet could answer the question.
+            - ``"matched"`` — successfully matched to a team.
+            - ``"unmatched"`` — no team could answer the question.
             - ``"unavailable"`` — dispatch failed (infrastructure /
               agent error).
             - ``"resolved"`` — blocking consult was resolved.
@@ -118,7 +138,7 @@ class ConsultationResult:
     """
     question: str = ""
     capability: Optional[str] = None
-    fleet_name: str = ""
+    team_name: str = ""
     response: str = ""
     mode: str = "advisory"
     status: str = "unmatched"
@@ -149,7 +169,7 @@ class ConsultationResult:
     @property
     def summary(self) -> str:
         """Return a one-line summary string."""
-        meta = f"[{self.status}] {self.fleet_name}: {self.capability or '???'}"
+        meta = f"[{self.status}] {self.team_name}: {self.capability or '???'}"
         is_resolved = self.resolution is not None
         if self.mode == "blocking" and not is_resolved:
             meta += " (blocking)"
@@ -171,16 +191,16 @@ class ConsultationResult:
 
 
 class ConsultationOrchestrator:
-    """Routes consultation questions to the appropriate fleet.
+    """Routes consultation questions to the appropriate team.
 
-    Uses structured phrase matching against each fleet's declared
-    :class:`ConsultationCapability` list. Matching is deterministic,
+    Uses structured phrase matching against each team's declared
+    consultation capabilities. Matching is deterministic,
     testable, and requires no NLP infrastructure.
 
     Dispatch rules (from the design):
         1. All matching capabilities are collected.
         2. They are resolved in deterministic order (alphabetical by
-           fleet, then by capability name within each fleet).
+           team, then by capability name within each team).
         3. Blocking consults must **ALL** be resolved for flow to
            continue. If any blocks, execution pauses.
         4. On dispatch failure (agent unavailable, timeout, error):
@@ -190,65 +210,85 @@ class ConsultationOrchestrator:
 
     Args:
         registry: A :class:`~harness.team.registry.TeamRegistry`
-            instance with loaded fleet definitions.
+            instance with loaded team definitions.
     """
 
-    def __init__(self, registry) -> None:
+    def __init__(self, registry: TeamRegistry) -> None:
         self._registry = registry
 
-    def can_answer(self, question: str, fleet_filter: str | None = None) -> list[tuple]:
-        """Find all fleets with capabilities matching the question.
+    def _get_team_capabilities(self, team: AgentTeam) -> list[ConsultationCapability]:
+        """Extract ConsultationCapabilities from a team definition.
 
-        Iterates over all registered fleets and their consultation
+        Reads from the team's ``consultations`` field (list of dicts).
+        Supports both dict-based and already-parsed capability objects.
+
+        Args:
+            team: The AgentTeam to extract capabilities from.
+
+        Returns:
+            List of ConsultationCapability objects.
+        """
+        raw = team.consultations or []
+        capabilities: list[ConsultationCapability] = []
+        for item in raw:
+            if isinstance(item, ConsultationCapability):
+                capabilities.append(item)
+            elif isinstance(item, dict):
+                capabilities.append(ConsultationCapability.from_dict(item))
+        return capabilities
+
+    def can_answer(self, question: str, team_filter: str | None = None) -> list[tuple]:
+        """Find all teams with capabilities matching the question.
+
+        Iterates over all registered teams and their consultation
         capabilities, returning every matching
-        ``(ConsultationCapability, fleet_name)`` pair.
+        ``(ConsultationCapability, team_name)`` pair.
 
         Args:
             question: The user's or system's question text.
-            fleet_filter: Optional fleet name to narrow the search.
-                Only capabilities from this fleet are checked.
+            team_filter: Optional team name to narrow the search.
+                Only capabilities from this team are checked.
 
         Returns:
-            List of ``(ConsultationCapability, fleet_name)`` tuples
-            for every fleet whose consultation capabilities match the
-            question. Sorted alphabetically by fleet name, then by
-            capability name within each fleet. Returns an empty list
-            if no fleet can answer.
+            List of ``(ConsultationCapability, team_name)`` tuples
+            for every team whose consultation capabilities match the
+            question. Sorted alphabetically by team name, then by
+            capability name within each team. Returns an empty list
+            if no team can answer.
         """
         results: list[tuple] = []
-        for fleet in sorted(
-            self._registry.list_fleets(), key=lambda f: f.name
-        ):
-            if fleet_filter is not None and fleet.name != fleet_filter:
+        for team_name in sorted(self._registry.list_teams()):
+            if team_filter is not None and team_name != team_filter:
                 continue
-            for cap in sorted(
-                fleet.consultations, key=lambda c: c.name
-            ):
+            team = self._registry.resolve(team_name)
+            for cap in self._get_team_capabilities(team):
                 if cap.matches(question):
-                    results.append((cap, fleet.name))
+                    results.append((cap, team_name))
+        # Sort by team name, then capability name
+        results.sort(key=lambda x: (x[1], x[0].name))
         return results
 
-    def can_answer_any(self, question: str, fleet_filter: str | None = None) -> bool:
-        """Quick check if any fleet can answer the question.
+    def can_answer_any(self, question: str, team_filter: str | None = None) -> bool:
+        """Quick check if any team can answer the question.
 
         Args:
             question: The question text to check.
-            fleet_filter: Optional fleet name to narrow the search.
+            team_filter: Optional team name to narrow the search.
 
         Returns:
-            ``True`` if at least one fleet's capabilities match.
+            ``True`` if at least one team's capabilities match.
         """
-        return len(self.can_answer(question, fleet_filter=fleet_filter)) > 0
+        return len(self.can_answer(question, team_filter=team_filter)) > 0
 
     def route(self, question: str, mode: str | None = None,
-              fleet_filter: str | None = None) -> ConsultationResult:
-        """Route a single question to the matching fleet.
+              team_filter: str | None = None) -> ConsultationResult:
+        """Route a single question to the matching team.
 
-        If multiple fleets match, the first match in deterministic
-        order (alphabetical by fleet name, then capability name)
+        If multiple teams match, the first match in deterministic
+        order (alphabetical by team name, then capability name)
         is used.
 
-        If no fleet matches, the result has ``status="unmatched"``
+        If no team matches, the result has ``status="unmatched"``
         and includes a list of all available questions in its
         response field.
 
@@ -259,36 +299,36 @@ class ConsultationOrchestrator:
                 default mode. Useful when the caller wants to treat a
                 consult as blocking regardless of the capability's
                 declaration.
-            fleet_filter: Optional fleet name to limit the search.
-                Only capabilities from this fleet are checked.
+            team_filter: Optional team name to limit the search.
+                Only capabilities from this team are checked.
 
         Returns:
             A :class:`ConsultationResult` with the appropriate status.
         """
-        matches = self.can_answer(question, fleet_filter=fleet_filter)
+        matches = self.can_answer(question, team_filter=team_filter)
         if not matches:
-            available = self.get_available_questions(fleet_filter=fleet_filter)
+            available = self.get_available_questions(team_filter=team_filter)
             question_list = "\n".join(
-                f"  - [{fleet}] {q}" for q, fleet, _ in available
+                f"  - [{team}] {q}" for q, team, _ in available
             )
             return ConsultationResult(
                 question=question,
                 status="unmatched",
                 response=(
-                    "No fleet can answer this question.\n\n"
+                    "No team can answer this question.\n\n"
                     "Available questions:\n" + question_list
                 ),
             )
 
-        cap, fleet_name = matches[0]
+        cap, team_name = matches[0]
         effective_mode = mode if mode is not None else cap.mode
         return ConsultationResult(
             question=question,
             capability=cap.name,
-            fleet_name=fleet_name,
+            team_name=team_name,
             mode=effective_mode,
             status="matched",
-            response=f"Question routed to fleet '{fleet_name}' "
+            response=f"Question routed to team '{team_name}' "
             f"for capability '{cap.name}'. "
             f"Mode: {effective_mode}.",
         )
@@ -349,52 +389,46 @@ class ConsultationOrchestrator:
         Returns:
             List of :class:`ConsultationResult`, one per matching
             capability, in deterministic order (alphabetical by
-            fleet, then by capability).
+            team, then by capability).
         """
         results: list[ConsultationResult] = []
-        for fleet in sorted(
-            self._registry.list_fleets(), key=lambda f: f.name
-        ):
-            for cap in sorted(
-                fleet.consultations, key=lambda c: c.name
-            ):
+        for team_name in sorted(self._registry.list_teams()):
+            team = self._registry.resolve(team_name)
+            for cap in self._get_team_capabilities(team):
                 if cap.scope == "cross-phase" or \
                    cap.scope == f"trigger:{phase_name}" or \
                    cap.scope == f"phase:{phase_name}":
                     results.append(ConsultationResult(
                         question=cap.question or cap.description,
                         capability=cap.name,
-                        fleet_name=fleet.name,
+                        team_name=team_name,
                         mode="advisory",  # auto-consults are always advisory
                         status="matched",
-                        response=f"Auto-triggered from fleet "
-                        f"'{fleet.name}' capability '{cap.name}'.",
+                        response=f"Auto-triggered from team "
+                        f"'{team_name}' capability '{cap.name}'.",
                     ))
         return results
 
     def get_available_questions(
-        self, fleet_filter: str | None = None
+        self, team_filter: str | None = None
     ) -> list[tuple[str, str, str]]:
-        """Return all consultation questions across all fleets.
+        """Return all consultation questions across all teams.
 
         Args:
-            fleet_filter: Optional fleet name to narrow results.
-                Only capabilities from this fleet are included.
+            team_filter: Optional team name to narrow results.
+                Only capabilities from this team are included.
 
         Returns:
-            List of ``(question_text, fleet_name, mode)`` triples
+            List of ``(question_text, team_name, mode)`` triples
             for display. Only capabilities with non-empty questions
             or descriptions are included.
         """
         questions: list[tuple[str, str, str]] = []
-        for fleet in sorted(
-            self._registry.list_fleets(), key=lambda f: f.name
-        ):
-            if fleet_filter is not None and fleet.name != fleet_filter:
+        for team_name in sorted(self._registry.list_teams()):
+            if team_filter is not None and team_name != team_filter:
                 continue
-            for cap in sorted(
-                fleet.consultations, key=lambda c: c.name
-            ):
+            team = self._registry.resolve(team_name)
+            for cap in self._get_team_capabilities(team):
                 text = cap.question or cap.description or cap.name
-                questions.append((text, fleet.name, cap.mode))
+                questions.append((text, team_name, cap.mode))
         return questions

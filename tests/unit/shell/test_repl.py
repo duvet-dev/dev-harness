@@ -396,27 +396,29 @@ class TestDispatchViaBus:
     """Tests for _dispatch_via_bus()."""
 
     def test_dispatch_via_bus_success(self):
-        """_dispatch_via_bus should return a CommandResult."""
+        """_dispatch_via_bus should return a CommandResult for valid typed commands."""
         from harness.shell.repl import _dispatch_via_bus
-        from harness.command.types import Command
+        from harness.command.commands.mgmt import AgentListCommand
 
-        cmd = Command(slug="", command_type="agent_list")
+        cmd = AgentListCommand(slug="")
         result = _dispatch_via_bus(cmd)
         assert result is not None
         assert isinstance(result, CommandResult)
 
     def test_dispatch_via_bus_unknown_command(self):
-        """_dispatch_via_bus with unknown type should handle gracefully."""
+        """_dispatch_via_bus with unknown type raises error."""
         from harness.shell.repl import _dispatch_via_bus
-        from harness.command.types import Command
+        from harness.command.types import CommandResult
+        from harness.errors import UnknownCommandError
 
-        cmd = Command(slug="", command_type="nonexistent_command")
+        class UnknownCmd:
+            pass
+
+        cmd = UnknownCmd()
         try:
             result = _dispatch_via_bus(cmd)
-            # Should only get here if an error result is returned
             assert isinstance(result, CommandResult)
-        except Exception:
-            # An exception is also acceptable for unknown commands
+        except UnknownCommandError:
             pass
 
 

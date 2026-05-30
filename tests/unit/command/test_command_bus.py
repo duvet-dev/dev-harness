@@ -1,69 +1,108 @@
-"""Tests for CommandBus dispatch, register, and error handling.
+"""Tests for CommandBus typed dispatch, register, and error handling.
 
 Covers:
-- CommandBus.register() and CommandRegistry registration
-- CommandBus.dispatch() and dispatch_async()
+- CommandBus.register_type() and register_types() for typed commands
+- CommandBus.dispatch() and dispatch_async() for typed commands
 - UnknownCommandError for unregistered commands
-- CommandRegistry.register_all(), get_handler(), has_handler()
+- TypedCommand construction and dispatch
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
 from harness.command.bus import CommandBus
-from harness.command.registry import CommandRegistry
-from harness.command.types import Command, CommandHandler, CommandResult
+from harness.command.types import (
+    CommandResult,
+    TypedCommand,
+    TypedHandler,
+    TypedResult,
+)
 from harness.errors import UnknownCommandError
 
 
-# ── Fixtures ─────────────────────────────────────────────────────────
+# ── Test typed command and handler types ──────────────────────────────
 
 
-class _EchoHandler(CommandHandler):
+@dataclass(frozen=True)
+class _EchoCommand(TypedCommand):
+    """Test typed command that echoes."""
+    slug: str
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class _EchoResult(TypedResult):
+    """Test typed result."""
+    success: bool = True
+    message: str = ""
+
+
+class _EchoHandler(TypedHandler):
     """Test handler that echoes back command data."""
 
-    def handle(self, command: Command) -> CommandResult:
-        return CommandResult(
+    def handle(self, command: _EchoCommand) -> _EchoResult:
+        return _EchoResult(
             success=True,
-            message=f"Echo: {command.command_type}",
-            data={"slug": command.slug, "type": command.command_type},
+            message=f"Echo: {command.message or command.slug}",
         )
 
 
-class _AsyncHandler(CommandHandler):
+@dataclass(frozen=True)
+class _AsyncCommand(TypedCommand):
+    """Test typed command with async handler."""
+    slug: str
+
+
+@dataclass(frozen=True)
+class _AsyncResult(TypedResult):
+    """Test async result."""
+    success: bool = True
+    message: str = ""
+
+
+class _AsyncHandler(TypedHandler):
     """Test handler with async handle method."""
 
-    async def handle(self, command: Command) -> CommandResult:
-        return CommandResult(
+    async def handle(self, command: _AsyncCommand) -> _AsyncResult:
+        return _AsyncResult(
             success=True,
-            message=f"Async: {command.command_type}",
-            data={"slug": command.slug, "type": command.command_type},
+            message=f"Async: {command.slug}",
         )
 
 
-class _FailingHandler(CommandHandler):
+@dataclass(frozen=True)
+class _FailingCommand(TypedCommand):
+    """Test typed command with failing handler."""
+    slug: str
+
+
+@dataclass(frozen=True)
+class _FailingResult(TypedResult):
+    """Test failing result."""
+    success: bool = False
+    error: str = ""
+
+
+class _FailingHandler(TypedHandler):
     """Test handler that always fails."""
 
-    def handle(self, command: Command) -> CommandResult:
-        return CommandResult(
+    def handle(self, command: _FailingCommand) -> _FailingResult:
+        return _FailingResult(
             success=False,
             error="Intentional failure",
-            message="Handler failed as designed",
         )
 
 
-@pytest.fixture
-def empty_registry() -> CommandRegistry:
-    return CommandRegistry()
+@dataclass(frozen=True)
+class _UnregisteredCommand(TypedCommand):
+    """Test typed command with no handler registered."""
+    slug: str
 
 
-@pytest.fixture
-def populated_registry() -> CommandRegistry:
-    registry = CommandRegistry()
-    registry.register("echo", _EchoHandler())
-    registry.register("fail", _FailingHandler())
-    return registry
+# ── Fixtures ─────────────────────────────────────────────────────────
 
 
 @pytest.fixture
@@ -72,194 +111,129 @@ def bus() -> CommandBus:
 
 
 @pytest.fixture
-def populated_bus(populated_registry: CommandRegistry) -> CommandBus:
-    return CommandBus(registry=populated_registry)
-
-
-# ── CommandRegistry Tests ──────────────────────────────────────────
-
-
-class TestCommandRegistry:
-    """Tests for CommandRegistry — registration and lookup."""
-
-    def test_register_handler(self, empty_registry: CommandRegistry):
-        """Registering a handler allows get_handler to find it."""
-        handler = _EchoHandler()
-        empty_registry.register("echo", handler)
-        assert empty_registry.get_handler("echo") is handler
-
-    def test_register_duplicate_raises(self, empty_registry: CommandRegistry):
-        """Registering a duplicate command type raises ValueError."""
-        empty_registry.register("echo", _EchoHandler())
-        with pytest.raises(ValueError, match="already registered"):
-            empty_registry.register("echo", _EchoHandler())
-
-    def test_register_empty_type_raises(self, empty_registry: CommandRegistry):
-        """Registering with empty string raises ValueError."""
-        with pytest.raises(ValueError, match="non-empty"):
-            empty_registry.register("", _EchoHandler())
-
-    def test_register_invalid_type_raises(self, empty_registry: CommandRegistry):
-        """Registering with non-string type raises ValueError."""
-        with pytest.raises(ValueError):
-            empty_registry.register(123, _EchoHandler())  # type: ignore[arg-type]
-
-    def test_get_handler_returns_none_for_unknown(
-        self, empty_registry: CommandRegistry
-    ):
-        """get_handler returns None for unregistered command types."""
-        assert empty_registry.get_handler("nonexistent") is None
-
-    def test_register_all_bulk(self, empty_registry: CommandRegistry):
-        """register_all registers multiple handlers at once."""
-        handlers = {
-            "echo": _EchoHandler(),
-            "fail": _FailingHandler(),
-        }
-        empty_registry.register_all(handlers)
-        assert empty_registry.has_handler("echo") is True
-        assert empty_registry.has_handler("fail") is True
-
-    def test_register_all_conflict_raises(self, empty_registry: CommandRegistry):
-        """register_all raises ValueError if any type conflicts."""
-        empty_registry.register("echo", _EchoHandler())
-        with pytest.raises(ValueError):
-            empty_registry.register_all({"echo": _EchoHandler()})
-
-    def test_has_handler(self, populated_registry: CommandRegistry):
-        """has_handler correctly reports registration status."""
-        assert populated_registry.has_handler("echo") is True
-        assert populated_registry.has_handler("unknown") is False
-
-    def test_list_registered(self, populated_registry: CommandRegistry):
-        """list_registered returns sorted list of registered types."""
-        types = populated_registry.list_registered()
-        assert types == ["echo", "fail"]
-
-    def test_list_registered_empty(self, empty_registry: CommandRegistry):
-        """list_registered returns empty list when nothing registered."""
-        assert empty_registry.list_registered() == []
-
-    def test_clear(self, populated_registry: CommandRegistry):
-        """clear removes all registered handlers."""
-        populated_registry.clear()
-        assert populated_registry.list_registered() == []
+def populated_bus(bus: CommandBus) -> CommandBus:
+    bus.register_type(_EchoHandler(), _EchoCommand)
+    bus.register_type(_FailingHandler(), _FailingCommand)
+    return bus
 
 
 # ── CommandBus Tests ───────────────────────────────────────────────
 
 
 class TestCommandBus:
-    """Tests for CommandBus dispatch and registration."""
+    """Tests for CommandBus typed dispatch and registration."""
 
-    def test_dispatch_known_command(self, populated_bus: CommandBus):
-        """Dispatching a registered command returns the handler's result."""
-        cmd = Command(slug="test-eng", command_type="echo")
+    def test_dispatch_known_typed_command(self, populated_bus: CommandBus):
+        """Dispatching a registered typed command returns the handler's result."""
+        cmd = _EchoCommand(slug="test-eng", message="hello")
         result = populated_bus.dispatch(cmd)
         assert result.success is True
-        assert "Echo: echo" in result.message
+        assert "Echo: hello" in result.message
 
     def test_dispatch_failing_handler(self, populated_bus: CommandBus):
         """Dispatching to a failing handler returns failure result."""
-        cmd = Command(slug="test-eng", command_type="fail")
+        cmd = _FailingCommand(slug="test-eng")
         result = populated_bus.dispatch(cmd)
         assert result.success is False
         assert result.error == "Intentional failure"
 
-    def test_dispatch_unknown_command_raises(self, populated_bus: CommandBus):
-        """Dispatching an unregistered command raises UnknownCommandError."""
-        cmd = Command(slug="test-eng", command_type="nonexistent")
-        with pytest.raises(UnknownCommandError, match="nonexistent"):
+    def test_dispatch_unknown_typed_command_raises(self, populated_bus: CommandBus):
+        """Dispatching an unregistered typed command raises UnknownCommandError."""
+        cmd = _UnregisteredCommand(slug="test-eng")
+        with pytest.raises(UnknownCommandError, match="_UnregisteredCommand"):
             populated_bus.dispatch(cmd)
 
     def test_dispatch_empty_registry(self, bus: CommandBus):
-        """Dispatching with empty registry raises UnknownCommandError."""
-        cmd = Command(slug="test-eng", command_type="anything")
+        """Dispatching with empty bus raises UnknownCommandError."""
+        cmd = _EchoCommand(slug="test-eng")
         with pytest.raises(UnknownCommandError):
             bus.dispatch(cmd)
 
-    def test_register_handler(self, bus: CommandBus):
-        """Registering on the bus delegates to the registry."""
-        bus.register("echo", _EchoHandler())
-        cmd = Command(slug="test-eng", command_type="echo")
+    def test_register_type_sync(self, bus: CommandBus):
+        """Registering a typed handler enables dispatch."""
+        bus.register_type(_EchoHandler(), _EchoCommand)
+        cmd = _EchoCommand(slug="test-eng", message="sync")
         result = bus.dispatch(cmd)
         assert result.success is True
 
     def test_dispatch_async_sync_handler(self, populated_bus: CommandBus):
         """dispatch_async works with sync handlers."""
         import asyncio
-        cmd = Command(slug="test-eng", command_type="echo")
+        cmd = _EchoCommand(slug="test-eng")
         result = asyncio.run(populated_bus.dispatch_async(cmd))
         assert result.success is True
 
     def test_dispatch_async_async_handler(self, bus: CommandBus):
         """dispatch_async awaits async handlers."""
         import asyncio
-        bus.register("async", _AsyncHandler())
-        cmd = Command(slug="test-eng", command_type="async")
+        bus.register_type(_AsyncHandler(), _AsyncCommand)
+        cmd = _AsyncCommand(slug="test-eng")
         result = asyncio.run(bus.dispatch_async(cmd))
         assert result.success is True
         assert "Async:" in result.message
 
-    def test_register_from_imports_handlers(self, bus: CommandBus):
-        """register_from imports all handlers from another registry."""
-        registry = CommandRegistry()
-        registry.register("echo", _EchoHandler())
-        bus.register_from(registry)
-        cmd = Command(slug="test-eng", command_type="echo")
-        result = bus.dispatch(cmd)
-        assert result.success is True
+    def test_register_types_bulk(self, bus: CommandBus):
+        """register_types registers multiple handlers at once."""
+        bus.register_types({
+            _EchoCommand: _EchoHandler(),
+            _FailingCommand: _FailingHandler(),
+        })
+        r1 = bus.dispatch(_EchoCommand(slug="t1"))
+        assert r1.success is True
+        r2 = bus.dispatch(_FailingCommand(slug="t2"))
+        assert r2.success is False
 
-    def test_register_from_conflict_raises(self, bus: CommandBus):
-        """register_from raises if it creates a type conflict."""
-        bus.register("echo", _EchoHandler())
-        registry = CommandRegistry()
-        registry.register("echo", _EchoHandler())
-        with pytest.raises(ValueError):
-            bus.register_from(registry)
-
-    def test_registry_property(self, populated_bus: CommandBus):
-        """The registry property exposes the underlying registry."""
-        assert isinstance(populated_bus.registry, CommandRegistry)
-
-    def test_command_with_data(self, populated_bus: CommandBus):
-        """Commands can carry additional data."""
-        cmd = Command(
-            slug="test-eng",
-            command_type="echo",
-            data={"extra": "value"},
-        )
+    def test_typed_result_wrapped(self, populated_bus: CommandBus):
+        """Typed results are wrapped in CommandResult for uniform API."""
+        cmd = _EchoCommand(slug="test")
         result = populated_bus.dispatch(cmd)
-        assert result.success is True
+        assert isinstance(result, CommandResult)
+        # The typed result is stored in data
+        assert "typed_result" in result.data
+        assert isinstance(result.data["typed_result"], _EchoResult)
+
+    def test_dispatch_async_unknown_command(self, bus: CommandBus):
+        """dispatch_async raises UnknownCommandError for unregistered commands."""
+        import asyncio
+        cmd = _UnregisteredCommand(slug="test")
+        with pytest.raises(UnknownCommandError):
+            asyncio.run(bus.dispatch_async(cmd))
+
+    def test_dispatch_async_wraps_typed_result(self, bus: CommandBus):
+        """dispatch_async wraps typed results in CommandResult."""
+        import asyncio
+        bus.register_type(_EchoHandler(), _EchoCommand)
+        cmd = _EchoCommand(slug="test")
+        result = asyncio.run(bus.dispatch_async(cmd))
+        assert isinstance(result, CommandResult)
+        assert "typed_result" in result.data
 
     def test_multiple_dispatch_consistent(self, populated_bus: CommandBus):
-        """Dispatching the same command multiple times is consistent."""
-        cmd = Command(slug="test-eng", command_type="echo")
+        """Dispatching the same typed command multiple times is consistent."""
+        cmd = _EchoCommand(slug="test-eng")
         r1 = populated_bus.dispatch(cmd)
         r2 = populated_bus.dispatch(cmd)
         assert r1.message == r2.message
         assert r1.success == r2.success
+
+    def test_slug_in_typed_command(self, populated_bus: CommandBus):
+        """Typed commands carry their slug through dispatch."""
+        cmd = _EchoCommand(slug="my-eng")
+        result = populated_bus.dispatch(cmd)
+        assert result.success is True
+
+    def test_frozen_dataclass_command(self):
+        """Typed commands are frozen dataclasses and immutable."""
+        cmd = _EchoCommand(slug="test")
+        with pytest.raises((AttributeError, TypeError)):
+            cmd.slug = "changed"  # type: ignore[misc]
 
 
 # ── Command Types Tests ────────────────────────────────────────────
 
 
 class TestCommandTypes:
-    """Tests for Command, CommandResult, and CommandHandler base types."""
-
-    def test_command_defaults(self):
-        """Command with minimal args has sensible defaults."""
-        cmd = Command(slug="test")
-        assert cmd.command_type == ""
-        assert cmd.data == {}
-        assert cmd.slug == "test"
-
-    def test_command_full(self):
-        """Command with all args sets fields correctly."""
-        cmd = Command(slug="test", command_type="test_cmd", data={"key": "val"})
-        assert cmd.slug == "test"
-        assert cmd.command_type == "test_cmd"
-        assert cmd.data == {"key": "val"}
+    """Tests for CommandResult, TypedCommand, TypedHandler base types."""
 
     def test_command_result_defaults(self):
         """CommandResult with no args defaults to success."""
@@ -281,7 +255,12 @@ class TestCommandTypes:
         assert result.message == "Done"
         assert result.data == {"id": 42}
 
-    def test_command_handler_abc_cannot_instantiate(self):
-        """CommandHandler ABC cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            CommandHandler()  # type: ignore[abstract]
+    def test_typed_command_frozen(self):
+        """Typed commands are frozen dataclasses."""
+        @dataclass(frozen=True)
+        class MyCmd(TypedCommand):
+            slug: str
+        cmd = MyCmd(slug="test")
+        assert cmd.slug == "test"
+        with pytest.raises((AttributeError, TypeError)):
+            cmd.slug = "new"  # type: ignore[misc]

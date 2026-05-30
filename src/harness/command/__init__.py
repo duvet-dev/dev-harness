@@ -1,15 +1,13 @@
 """CommandBus package — DDD command bus infrastructure.
 
-Provides the CommandBus, CommandRegistry, and delegation-thin handler
+Provides the CommandBus and delegation-thin handler
 pattern for the Dev Harness engagement lifecycle.
 """
 
 from harness.command.bus import CommandBus
 from harness.command.errors import HandlerError
-from harness.command.registry import CommandRegistry
 from harness.command.setup import create_bus
 from harness.command.types import (
-    Command,
     CommandHandler,
     CommandPresenter,
     CommandResult,
@@ -29,8 +27,6 @@ from harness.command.values import (
 
 __all__ = [
     "CommandBus",
-    "CommandRegistry",
-    "Command",
     "CommandHandler",
     "CommandResult",
     "CommandPresenter",

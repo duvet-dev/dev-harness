@@ -19,7 +19,7 @@ import click.shell_completion
 
 from harness.command.setup import create_bus
 from harness.command.bus import CommandBus
-from harness.command.types import Command, CommandResult
+from harness.command.types import CommandResult, TypedCommand
 from harness.command.commands.engagement import (
     AbortEngagementCommand,
     CreateEngagementCommand,
@@ -53,7 +53,7 @@ def _build_command_bus() -> CommandBus:
     return create_bus()
 
 
-def _dispatch_via_bus(command: Command) -> CommandResult:
+def _dispatch_via_bus(command: TypedCommand) -> CommandResult:
     """Dispatch a command through the CommandBus and return the result."""
     bus = _build_command_bus()
     return bus.dispatch(command)
@@ -200,7 +200,7 @@ def _create_wave_from_finding_args(args: list[str]) -> dict[str, Any]:
 
 
 # Factory map: command_name -> (factory_fn, arg_parser)
-COMMAND_MAP: dict[str, tuple[Callable[..., Command], Callable[[list[str]], dict[str, Any]]]] = {
+COMMAND_MAP: dict[str, tuple[Callable[..., TypedCommand], Callable[[list[str]], dict[str, Any]]]] = {
     # Engagement lifecycle
     "engagement create":             (lambda **kw: CreateEngagementCommand(**kw), _engagement_create_args),
     "engagement close":              (lambda **kw: AbortEngagementCommand(**kw), _single_arg),

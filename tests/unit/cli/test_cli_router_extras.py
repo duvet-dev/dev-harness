@@ -10,7 +10,23 @@ from __future__ import annotations
 import pytest
 
 from harness.command.router import CommandRouter
-from harness.command.types import Command
+
+
+def _command_type_name(cmd) -> str:
+    """Helper to extract a readable command type name from a typed command."""
+    mapping = {
+        "NextCommand": "next",
+        "QueryWhatsNextCommand": "query_whats_next",
+        "AbortEngagementCommand": "abort_engagement",
+        "CreateEngagementCommand": "create_engagement",
+        "ResumeEngagementCommand": "resume_engagement",
+        "EnterPhaseCommand": "enter_phase",
+        "QueryStatusCommand": "query_status",
+        "CreateWaveCommand": "create_wave",
+        "ExecuteStepCommand": "execute_step",
+    }
+    name = type(cmd).__name__
+    return mapping.get(name, name)
 
 
 class TestRouterExtras:
@@ -21,23 +37,21 @@ class TestRouterExtras:
 
     def test_parse_engine(self):
         """/engine → query_whats_next."""
+        from harness.command.commands.misc import QueryWhatsNextCommand
         result = self.router.parse("/engine")
-        assert result is not None
-        assert result.command_type == "query_whats_next"
-        assert result.data == {}
+        assert isinstance(result, QueryWhatsNextCommand)
 
     def test_parse_advance(self):
         """/advance → next."""
+        from harness.command.commands.misc import NextCommand
         result = self.router.parse("/advance")
-        assert result is not None
-        assert result.command_type == "next"
-        assert result.data == {}
+        assert isinstance(result, NextCommand)
 
     def test_parse_advance_with_args(self):
         """/advance my-eng → next with slug (args ignored for next)."""
+        from harness.command.commands.misc import NextCommand
         result = self.router.parse("/advance my-eng")
-        assert result is not None
-        assert result.command_type == "next"
+        assert isinstance(result, NextCommand)
 
     def test_all_standard_commands_still_work(self):
         """Existing commands are unaffected."""
@@ -53,17 +67,16 @@ class TestRouterExtras:
             ("/resume", "resume_engagement"),
             ("/wave", "create_wave"),
             ("/step", "execute_step"),
-            ("/help", "help"),
         ]
         for input_text, expected_type in mappings:
             result = self.router.parse(input_text)
             assert result is not None, f"'{input_text}' should parse to a command"
-            assert result.command_type == expected_type, (
-                f"'{input_text}' → expected '{expected_type}', got '{result.command_type}'"
+            result_name = _command_type_name(result)
+            assert result_name == expected_type, (
+                f"'{input_text}' → expected '{expected_type}', got '{result_name}'"
             )
 
     def test_unknown_prefix_still_works(self):
-        """Unknown /-command still maps as-is."""
+        """Unknown /-command returns None (no match)."""
         result = self.router.parse("/unknown_cmd")
-        assert result is not None
-        assert result.command_type == "unknown_cmd"
+        assert result is None

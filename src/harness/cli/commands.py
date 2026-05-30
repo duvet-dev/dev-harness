@@ -1,7 +1,7 @@
 """CLI-to-CommandBus command factories and dispatch helper.
 
 Provides factory functions that accept human-friendly argument
-naming and produce the correct ``command_type`` and ``data`` fields.
+naming and produce the correct typed command instances.
 """
 
 from __future__ import annotations
@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from harness.command.setup import create_bus
-from harness.command.types import Command, CommandResult
+from harness.command.types import CommandResult, TypedCommand
 
 
-# ── Command Factory Functions (remaining, for dispatch_cli_command) ──
+# ── Command Factory Functions ──────────────────────────────────────────
 
 
 def summary_command(
@@ -22,32 +22,28 @@ def summary_command(
     engagement: str | None = None,
     json_flag: bool = False,
     reconcile: bool = False,
-) -> Command:
+) -> TypedCommand:
     """Create a Summary command."""
-    return Command(
+    from harness.command.commands.analysis import SummaryCommand
+    return SummaryCommand(
         slug=engagement or "",
-        command_type="summary",
-        data={
-            "deep": deep,
-            "assess_flag": assess_flag,
-            "json_flag": json_flag,
-            "reconcile": reconcile,
-        },
+        deep=deep,
+        assess_flag=assess_flag,
+        json_flag=json_flag,
+        reconcile=reconcile,
     )
 
 
-def inspect_command(root: str = ".") -> Command:
+def inspect_command(root: str = ".") -> TypedCommand:
     """Create an Inspect command."""
-    return Command(slug="", command_type="inspect", data={"root": root})
+    from harness.command.commands.analysis import InspectCommand
+    return InspectCommand(slug="", root=root)
 
 
-def assess_command(root: str = ".", deep_flag: bool = True) -> Command:
+def assess_command(root: str = ".", deep_flag: bool = True) -> TypedCommand:
     """Create an Assess command."""
-    return Command(
-        slug="",
-        command_type="assess",
-        data={"root": root, "deep_flag": deep_flag},
-    )
+    from harness.command.commands.analysis import AssessCommand
+    return AssessCommand(slug="", root=root, deep_flag=deep_flag)
 
 
 def create_waves_from_assessment_command(
@@ -55,53 +51,52 @@ def create_waves_from_assessment_command(
     limit: int = 0,
     slug: str = "",
     refactoring: bool = False,
-) -> Command:
+) -> TypedCommand:
     """Create a CreateWavesFromAssessment command."""
-    return Command(
+    from harness.command.commands.batch import CreateWavesFromAssessmentCommand
+    return CreateWavesFromAssessmentCommand(
         slug=slug,
-        command_type="create_waves_from_assessment",
-        data={"focus": focus, "limit": limit, "refactoring": refactoring},
+        focus=focus,
+        limit=limit,
+        refactoring=refactoring,
     )
 
 
 def create_wave_from_finding_command(
     finding_id: str,
     slug: str = "",
-) -> Command:
+) -> TypedCommand:
     """Create a CreateWaveFromFinding command."""
-    return Command(
-        slug=slug,
-        command_type="create_wave_from_finding",
-        data={"finding_id": finding_id},
-    )
+    from harness.command.commands.batch import CreateWaveFromFindingCommand
+    return CreateWaveFromFindingCommand(slug=slug, finding_id=finding_id)
 
 
-def list_waves_command(slug: str = "") -> Command:
+def list_waves_command(slug: str = "") -> TypedCommand:
     """Create a ListWaves command."""
-    return Command(slug=slug, command_type="list_waves")
+    from harness.command.commands.batch import ListWavesCommand
+    return ListWavesCommand(slug=slug)
 
 
-def wave_status_command(slug: str = "") -> Command:
+def wave_status_command(slug: str = "") -> TypedCommand:
     """Create a WaveStatus command."""
-    return Command(slug=slug, command_type="wave_status")
+    from harness.command.commands.batch import WaveStatusCommand
+    return WaveStatusCommand(slug=slug)
 
 
-def generate_docs_command(root: str = ".") -> Command:
+def generate_docs_command(root: str = ".") -> TypedCommand:
     """Create a GenerateDocs command."""
-    return Command(slug="", command_type="generate_docs", data={"root": root})
+    from harness.command.commands.batch import GenerateDocsCommand
+    return GenerateDocsCommand(slug="", root=root)
 
 
 def annotate_changelog_command(
     slug: str,
     wave: str,
     text: str,
-) -> Command:
+) -> TypedCommand:
     """Create an AnnotateChangelog command."""
-    return Command(
-        slug=slug,
-        command_type="annotate_changelog",
-        data={"wave": wave, "text": text},
-    )
+    from harness.command.commands.batch import AnnotateChangelogCommand
+    return AnnotateChangelogCommand(slug=slug, wave=wave, text=text)
 
 
 def rename_engagement_command(
@@ -109,87 +104,69 @@ def rename_engagement_command(
     new_slug: str,
     branch_strategy: str = "keep",
     dry_run: bool = False,
-) -> Command:
+) -> TypedCommand:
     """Create a RenameEngagement command."""
-    return Command(
+    from harness.command.commands.mgmt import RenameEngagementCommand
+    return RenameEngagementCommand(
         slug=old_slug,
-        command_type="rename_engagement",
-        data={
-            "new_slug": new_slug,
-            "branch_strategy": branch_strategy,
-            "dry_run": dry_run,
-        },
+        new_slug=new_slug,
+        branch_strategy=branch_strategy,
+        dry_run=dry_run,
     )
 
 
-def set_branch_command(slug: str, branch: str) -> Command:
+def set_branch_command(slug: str, branch: str) -> TypedCommand:
     """Create a SetBranch command."""
-    return Command(
-        slug=slug,
-        command_type="set_branch",
-        data={"branch": branch},
-    )
+    from harness.command.commands.mgmt import SetBranchCommand
+    return SetBranchCommand(slug=slug, branch=branch)
 
 
-def fix_engagement_command(slug: str, fix_type: str = "metadata") -> Command:
+def fix_engagement_command(slug: str, fix_type: str = "metadata") -> TypedCommand:
     """Create a FixEngagement command."""
-    return Command(
-        slug=slug,
-        command_type="fix_engagement",
-        data={"fix_type": fix_type},
-    )
+    from harness.command.commands.mgmt import FixEngagementCommand
+    return FixEngagementCommand(slug=slug, fix_type=fix_type)
 
 
 def refresh_agents_command(
     project_dir: str | None = None,
     force: bool = False,
-) -> Command:
+) -> TypedCommand:
     """Create a RefreshAgents command."""
-    return Command(
-        slug="",
-        command_type="refresh_agents",
-        data={
-            "project_dir": project_dir,
-            "force": force,
-        },
-    )
+    from harness.command.commands.mgmt import RefreshAgentsCommand
+    return RefreshAgentsCommand(slug="", project_dir=project_dir, force=force)
 
 
 def set_governance_command(
     level: str = "standard",
     slug: str = "",
-) -> Command:
+) -> TypedCommand:
     """Create a SetGovernance command."""
-    return Command(
-        slug=slug,
-        command_type="set_governance",
-        data={"level": level},
-    )
+    from harness.command.commands.mgmt import SetGovernanceCommand
+    return SetGovernanceCommand(slug=slug, level=level)
 
 
-def agent_list_command() -> Command:
+def agent_list_command() -> TypedCommand:
     """Create an AgentList command."""
-    return Command(slug="", command_type="agent_list")
+    from harness.command.commands.mgmt import AgentListCommand
+    return AgentListCommand(slug="")
 
 
-def fleet_list_command() -> Command:
+def fleet_list_command() -> TypedCommand:
     """Create a FleetList command."""
-    return Command(slug="", command_type="fleet_list")
+    from harness.command.commands.mgmt import FleetListCommand
+    return FleetListCommand(slug="")
 
 
-def consult_command(question: str = "") -> Command:
+def consult_command(question: str = "") -> TypedCommand:
     """Create a Consult command."""
-    return Command(
-        slug="",
-        command_type="consult",
-        data={"question": question},
-    )
+    from harness.command.commands.mgmt import ConsultCommand
+    return ConsultCommand(slug="", question=question)
 
 
 # ── Dispatch Helper ────────────────────────────────────────────────────
 
 
-def dispatch_cli_command(command: Command) -> CommandResult:
+def dispatch_cli_command(command: TypedCommand) -> CommandResult:
     """Dispatch a command through the CommandBus from a CLI context.
 
     Creates a fresh ``CommandBus`` via ``create_bus()`` with all

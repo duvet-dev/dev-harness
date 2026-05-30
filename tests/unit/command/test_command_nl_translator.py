@@ -34,7 +34,28 @@ from harness.command.nl_translator import (
     NLTranslator,
     TranslationResult,
 )
+from harness.command.types import TypedCommand
 from harness.config import NLTranslatorSettings
+
+
+# ── Typed command class imports ──────────────────────────────────────────
+
+
+def _command_type_name(cmd) -> str:
+    """Helper to extract a readable command type name from a typed command."""
+    mapping = {
+        "AbortEngagementCommand": "abort_engagement",
+        "CreateEngagementCommand": "create_engagement",
+        "ResumeEngagementCommand": "resume_engagement",
+        "EnterPhaseCommand": "enter_phase",
+        "NextCommand": "next",
+        "QueryStatusCommand": "query_status",
+        "QueryWhatsNextCommand": "query_whats_next",
+        "CreateWaveCommand": "create_wave",
+        "ExecuteStepCommand": "execute_step",
+    }
+    name = type(cmd).__name__
+    return mapping.get(name, name)
 
 
 class TestNLTranslatorDefaults:
@@ -122,7 +143,7 @@ class TestNLTranslatorTier1AutoDispatch:
         result = self.translator.translate("abort the engagement")
         assert result.auto_dispatch is True
         assert result.command is not None
-        assert result.command.command_type == "abort_engagement"
+        assert _command_type_name(result.command) == "abort_engagement"
         assert result.confidence >= result.threshold
         assert result.is_conversation is False
 
@@ -131,80 +152,80 @@ class TestNLTranslatorTier1AutoDispatch:
         result = self.translator.translate("status")
         assert result.auto_dispatch is True
         assert result.command is not None
-        assert result.command.command_type == "query_status"
+        assert _command_type_name(result.command) == "query_status"
         assert result.confidence >= result.threshold
 
     def test_health_auto_dispatches(self):
         """'health check' auto-dispatches."""
         result = self.translator.translate("health")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "query_status"
+        assert _command_type_name(result.command) == "query_status"
 
     def test_next_auto_dispatches(self):
         """'next' auto-dispatches at high confidence."""
         result = self.translator.translate("next")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "next"
+        assert _command_type_name(result.command) == "next"
 
     def test_advance_auto_dispatches(self):
         """'advance' auto-dispatches."""
         result = self.translator.translate("advance")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "next"
+        assert _command_type_name(result.command) == "next"
 
     def test_create_engagement_auto_dispatches(self):
         """'create a new engagement' auto-dispatches."""
         result = self.translator.translate("create a new engagement")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "create_engagement"
+        assert _command_type_name(result.command) == "create_engagement"
 
     def test_stop_auto_dispatches(self):
         """'stop' auto-dispatches as hard abort."""
         result = self.translator.translate("stop")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "abort_engagement"
-        assert result.command.data.get("mode") == "hard"
+        assert _command_type_name(result.command) == "abort_engagement"
+        assert result.command.mode == "hard"
 
     def test_hard_abort_auto_dispatches(self):
         """'hard-abort' auto-dispatches with hard mode."""
         result = self.translator.translate("hard-abort")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "abort_engagement"
-        assert result.command.data.get("mode") == "hard"
+        assert _command_type_name(result.command) == "abort_engagement"
+        assert result.command.mode == "hard"
 
     def test_whats_next_auto_dispatches(self):
         """'what's next?' auto-dispatches."""
         result = self.translator.translate("what's next")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "query_whats_next"
+        assert _command_type_name(result.command) == "query_whats_next"
 
     def test_create_wave_auto_dispatches(self):
         """'create wave' auto-dispatches."""
         result = self.translator.translate("create a new wave")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "create_wave"
+        assert _command_type_name(result.command) == "create_wave"
 
     def test_enter_phase_auto_dispatches(self):
         """'enter phase design' auto-dispatches with phase data."""
         result = self.translator.translate("enter phase design")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "enter_phase"
-        assert result.command.data.get("phase") == "design"
+        assert _command_type_name(result.command) == "enter_phase"
+        assert result.command.phase == "design"
 
     def test_resume_engagement_auto_dispatches(self):
         """'resume the engagement' auto-dispatches."""
         result = self.translator.translate("resume the engagement")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "resume_engagement"
+        assert _command_type_name(result.command) == "resume_engagement"
 
     def test_proceed_auto_dispatches(self):
         """'proceed' auto-dispatches."""
         result = self.translator.translate("proceed")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "next"
+        assert _command_type_name(result.command) == "next"
 
     def test_slug_passed_to_command(self):
-        """Slug is passed through to the Command."""
+        """Slug is passed through to the typed command."""
         result = self.translator.translate("status", slug="my-eng")
         assert result.command is not None
         assert result.command.slug == "my-eng"
@@ -213,7 +234,7 @@ class TestNLTranslatorTier1AutoDispatch:
         """'please abort' still auto-dispatches correctly."""
         result = self.translator.translate("please abort the engagement")
         assert result.auto_dispatch is True
-        assert result.command.command_type == "abort_engagement"
+        assert _command_type_name(result.command) == "abort_engagement"
 
 
 class TestNLTranslatorTier2NeedsConfirmation:
@@ -243,7 +264,7 @@ class TestNLTranslatorTier2NeedsConfirmation:
         """'execute step build' needs confirmation with threshold 0.95."""
         result = self.translator.translate("execute step build")
         assert result.needs_confirmation is True
-        assert result.command.command_type == "execute_step"
+        assert _command_type_name(result.command) == "execute_step"
 
     def test_suggested_command_is_formatted(self):
         """Suggested command is displayed for confirmation."""
@@ -273,7 +294,7 @@ class TestNLTranslatorTier2NeedsConfirmation:
         """Confirmation-tier results still include the command."""
         result = self.translator.translate("create engagement")
         assert result.command is not None
-        assert result.command.command_type == "create_engagement"
+        assert _command_type_name(result.command) == "create_engagement"
         assert result.needs_confirmation is True
 
     def test_confirm_message_includes_confidence(self):
@@ -452,19 +473,19 @@ class TestNLTranslatorEdgeCases:
         """Parameterised commands have data populated."""
         result = self.translator.translate("enter phase build")
         assert result.command is not None
-        assert result.command.data.get("phase") == "build"
+        assert result.command.phase == "build"
 
     def test_abort_mode_graceful(self):
         """Graceful abort mode is set correctly."""
         result = self.translator.translate("gracefully abort the engagement")
         assert result.command is not None
-        assert result.command.data.get("mode") == "graceful"
+        assert result.command.mode == "graceful"
 
     def test_hard_abort_mode(self):
         """Hard abort mode is set for 'hard-abort'."""
         result = self.translator.translate("hard-abort")
         assert result.command is not None
-        assert result.command.data.get("mode") == "hard"
+        assert result.command.mode == "hard"
 
     def test_suggested_command_format(self):
         """Suggested command string is well-formatted."""
@@ -488,7 +509,6 @@ class TestNLTranslatorEdgeCases:
 
     def test_partial_word_no_false_positive(self):
         """Partial word should not false-positive match."""
-        # 'station' contains 'status'? No, but 'stat' does
         result = self.translator.translate("statistics")
         # Should not match 'status' pattern
         assert result.is_conversation is True
@@ -497,13 +517,13 @@ class TestNLTranslatorEdgeCases:
         """'run step X' matches execute_step."""
         result = self.translator.translate("run step build")
         assert result.command is not None
-        assert result.command.command_type == "execute_step"
+        assert _command_type_name(result.command) == "execute_step"
 
     def test_create_wave_with_title(self):
         """'create wave testing' matches create_wave."""
         result = self.translator.translate("create a wave testing")
         assert result.command is not None
-        assert result.command.command_type == "create_wave"
+        assert _command_type_name(result.command) == "create_wave"
 
 
 class TestTranslationResult:
@@ -555,7 +575,7 @@ class TestTranslationResult:
 class TestNLTranslatorCommandBusIntegration:
     """NLTranslator — integration with CommandBus.
 
-    Tests that the translator produces commands that the CommandBus
+    Tests that the translator produces typed commands that the CommandBus
     can dispatch.
     """
 
@@ -563,29 +583,26 @@ class TestNLTranslatorCommandBusIntegration:
         self.translator = NLTranslator()
 
     def test_translate_creates_valid_command(self):
-        """Translated command has all fields needed by CommandBus."""
-        from harness.command.types import Command
-
+        """Translated command is a TypedCommand with correct slug."""
         result = self.translator.translate("status", slug="my-eng")
         assert result.auto_dispatch is True
         assert result.command is not None
-        assert isinstance(result.command, Command)
+        assert isinstance(result.command, TypedCommand)
         assert result.command.slug == "my-eng"
-        assert result.command.command_type == "query_status"
+        assert _command_type_name(result.command) == "query_status"
 
     def test_abort_command_data(self):
-        """Abort commands produce data consumable by AbortEngagementHandler."""
+        """Abort commands produce typed AbortEngagementCommand with correct mode."""
         result = self.translator.translate("stop")
         assert result.command is not None
-        assert result.command.command_type == "abort_engagement"
-        assert "mode" in result.command.data
-        assert result.command.data["mode"] == "hard"
+        assert _command_type_name(result.command) == "abort_engagement"
+        assert result.command.mode == "hard"
 
-        # 'abort' defaults to graceful (pattern order)
+        # 'abort' defaults to graceful
         result2 = self.translator.translate("abort")
         assert result2.command is not None
-        assert result2.command.command_type == "abort_engagement"
-        assert result2.command.data.get("mode") == "graceful"
+        assert _command_type_name(result2.command) == "abort_engagement"
+        assert result2.command.mode == "graceful"
 
     def test_all_known_commands_produce_match(self):
         """All known command types produce a match at some confidence."""
@@ -612,9 +629,9 @@ class TestNLTranslatorCommandBusIntegration:
             assert result.command is not None, (
                 f"'{text}' should match a command"
             )
-            assert result.command.command_type == expected_type, (
+            assert _command_type_name(result.command) == expected_type, (
                 f"'{text}' should produce '{expected_type}', "
-                f"got '{result.command.command_type}'"
+                f"got '{_command_type_name(result.command)}'"
             )
 
 
@@ -625,7 +642,6 @@ class TestWebSearchFactory:
         """Factory creates DuckDuckGo provider by default."""
         from harness.skills.builtin.web_search import (
             DuckDuckGoProvider,
-            SearXNGProvider,
             create_web_search_provider,
         )
 

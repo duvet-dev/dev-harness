@@ -1,11 +1,11 @@
-"""Tests for CommandRouter — parse user input into Command instances.
+"""Tests for CommandRouter — parse user input into typed Command instances.
 
 Covers:
 - CommandRouter.parse() with /-prefixed commands
-- Command mapping to correct command_type
+- Command mapping to correct typed command class
 - Free text returns None (routes to NLTranslator/chat)
 - Parameterised commands (abort with mode, phase with name, wave with title)
-- Unknown commands → mapped as-is
+- Unknown commands → returned as-is
 - Empty input and edge cases
 """
 
@@ -14,7 +14,35 @@ from __future__ import annotations
 import pytest
 
 from harness.command.router import CommandRouter
-from harness.command.types import Command
+from harness.command.types import TypedCommand
+from harness.command.commands.misc import (
+    NextCommand,
+    QueryWhatsNextCommand,
+)
+from harness.command.commands.engagement import (
+    AbortEngagementCommand,
+    CreateEngagementCommand,
+    ResumeEngagementCommand,
+)
+from harness.command.commands.phase import EnterPhaseCommand
+from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand
+
+
+def _command_type_name(cmd) -> str:
+    """Helper to extract a readable command type name from a typed command."""
+    mapping = {
+        "AbortEngagementCommand": "abort_engagement",
+        "CreateEngagementCommand": "create_engagement",
+        "ResumeEngagementCommand": "resume_engagement",
+        "EnterPhaseCommand": "enter_phase",
+        "NextCommand": "next",
+        "QueryStatusCommand": "query_status",
+        "QueryWhatsNextCommand": "query_whats_next",
+        "CreateWaveCommand": "create_wave",
+        "ExecuteStepCommand": "execute_step",
+    }
+    name = type(cmd).__name__
+    return mapping.get(name, name)
 
 
 class TestCommandRouter:
@@ -24,109 +52,94 @@ class TestCommandRouter:
         self.router = CommandRouter()
 
     def test_parse_next(self):
-        """/next → next command."""
+        """/next → NextCommand."""
         result = self.router.parse("/next")
-        assert result is not None
-        assert result.command_type == "next"
+        assert isinstance(result, NextCommand)
 
     def test_parse_abort_graceful(self):
-        """/abort graceful → abort_engagement with mode=graceful."""
+        """/abort graceful → AbortEngagementCommand with mode=graceful."""
         result = self.router.parse("/abort graceful")
-        assert result is not None
-        assert result.command_type == "abort_engagement"
-        assert result.data.get("mode") == "graceful"
+        assert isinstance(result, AbortEngagementCommand)
+        assert result.mode == "graceful"
 
     def test_parse_abort_hard(self):
-        """/abort hard → abort_engagement with mode=hard."""
+        """/abort hard → AbortEngagementCommand with mode=hard."""
         result = self.router.parse("/abort hard")
-        assert result is not None
-        assert result.command_type == "abort_engagement"
-        assert result.data.get("mode") == "hard"
+        assert isinstance(result, AbortEngagementCommand)
+        assert result.mode == "hard"
 
     def test_parse_abort_default_mode(self):
         """/abort (no mode) → default graceful."""
         result = self.router.parse("/abort")
-        assert result is not None
-        assert result.data.get("mode") == "graceful"
+        assert isinstance(result, AbortEngagementCommand)
+        assert result.mode == "graceful"
 
     def test_parse_stop(self):
         """/stop → hard abort."""
         result = self.router.parse("/stop")
-        assert result is not None
-        assert result.command_type == "abort_engagement"
-        assert result.data.get("mode") == "hard"
+        assert isinstance(result, AbortEngagementCommand)
+        assert result.mode == "hard"
 
     def test_parse_status(self):
-        """/status → query_status."""
+        """/status → QueryStatusCommand."""
+        from harness.command.commands.misc import QueryStatusCommand
         result = self.router.parse("/status")
-        assert result is not None
-        assert result.command_type == "query_status"
+        assert isinstance(result, QueryStatusCommand)
 
     def test_parse_health(self):
-        """/health → query_status (alias)."""
+        """/health → QueryStatusCommand (alias)."""
+        from harness.command.commands.misc import QueryStatusCommand
         result = self.router.parse("/health")
-        assert result is not None
-        assert result.command_type == "query_status"
+        assert isinstance(result, QueryStatusCommand)
 
     def test_parse_whatsnext(self):
-        """/whatsnext → query_whats_next."""
+        """/whatsnext → QueryWhatsNextCommand."""
         result = self.router.parse("/whatsnext")
-        assert result is not None
-        assert result.command_type == "query_whats_next"
+        assert isinstance(result, QueryWhatsNextCommand)
 
     def test_parse_phase(self):
-        """/phase design → enter_phase with phase_name."""
+        """/phase design → EnterPhaseCommand with phase."""
         result = self.router.parse("/phase design")
-        assert result is not None
-        assert result.command_type == "enter_phase"
-        assert result.data.get("phase_name") == "design"
+        assert isinstance(result, EnterPhaseCommand)
+        assert result.phase == "design"
 
     def test_parse_phase_empty(self):
-        """/phase (no name) → enter_phase with empty phase_name."""
+        """/phase (no name) → EnterPhaseCommand with empty phase."""
         result = self.router.parse("/phase")
-        assert result is not None
-        assert result.command_type == "enter_phase"
-        assert result.data.get("phase_name") == ""
+        assert isinstance(result, EnterPhaseCommand)
+        assert result.phase == ""
 
     def test_parse_create(self):
-        """/create → create_engagement."""
+        """/create → CreateEngagementCommand."""
         result = self.router.parse("/create")
-        assert result is not None
-        assert result.command_type == "create_engagement"
+        assert isinstance(result, CreateEngagementCommand)
 
     def test_parse_resume(self):
-        """/resume → resume_engagement."""
+        """/resume → ResumeEngagementCommand."""
         result = self.router.parse("/resume")
-        assert result is not None
-        assert result.command_type == "resume_engagement"
+        assert isinstance(result, ResumeEngagementCommand)
 
     def test_parse_wave(self):
-        """/wave My Wave → create_wave with title."""
+        """/wave My Wave → CreateWaveCommand with title."""
         result = self.router.parse("/wave My Wave")
-        assert result is not None
-        assert result.command_type == "create_wave"
-        assert result.data.get("title") == "My Wave"
+        assert isinstance(result, CreateWaveCommand)
+        assert result.title == "My Wave"
 
     def test_parse_step(self):
-        """/step {...} → execute_step with step spec."""
+        """/step {} → ExecuteStepCommand with step spec."""
         result = self.router.parse("/step {}")
-        assert result is not None
-        assert result.command_type == "execute_step"
-        assert result.data.get("step") == "{}"
+        assert isinstance(result, ExecuteStepCommand)
+        assert result.step == "{}"
 
     def test_parse_help(self):
-        """/help → help command (special case)."""
+        """/help → None (special case, no dispatch)."""
         result = self.router.parse("/help")
-        assert result is not None
-        assert result.command_type == "help"
-        assert result.data.get("text") == ""
+        assert result is None
 
     def test_parse_help_with_args(self):
-        """/help phases → help command with args."""
+        """/help phases → None (special case)."""
         result = self.router.parse("/help phases")
-        assert result is not None
-        assert result.command_type == "help"
-        assert result.data.get("text") == "phases"
+        assert result is None
 
     def test_parse_free_text(self):
         """Free text input → None (routes to NL translator / chat)."""
@@ -149,24 +162,22 @@ class TestCommandRouter:
         assert result is None
 
     def test_parse_unknown_command(self):
-        """Unknown /-command → mapped as-is with raw text."""
+        """Unknown /-command → None (consumed but no match)."""
         result = self.router.parse("/unknown_cmd")
-        assert result is not None
-        assert result.command_type == "unknown_cmd"
-        assert result.data.get("raw") == "unknown_cmd"
+        assert result is None
 
     def test_parse_with_slug(self):
-        """parse() with slug attaches it to Command."""
+        """parse() with slug attaches it to typed command."""
         result = self.router.parse("/status", slug="my-eng")
-        assert result is not None
+        from harness.command.commands.misc import QueryStatusCommand
+        assert isinstance(result, QueryStatusCommand)
         assert result.slug == "my-eng"
-        assert result.command_type == "query_status"
 
     def test_parse_invalid_mode_fallback(self):
         """Invalid abort mode → fallback to graceful."""
         result = self.router.parse("/abort invalid_mode")
-        assert result is not None
-        assert result.data.get("mode") == "graceful"
+        assert isinstance(result, AbortEngagementCommand)
+        assert result.mode == "graceful"
 
     def test_all_standard_commands_map(self):
         """All standard /-commands map to correct types."""
@@ -182,11 +193,10 @@ class TestCommandRouter:
             ("/resume", "resume_engagement"),
             ("/wave", "create_wave"),
             ("/step", "execute_step"),
-            ("/help", "help"),
         ]
         for input_text, expected_type in mappings:
             result = self.router.parse(input_text)
             assert result is not None, f"'{input_text}' should parse to a command"
-            assert result.command_type == expected_type, (
-                f"'{input_text}' → expected '{expected_type}', got '{result.command_type}'"
+            assert _command_type_name(result) == expected_type, (
+                f"'{input_text}' → expected '{expected_type}', got '{_command_type_name(result)}'"
             )

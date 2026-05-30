@@ -1,7 +1,7 @@
 """NLTranslator — natural language to command translation — V7 §5.21.
 
 Full implementation (Wave 8b). Translates free-text user input into
-CommandBus commands using pattern matching and confidence scoring.
+typed CommandBus commands using pattern matching and confidence scoring.
 
 Three-tier confidence flow (W4):
 - confidence >= threshold (default 0.75) → auto-dispatch
@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from harness.command.types import Command
+from harness.command.types import TypedCommand
 from harness.config import NLTranslatorSettings
 
 
@@ -38,7 +38,7 @@ DEFAULT_CONFIDENCE_THRESHOLD: float = 0.75
 
 # Each pattern is a tuple of (pattern_name, regex, command_type, data_builder, weight)
 # weight is the base confidence when the pattern matches
-# data_builder takes (matched_groups) and returns a dict
+# data_builder takes (matched_groups) and returns a dict of kwargs
 
 _Pattern = tuple[str, re.Pattern, str, Any, float]
 
@@ -61,9 +61,9 @@ def _phase_data(groups: tuple[str, ...]) -> dict:
     return {"phase": phase}
 
 
-def _wave_data(groups: tuple[str, ...]) -> dict:
-    title = groups[0].strip() if groups and groups[0] else "New Wave"
-    return {"title": title}
+def _slug_data(groups: tuple[str, ...]) -> dict:
+    slug = groups[0].strip() if groups and groups[0] else ""
+    return {"slug": slug}
 
 
 def _step_data(groups: tuple[str, ...]) -> dict:
@@ -71,9 +71,63 @@ def _step_data(groups: tuple[str, ...]) -> dict:
     return {"step": step_spec}
 
 
-def _slug_data(groups: tuple[str, ...]) -> dict:
-    slug = groups[0].strip() if groups and groups[0] else ""
-    return {"slug": slug}
+# ── Build typed command from command_type string and kwargs ──────────────
+
+_TYPED_COMMAND_MAP: dict[str, type] = {}
+
+
+def _get_typed_command_class(command_type: str) -> type:
+    """Lazy-import and cache the typed command class for a command type."""
+    if not _TYPED_COMMAND_MAP:
+        _build_command_map()
+    cls = _TYPED_COMMAND_MAP.get(command_type)
+    if cls is None:
+        raise ValueError(f"No typed command class for type '{command_type}'")
+    return cls
+
+
+def _build_command_map() -> None:
+    """Populate the command type string -> typed command class mapping."""
+    from harness.command.commands.engagement import (
+        AbortEngagementCommand,
+        CreateEngagementCommand,
+        ResumeEngagementCommand,
+    )
+    from harness.command.commands.phase import EnterPhaseCommand
+    from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand
+    from harness.command.commands.misc import (
+        NextCommand,
+        QueryStatusCommand,
+        QueryWhatsNextCommand,
+    )
+    _TYPED_COMMAND_MAP.update({
+        "next": NextCommand,
+        "query_whats_next": QueryWhatsNextCommand,
+        "abort_engagement": AbortEngagementCommand,
+        "create_engagement": CreateEngagementCommand,
+        "resume_engagement": ResumeEngagementCommand,
+        "query_status": QueryStatusCommand,
+        "enter_phase": EnterPhaseCommand,
+        "create_wave": CreateWaveCommand,
+        "execute_step": ExecuteStepCommand,
+    })
+
+
+def _build_typed_command(command_type: str, data: dict, slug: str) -> TypedCommand:
+    """Construct a typed command from command_type string and kwargs.
+
+    Args:
+        command_type: The command type string.
+        data: Keyword arguments for the typed command constructor.
+        slug: The engagement slug.
+
+    Returns:
+        A typed command instance.
+    """
+    cls = _get_typed_command_class(command_type)
+    kwargs = dict(data)
+    kwargs.setdefault("slug", slug)
+    return cls(**kwargs)
 
 
 # ── NL command patterns (ordered by specificity, descending) ───────────
@@ -245,7 +299,7 @@ class TranslationResult:
     """Result of NL-to-command translation.
 
     Attributes:
-        command: The translated Command, or None if no command
+        command: The translated typed command, or None if no command
             was detected (confidence == 0).
         confidence: The translation confidence score. 0.0 = no
             command detected, 1.0 = perfect match.
@@ -261,7 +315,7 @@ class TranslationResult:
             confirmation display.
     """
 
-    command: Command | None = None
+    command: TypedCommand | None = None
     confidence: float = 0.0
     threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     auto_dispatch: bool = False
@@ -272,7 +326,7 @@ class TranslationResult:
 
 
 class NLTranslator:
-    """Translates free-text user input into CommandBus commands.
+    """Translates free-text user input into typed CommandBus commands.
 
     Full implementation (Wave 8b) with pattern matching and
     three-tier confidence flow.
@@ -324,7 +378,7 @@ class NLTranslator:
         text: str,
         slug: str = "",
     ) -> TranslationResult:
-        """Translate free-text input into a Command.
+        """Translate free-text input into a typed Command.
 
         Runs pattern matching against known command patterns and
         applies the three-tier confidence flow (V7 §5.21, W4):
@@ -360,14 +414,22 @@ class NLTranslator:
                 "No command detected. Routing to conversation.",
             )
 
-        # Build the Command
+        # Build the typed command
         if slug:
             data.setdefault("slug", slug)
-        command = Command(
-            slug=slug,
-            command_type=command_type,
-            data=data,
-        )
+        try:
+            command = _build_typed_command(command_type, data, slug)
+        except (ValueError, TypeError, AttributeError) as exc:
+            return TranslationResult(
+                command=None,
+                confidence=0.0,
+                threshold=self.confidence_threshold,
+                auto_dispatch=False,
+                needs_confirmation=False,
+                is_conversation=True,
+                message=f"Failed to build command: {exc}",
+                suggested_command="",
+            )
 
         # Build human-readable suggested command string
         suggested = self._format_suggested_command(command_type, data)

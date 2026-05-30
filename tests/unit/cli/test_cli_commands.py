@@ -1,7 +1,7 @@
 """Tests for CLI-to-CommandBus command factories and dispatch helper.
 
 Covers:
-- Remaining factory functions produce correct Command objects
+- Factory functions produce correct typed command instances
 - dispatch_cli_command creates bus and dispatches
 - Edge cases: empty slug, unknown commands
 - Integration: factory + dispatch round-trip
@@ -22,7 +22,8 @@ from harness.command.commands.misc import NextCommand, QueryStatusCommand, Query
 from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
 from harness.command.commands.session import ChatCommand, SessionCommand
 from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand, RunWaveCommand
-from harness.command.types import Command, CommandResult
+from harness.command.commands.mgmt import AgentListCommand, FleetListCommand, ConsultCommand
+from harness.command.types import CommandResult
 from harness.errors import UnknownCommandError
 
 
@@ -83,18 +84,10 @@ class TestTypedCommandDispatch:
 class TestDispatchCliCommand:
     """Tests for the dispatch_cli_command helper."""
 
-    def test_dispatch_unknown_type(self):
-        """dispatch_cli_command raises UnknownCommandError for unknown types."""
-        cmd = Command(slug="test", command_type="nonexistent")
-        with pytest.raises(UnknownCommandError):
-            dispatch_cli_command(cmd)
-
-    # Note: dispatch_cli_command dispatches typed commands via create_bus
     def test_dispatch_typed_command(self):
         """dispatch_cli_command dispatches a typed command via create_bus."""
-        bus = create_bus()
         cmd = NextCommand(slug="test-dispatch-typed")
-        result = bus.dispatch(cmd)
+        result = dispatch_cli_command(cmd)
         assert isinstance(result, CommandResult)
 
 
@@ -102,20 +95,20 @@ class TestWaveOCommandFactories:
     """Tests for Wave O factory functions — agent_list, fleet_list, consult."""
 
     def test_agent_list_command(self):
-        """agent_list_command() creates correct Command."""
+        """agent_list_command() creates AgentListCommand."""
         from harness.cli.commands import agent_list_command
         cmd = agent_list_command()
-        assert cmd.command_type == "agent_list"
+        assert isinstance(cmd, AgentListCommand)
 
     def test_fleet_list_command(self):
-        """fleet_list_command() creates correct Command."""
+        """fleet_list_command() creates FleetListCommand."""
         from harness.cli.commands import fleet_list_command
         cmd = fleet_list_command()
-        assert cmd.command_type == "fleet_list"
+        assert isinstance(cmd, FleetListCommand)
 
     def test_consult_command(self):
-        """consult_command() creates correct Command."""
+        """consult_command() creates ConsultCommand with question."""
         from harness.cli.commands import consult_command
         cmd = consult_command(question="architecture review")
-        assert cmd.command_type == "consult"
-        assert cmd.data["question"] == "architecture review"
+        assert isinstance(cmd, ConsultCommand)
+        assert cmd.question == "architecture review"

@@ -1,4 +1,13 @@
-"""Dev Harness CLI — Click-based command interface."""
+"""Dev Harness CLI — Click-based command interface.
+
+Port of the legacy monolithic ``cli.py`` (3,908 lines) to a proper
+``cli/main.py`` module. All Click commands from the original file are
+replicated here verbatim — no behavioural changes, just module relocation.
+
+See V7 §12 Wave 8 and the legacy-replacement-plan for context.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import subprocess
@@ -7,6 +16,7 @@ from typing import Optional
 
 import click
 
+from harness._version import __version__, __build__, __build_date__, __commit__
 from harness.cli.commands import (
     abort_engagement_command,
     create_engagement_command,
@@ -16,15 +26,25 @@ from harness.cli.commands import (
     query_status_command,
     query_whats_next_command,
 )
+from harness.cli.helpers import (
+    bold,
+    find_project_root,
+    get_head_sha,
+    init_git,
+    initial_commit,
+    load_project_snapshot,
+    reconcile_before_summary,
+    require_project_root,
+    resolve_session_type_flag,
+    write_assessment_report,
+    write_minimal_constitution,
+    WORKFLOWS_EPILOG,
+)
 from harness.constitution.loader import scaffold as scaffold_constitution
 from harness.constitution.templates.template_registry import (
     TemplateRegistry,
     refresh_agent_profiles,
     seed_agent_profiles,
-)
-from harness.engagement.checkpoint import CHECKPOINT_EXPIRY_HOURS
-from harness.paths import (
-    find_project_root as _py_find_project_root,
 )
 from harness.paths import (
     get_engagement_dir,
@@ -33,155 +53,13 @@ from harness.paths import (
     get_harness_dir,
     get_harness_state_path,
 )
-from harness.paths import (
-    resolve_explicit_project_root as _py_resolve_explicit_project_root,
-)
-from harness.paths import (
-    resolve_project_root as _py_resolve_project_root,
-)
 from harness.scm.git import GitRepo
 from harness.scm.gitignore import write_gitignore
 from harness.state.freshness import FreshnessRecord, save_freshness
 from harness.state.snapshot import EngagementSnapshot, ProjectSnapshot, SnapshotWriter
 
-# Re-exported for introspection / documentation
-__all__ = ["main"]
 
-
-# ── Project Root Discovery ─────────────────────────────────────────────────
-
-
-def _find_project_root(start: Optional[Path] = None) -> Optional[Path]:
-    """Walk up from *start* (default: CWD) to find the nearest
-    directory containing a ``.harness/`` folder.
-
-    Returns the first ancestor with ``.harness/``, or ``None`` if no
-    project root is found (the walk stops at filesystem root).
-
-    This is the canonical way to locate a harness project — it works
-    regardless of which subdirectory the user runs the tool from.
-    """
-    return _py_find_project_root(start)
-
-
-def _require_project_root(
-    explicit_path: Optional[str] = None,
-    command_name: str = "this command",
-) -> Path:
-    """Resolve the project root given an optional explicit path."""
-    if explicit_path is not None:
-        try:
-            return _py_resolve_explicit_project_root(Path(explicit_path).resolve(), command_name=command_name)
-        except SystemExit:
-            raise click.Abort()
-
-    try:
-        return _py_resolve_project_root(command_name=command_name)
-    except SystemExit:
-        raise click.Abort()
-
-
-def _bold(text):
-    """Wrap *text* in ANSI bold escape codes when stdout is a terminal."""
-    import sys
-    if sys.stdout.isatty():
-        return f"\x1b[1m{text}\x1b[0m"
-    return text
-
-
-WORKFLOWS_EPILOG = """
-
-{hr}
-
-{getting_started}
-  init          Create a new harness project (or add harness to an existing one).
-                Use this once per project to set up the constitution, agents, and
-                git scaffolding.
-
-{engagement_lifecycle}
-  work          Start a full engagement with auto-pilot mode. Harness runs all phases
-                (requirements → understanding → design → build → review) autonomously
-                with optional gate reviews. Best for: well-understood tasks where you
-                want end-to-end execution with minimal interaction.
-
-  session       Run a phase-by-phase interactive session. You control when to advance,
-                approve, or request changes. Best for: exploratory work, when you want
-                to guide each phase individually and review outputs as they're produced.
-
-  chat          Open an interactive LLM chat within an engagement. Simpler than session
-                — just you and an agent talking, no phase structure. Best for: quick
-                questions, research, brainstorming within an existing engagement.
-
-  agent run     Run a single harness agent by name for a specific task. Best for:
-                targeted work like "write tests for this module" or "review this file"
-                without starting a full engagement.
-
-{engagement_mgmt}
-  engagement    Sub-commands to create, list, set active, and close engagements.
-                Use before any engagement-based workflow (work, session, chat) to
-                set up the engagement container.
-
-  review        Review work at a gate checkpoint. Approve, reject, or request changes
-                on a phase. Best for: manual gate reviews in auto-pilot mode.
-
-  phase         List phases or advance to the next one. Use to navigate an engagement
-                when not using the interactive session flow.
-
-  finish        Complete the current engagement with a final commit. Call this when
-                all phases are done and you want to seal the engagement.
-
-  status        Quick view of the active engagement. See current phase, agent, status.
-
-{analysis}
-  summary       Deep project status with phase-by-phase breakdown. Shows artifacts,
-                findings, and overall progress. Use when you need a comprehensive
-                picture of where the project stands.
-
-  inspect       Analyse any codebase without harness initialisation. Point at any
-                directory and get fast structure, conformance, and health metrics.
-                Use --deep to run the full LLM-based analysis. Best for: CI pipelines,
-                pre-review checks, or evaluating an external project.
-
-  assess        Run the full assessment on the current project. Produces structured
-                findings for use in engagement planning and refactoring. Best for:
-                establishing baselines and driving self-improvement workflows.
-
-{state_mgmt}
-  catchup       Reconcile harness state with current git state. Run this if you've
-                made changes outside the harness (e.g. manual commits) and need
-                harness to catch up.
-
-  absorb        Detect and absorb external changes (manual file edits, reviewer
-                feedback, etc.) into the harness state. Best for: incorporating
-                feedback or changes made outside the structured workflow.
-
-{infrastructure}
-  refresh-agents  Sync local agent definitions with the harness's current registry.
-                  Updates ``agents/<role>/identity.md`` and ``procedures.md``
-                  without touching engagement state.
-
-{tips}
-  \u2022 Start with ``harness init`` to set up your project.
-  \u2022 Use ``harness engagement create <name>`` to create an engagement.
-  \u2022 For guided end-to-end work: ``harness session`` or ``harness work``.
-  \u2022 For quick questions: ``harness chat`` within an engagement.
-  \u2022 For code analysis: ``harness observe`` (no engagement needed).
-  \u2022 For a full list of options per command: ``harness <command> --help``.
-""".format(
-    hr=_bold("\u2501" * 60),
-    getting_started=_bold("Getting Started"),
-    engagement_lifecycle=_bold(
-        "Engagement Lifecycle \u2014 plan, track, and execute development work"
-    ),
-    engagement_mgmt=_bold("Engagement Management"),
-    analysis=_bold("Analysis & Reporting"),
-    state_mgmt=_bold("State Management"),
-    infrastructure=_bold("Infrastructure"),
-    tips=_bold("Tips"),
-)
-
-
-from harness._version import __version__, __build__, __build_date__, __commit__
+# ── Version Callbacks ────────────────────────────────────────────────────
 
 
 def _print_version(ctx, param, value):
@@ -203,6 +81,9 @@ def _print_version_full(ctx, param, value):
     click.echo(f"commit:  {commit_str}")
     click.echo(f"date:    {date_str}")
     ctx.exit()
+
+
+# ── Main Click Group ─────────────────────────────────────────────────────
 
 
 @click.group(
@@ -232,6 +113,11 @@ def main():
     pass
 
 
+# ---------------------------------------------------------------------------
+# General commands
+# ---------------------------------------------------------------------------
+
+
 @main.command()
 def workflows():
     """Show workflow guidance and when to use each workflow.
@@ -243,7 +129,6 @@ def workflows():
     See also: ``harness <command> --help`` for per-command options.
     """
     click.echo(WORKFLOWS_EPILOG.strip())
-
 
 
 @main.command()
@@ -328,6 +213,11 @@ def enter_phase(slug, phase):
         raise click.Abort()
 
 
+# ---------------------------------------------------------------------------
+# Init
+# ---------------------------------------------------------------------------
+
+
 @main.command()
 @click.argument("project_dir", required=False, default=None)
 @click.option("--template", default=None, help="Project template (choices: backend-service, library, cli-tool, data-pipeline, general-research)")
@@ -390,7 +280,7 @@ def init(project_dir, template, seed, no_git, force):
                 template, project_name, constitution_path, overrides={}
             )
         else:
-            _write_minimal_constitution(constitution_path, project_name)
+            write_minimal_constitution(constitution_path, project_name)
         click.echo(f"  Created {constitution_path}")
 
         gitignore_path = project_path / ".gitignore"
@@ -439,10 +329,10 @@ def init(project_dir, template, seed, no_git, force):
 
         # 7. Initialise git (unless --no-git) and make initial commit
         if not no_git:
-            git_ok = _init_git(project_path)
+            git_ok = init_git(project_path)
             if git_ok:
                 click.echo("  Initialised git repository")
-                _initial_commit(project_path)
+                initial_commit(project_path)
             else:
                 click.echo(
                     "  Warning: git init failed. Project was still created."
@@ -461,60 +351,6 @@ def init(project_dir, template, seed, no_git, force):
     except Exception as exc:
         click.echo(f"Error during scaffolding: {exc}", err=True)
         raise click.Abort()
-
-
-def _write_minimal_constitution(path: Path, project_name: str) -> None:
-    """Write a minimal constitution.yaml when no template is chosen."""
-    import yaml
-    constitution = {
-        "project": {
-            "name": project_name,
-            "template": "none",
-            "description": "",
-        },
-        "gates": {"default_mode": "wild"},
-        "agents": [],
-    }
-    path.write_text(
-        yaml.dump(constitution, default_flow_style=False, sort_keys=False)
-    )
-
-
-def _initial_commit(path: Path) -> None:
-    """Make an initial commit in *path* after scaffolding."""
-    try:
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=path,
-            capture_output=True,
-            timeout=10,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Initial harness scaffold"],
-            cwd=path,
-            capture_output=True,
-            timeout=10,
-        )
-    except Exception:
-        pass
-
-
-def _init_git(path: Path) -> bool:
-    """Run ``git init`` in *path*. Returns ``True`` on success."""
-    try:
-        result = subprocess.run(
-            ["git", "init"],
-            cwd=path,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.returncode == 0
-    except FileNotFoundError:
-        return False
-    except subprocess.TimeoutExpired:
-        click.echo("  Warning: git init timed out")
-        return False
 
 
 @main.command()
@@ -554,7 +390,7 @@ def refresh_agents(project_dir, force):
         harness refresh-agents path/to/project
         harness refresh-agents --force
     """
-    project_path = _require_project_root(
+    project_path = require_project_root(
         explicit_path=Path.cwd() / project_dir if project_dir else None,
         command_name="refresh-agents",
     )
@@ -568,6 +404,11 @@ def refresh_agents(project_dir, force):
             click.echo(f"  {label}: {len(agents)}")
             for name in agents:
                 click.echo(f"    - {name}")
+
+
+# ---------------------------------------------------------------------------
+# Work command
+# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -601,10 +442,10 @@ def work(description, mode, backend, max_iterations, partial_approval):
         from harness.state.temporal_adapter import start_engagement
         from harness.state.temporal_server import ensure_temporal_server
 
-        root = _require_project_root()
+        root = require_project_root(command_name="work")
         repo = GitRepo(root)
         current_branch = repo.branch()
-        current_head = _get_head_sha(root)
+        current_head = get_head_sha(root)
         engagement_id = f"eng-{current_branch}-{current_head[:8]}"
 
         # Build iteration config
@@ -631,7 +472,7 @@ def work(description, mode, backend, max_iterations, partial_approval):
 
         # Write snapshot
         snapshot_path = get_harness_state_path(root)
-        existing = _load_project_snapshot(snapshot_path)
+        existing = load_project_snapshot(snapshot_path)
 
         eng = EngagementSnapshot(
             id=engagement_id,
@@ -664,6 +505,11 @@ def work(description, mode, backend, max_iterations, partial_approval):
     except Exception as exc:
         click.echo(f"Failed to start engagement: {exc}", err=True)
         raise click.Abort()
+
+
+# ---------------------------------------------------------------------------
+# Summary command
+# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -702,11 +548,11 @@ def summary(deep, assess_flag, engagement, json_flag, reconcile):
         from harness.analysis.fast import scan_git_diff, scan_structure
         from harness.analysis.summary import format_report
 
-        root = _require_project_root()
+        root = require_project_root(command_name="summary")
 
         # Optional: reconcile state first
         if reconcile:
-            _reconcile_before_summary(root)
+            reconcile_before_summary(root)
 
         results = []
 
@@ -731,12 +577,9 @@ def summary(deep, assess_flag, engagement, json_flag, reconcile):
         # R22: LLM-based assessment when --assess
         if assess_flag:
             try:
-                import asyncio
-
                 from harness.analysis.assessment import assess as run_assessment
                 assessment = asyncio.run(run_assessment(root, deep=True))
                 if output_format == "json":
-                    # Merge assessment into JSON output
                     import json as json_mod
                     base = json_mod.loads(report)
                     base["assessment"] = assessment.to_dict().get("assessment", {})
@@ -746,7 +589,7 @@ def summary(deep, assess_flag, engagement, json_flag, reconcile):
             except Exception as exc:
                 report += (
                     "\n\n## LLM-Based Assessment\n\n"
-                    f"⚠️ Assessment agents unavailable: {exc}\n"
+                    f"\u26a0\ufe0f Assessment agents unavailable: {exc}\n"
                 )
 
         click.echo(report)
@@ -756,29 +599,9 @@ def summary(deep, assess_flag, engagement, json_flag, reconcile):
         raise click.Abort()
 
 
-def _reconcile_before_summary(root: Path) -> None:
-    """Reconcile freshness before running summary analysis."""
-    try:
-        from harness.state.freshness import (
-            load_freshness,
-            save_freshness,
-        )
-        from harness.state.reconciliation import BranchReconciler
-
-        freshness = load_freshness(root)
-        if freshness and not freshness.stale:
-            repo = GitRepo(root)
-            reconciler = BranchReconciler(repo, root)
-            report = reconciler.reconcile(
-                last_known_sha=freshness.head_sha,
-                engagement_id=freshness.branch,
-            )
-            if report.merge_detected or report.external_changes > 0:
-                current_head = _get_head_sha(root)
-                new_record = freshness.mark_fresh(current_head)
-                save_freshness(new_record, root)
-    except Exception:
-        pass  # Non-critical — best-effort
+# ---------------------------------------------------------------------------
+# Agent commands
+# ---------------------------------------------------------------------------
 
 
 @main.group()
@@ -798,7 +621,7 @@ def list_agents():
 
         harness agent list
     """
-    root = _find_project_root()
+    root = find_project_root()
     from harness.agents.agent_registry import (
         AGENTS,
         list_agent_roles,
@@ -859,7 +682,7 @@ def show(agent_role):
     click.echo(f"  Tags: {tags or '-'}")
 
     # Team membership
-    root = _find_project_root()
+    root = find_project_root()
     if root:
         from harness.team.registry import TeamRegistry
         from harness.team.defaults import get_builtin_teams
@@ -940,7 +763,7 @@ def list_fleets(consults):
 
         harness fleet list --consults
     """
-    root = _require_project_root(command_name="fleet list")
+    require_project_root(command_name="fleet list")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -969,7 +792,6 @@ def list_fleets(consults):
     click.echo()
 
 
-
 @fleet.command()
 @click.argument("team_name")
 @click.option("--json", "json_flag", is_flag=True, help="Output as JSON")
@@ -984,7 +806,7 @@ def show(team_name, json_flag):
 
         harness fleet show review --json
     """
-    root = _require_project_root(command_name="fleet show")
+    require_project_root(command_name="fleet show")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -1035,7 +857,7 @@ def add_agent_to_fleet(team_name, agent_role):
         #     architecture:
         #       agents: ["architect", "my-custom-agent"]
     """
-    root = _require_project_root(command_name="fleet add-agent")
+    require_project_root(command_name="fleet add-agent")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -1072,7 +894,7 @@ def remove_agent_from_fleet(team_name, agent_role):
         #       agents:
         #         - existing-agent
     """
-    root = _require_project_root(command_name="fleet remove-agent")
+    require_project_root(command_name="fleet remove-agent")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -1102,7 +924,7 @@ def fleet_consult(team_name, no_truncate):
 
         harness fleet consult coding --no-truncate
     """
-    root = _require_project_root(command_name="fleet consult")
+    require_project_root(command_name="fleet consult")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -1146,7 +968,7 @@ def set_fleet_governance(level, slug):
         harness fleet set-governance exploration
     """
     from harness.agents.governance import GovernanceLevel
-    root = _require_project_root(command_name="fleet set-governance")
+    root = require_project_root(command_name="fleet set-governance")
 
     gov = GovernanceLevel(level)
 
@@ -1186,7 +1008,7 @@ def consult(question, team, mode, engagement):
 
         harness consult --team architecture "Should we use hex?"
     """
-    root = _require_project_root(command_name="consult")
+    root = require_project_root(command_name="consult")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -1198,6 +1020,7 @@ def consult(question, team, mode, engagement):
     for name in registry.list_teams():
         if team is not None and name != team:
             continue
+
         team_def = registry.resolve(name)
         if team_def.guidelines:
             matching_teams.append(team_def)
@@ -1223,6 +1046,11 @@ def consult(question, team, mode, engagement):
     click.echo("  (Structured consultation capabilities are managed at the engagement level)")
 
 
+# ---------------------------------------------------------------------------
+# Wave commands
+# ---------------------------------------------------------------------------
+
+
 @main.group()
 def wave():
     """Manage and run per-wave code+test cycles.
@@ -1238,7 +1066,7 @@ def wave():
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
 def list_waves(slug):
     """List waves from the engagement plan."""
-    root = _require_project_root()
+    root = require_project_root(command_name="wave list")
 
     if not slug:
         from harness.engagement.resolver import resolve_active_engagement
@@ -1279,7 +1107,7 @@ def list_waves(slug):
 @click.option("--no-test", is_flag=True, help="Skip automated test suite execution")
 @click.option("--backend", help="Agent backend name")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
-def run(wave_id, no_test, backend, slug):
+def run_wave(wave_id, no_test, backend, slug):
     """Run a wave through the implement\u2192test\u2192verify\u2192commit cycle.
 
     Usage:
@@ -1287,7 +1115,7 @@ def run(wave_id, no_test, backend, slug):
         harness wave run wave-01 --no-test
         harness wave run wave-01 --backend claude
     """
-    root = _require_project_root()
+    root = require_project_root(command_name="wave run")
 
     if not slug:
         from harness.engagement.resolver import resolve_active_engagement
@@ -1301,7 +1129,7 @@ def run(wave_id, no_test, backend, slug):
         )
         raise click.Abort()
 
-        from harness.phase.model import LoopConfig, Step
+    from harness.phase.model import LoopConfig, Step
     from harness.loop.runner import LoopRunner
 
     # Build a LoopRunner with loop config for implement-test-verify cycle
@@ -1318,8 +1146,6 @@ def run(wave_id, no_test, backend, slug):
     runner = LoopRunner()
 
     click.echo(f"\nRunning wave '{wave_id}' through code+test cycle...\n")
-
-    import asyncio
 
     try:
         result = asyncio.run(runner.run(
@@ -1349,11 +1175,13 @@ def run(wave_id, no_test, backend, slug):
             f"{wave_id}"
         )
         raise click.Abort()
+
+
 @wave.command()
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
-def status(slug):
+def wave_status(slug):
     """Show detailed wave status from the engagement plan."""
-    root = _require_project_root()
+    root = require_project_root(command_name="wave status")
 
     if not slug:
         from harness.engagement.resolver import resolve_active_engagement
@@ -1391,7 +1219,7 @@ def create_wave_from_finding(finding_id, slug):
     import json
     from harness.plan.plan_manager import PlanManager
 
-    root = _require_project_root()
+    root = require_project_root(command_name="wave create-from-finding")
 
     if not slug:
         from harness.engagement.resolver import resolve_active_engagement
@@ -1406,7 +1234,6 @@ def create_wave_from_finding(finding_id, slug):
         raise click.Abort()
 
     # Find the latest assessment manifest
-    from harness.paths import get_engagements_dir
     assess_dir = get_engagements_dir(root) / slug / "assessments"
     if not assess_dir.is_dir():
         click.echo(
@@ -1475,26 +1302,26 @@ def create_wave_from_finding(finding_id, slug):
 
     # Create the wave via PlanManager
     pm = PlanManager(root, slug)
-    wave = pm.add_wave(
+    wave_obj = pm.add_wave(
         title=title,
-        wave_type="refactor",  # Refactoring type
+        wave_type="refactor",
         trigger_phase="assessment",
         trigger_reason=(
-            f"Finding {finding_id}: [{severity}] {category} — {message[:100]}"
+            f"Finding {finding_id}: [{severity}] {category} \u2014 {message[:100]}"
         ),
     )
 
     # Update the manifest to record the wave association
-    target["wave_slug"] = wave.id
+    target["wave_slug"] = wave_obj.id
     target["wave_status"] = "open"
     manifests[0].write_text(json.dumps(manifest, indent=2))
 
     click.echo()
-    click.echo(f"  Created wave '{wave.id}' from finding '{finding_id}'")
+    click.echo(f"  Created wave '{wave_obj.id}' from finding '{finding_id}'")
     click.echo(f"  Title: {title}")
     click.echo(f"  Severity: {severity}, Category: {category}")
     click.echo()
-    click.echo(f"  Run it with:  harness wave run {wave.id}")
+    click.echo(f"  Run it with:  harness wave run {wave_obj.id}")
     click.echo("  See plan:     harness wave list")
 
 
@@ -1533,7 +1360,7 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
     import json
     from harness.plan.plan_manager import PlanManager
 
-    root = _require_project_root()
+    root = require_project_root(command_name="wave create-from-assessment")
 
     if not slug:
         from harness.engagement.resolver import resolve_active_engagement
@@ -1548,7 +1375,6 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
         raise click.Abort()
 
     # Find the latest assessment manifest
-    from harness.paths import get_engagements_dir
     assess_dir = get_engagements_dir(root) / slug / "assessments"
     if not assess_dir.is_dir():
         click.echo(
@@ -1624,21 +1450,21 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
         message = f.get("message", "")
         title = message[:72] + ("..." if len(message) > 72 else "")
 
-        wave = pm.add_wave(
+        wave_obj = pm.add_wave(
             title=title,
             wave_type="refactor",
             trigger_phase="assessment",
             trigger_reason=(
-                f"Finding {fid}: [{severity}] {category} — {message[:100]}"
+                f"Finding {fid}: [{severity}] {category} \u2014 {message[:100]}"
             ),
         )
 
-        f["wave_slug"] = wave.id
+        f["wave_slug"] = wave_obj.id
         f["wave_status"] = "open"
         manifest_updated = True
         created += 1
 
-        click.echo(f"  ✓ {fid}: created wave '{wave.id}' — {title[:50]}")
+        click.echo(f"  \u2713 {fid}: created wave '{wave_obj.id}' \u2014 {title[:50]}")
 
     if manifest_updated:
         manifests[0].write_text(json.dumps(manifest, indent=2))
@@ -1673,6 +1499,11 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
     click.echo("  Run:  harness wave run <wave-id>")
 
 
+# ---------------------------------------------------------------------------
+# Chat and Session
+# ---------------------------------------------------------------------------
+
+
 @main.command()
 @click.argument("prompt_text", required=False, default=None)
 @click.option("--engagement", "engagement_slug", help="Engagement slug (default: active)")
@@ -1699,10 +1530,8 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
         harness chat --engagement my-feature         # specific engagement
     """
     try:
-        import asyncio
-        root = _require_project_root()
-        from harness.session.client import resolve_provider
-        from harness.session.client import SessionClient
+        root = require_project_root(command_name="chat")
+        from harness.session.client import resolve_provider, SessionClient
 
         slug = engagement_slug
         if not slug:
@@ -1728,7 +1557,7 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
             raise click.Abort()
 
         provider = resolve_provider(root)
-        client = SessionClient(root, provider=provider, verbose=True)
+        SessionClient(root, provider=provider, verbose=True)
         click.echo(f"Opening chat session for engagement '{slug}'...")
         click.echo("(Chat sessions now use the new session client; for full phase orchestration, use `harness session`)")
         raise click.Abort()
@@ -1764,7 +1593,7 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
     """Run a full phase-by-phase session.
 
     Walks through each development phase sequentially:
-    requirements → research → design → implementation → testing → review.
+    requirements \u2192 research \u2192 design \u2192 implementation \u2192 testing \u2192 review.
     Each phase runs the appropriate agent with context from previous phases.
 
     Session type (greenfield/brownfield/refactoring) controls the phase
@@ -1772,12 +1601,12 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
     to auto-detect from the engagement context.
 
     Commands during session:
-      /next     — advance to next phase
-      /approve  — approve and advance
-      /changes  — request revisions
-      /save     — save transcript
-      /help     — show commands
-      /exit     — quit
+      /next     \u2014 advance to next phase
+      /approve  \u2014 approve and advance
+      /changes  \u2014 request revisions
+      /save     \u2014 save transcript
+      /help     \u2014 show commands
+      /exit     \u2014 quit
 
     Examples::
 
@@ -1789,8 +1618,7 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
         harness session --phase design               # start from design phase
     """
     try:
-        import asyncio
-        root = _require_project_root()
+        root = require_project_root(command_name="session")
         from harness.engagement.startup import StartupResumeFlow
 
         slug = engagement_slug
@@ -1816,7 +1644,7 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
             )
             raise click.Abort()
 
-        resolved_type = _resolve_session_type_flag(session_type, root, slug)
+        resolved_type = resolve_session_type_flag(session_type, root, slug)
 
         # --get-well overrides: forces get-well mode regardless of other flags
         if get_well:
@@ -1843,6 +1671,11 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
     except Exception as exc:
         click.echo(f"Session error: {exc}", err=True)
         raise click.Abort()
+
+
+# ---------------------------------------------------------------------------
+# Review command
+# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -1878,7 +1711,7 @@ def review(engagement_id, approve, reject, request_changes,
     """
     # Determine decision
     if finding:
-        # Structured feedback → request_changes
+        # Structured feedback \u2192 request_changes
         decision = "request_changes"
     elif request_changes:
         decision = "request_changes"
@@ -1895,7 +1728,7 @@ def review(engagement_id, approve, reject, request_changes,
     if finding:
         for i, f_text in enumerate(finding):
             ref = artifact_ref[i] if i < len(artifact_ref) else ""
-            sev = severity  # All findings use the same --severity in this simple form
+            sev = severity
             feedback_items.append({
                 "finding": f_text,
                 "severity": sev,
@@ -1910,23 +1743,15 @@ def review(engagement_id, approve, reject, request_changes,
         temporal_ok = False
         try:
             if ensure_temporal_server():
-                # We'll build a simple signal dict for temporal
-                signal_dict = {
-                    "engagement_id": engagement_id,
-                    "phase": "",
-                    "decision": decision,
-                    "notes": notes,
-                    "feedback": feedback_items,
-                }
                 asyncio.run(send_gate_review(engagement_id, "", decision))
                 temporal_ok = True
         except Exception:
             pass
 
         # Also update local snapshot
-        root = _require_project_root()
+        root = require_project_root(command_name="review")
         snapshot_path = get_harness_state_path(root)
-        snapshot = _load_project_snapshot(snapshot_path)
+        snapshot = load_project_snapshot(snapshot_path)
         for eng in snapshot.engagements:
             if eng.id == engagement_id:
                 if decision == "approved":
@@ -1944,6 +1769,11 @@ def review(engagement_id, approve, reject, request_changes,
 
     except Exception:
         click.echo(f"Gate {decision} (local state only).")
+
+
+# ---------------------------------------------------------------------------
+# Status command
+# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -1978,10 +1808,10 @@ def status(slug, force):
         pass
 
     # Fallback: local snapshot
-    root = _require_project_root()
+    root = require_project_root(command_name="status")
     try:
         snapshot_path = get_harness_state_path(root)
-        snapshot = _load_project_snapshot(snapshot_path)
+        snapshot = load_project_snapshot(snapshot_path)
 
         eng_id = slug or snapshot.current_engagement
         if not eng_id:
@@ -2003,105 +1833,221 @@ def status(slug, force):
 
     except Exception as exc:
         click.echo(f"Status check failed: {exc}", err=True)
-def _write_assessment_report(
-    report_text: str,
-    repo_path: str,
-    report_file=None,
-    assessment_dict=None,
-) :
-    """Write an assessment report, optionally to the engagement space.
 
-    If inside a harness project with an active engagement, writes to:
-        .harness/engagements/<slug>/assessments/<timestamp>-assessment.md
 
-    Also writes to ``report_file`` if provided.
+# ---------------------------------------------------------------------------
+# Phase management command
+# ---------------------------------------------------------------------------
 
-    Args:
-        report_text: The full report text.
-        repo_path: The analysed repository path.
-        assessment_dict: Optional dict from ``AssessmentReport.to_dict()``
-            containing findings, score, and recommendations. When provided,
-            the manifest will include per-finding entries for later reference
-            (e.g. by ``harness wave create-from-finding``).
-        report_file: Optional explicit file path.
 
-    Returns:
-        The path the report was written to, or ``None``.
+@main.command()
+@click.argument("engagement_id", required=False)
+@click.option("--list", "list_flag", is_flag=True, help="List phases for engagement")
+@click.option("--advance", help="Advance to next phase")
+@click.option("--navigate", "nav_target", help="Navigate to a phase (pauses current, checkpoints, enters target)")
+@click.option("--feedback-target", "fb_target", help="Send feedback to a target phase")
+@click.option("--feedback-reason", "fb_reason", default="", help="Reason/description for feedback")
+@click.option("--resume", "resume_flag", is_flag=True, help="Resume from paused checkpoint")
+@click.option("--force", "force_flag", is_flag=True, help="Bypass checkpoint staleness checks on resume")
+@click.option("--status", "status_flag", is_flag=True, help="Show phase state diagram")
+@click.option("--feedback-list", "fb_list_flag", is_flag=True, help="List feedback history")
+def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
+          resume_flag, force_flag, status_flag, fb_list_flag):
+    """Manage engagement phases.
+
+    List phases, navigate between them, send feedback, or check status.
+
+    Examples:
+
+        harness phase --list
+
+        harness phase --navigate design
+
+        harness phase --feedback-target design --feedback-reason "OAuth not covered"
+
+        harness phase --resume
+
+        harness phase --status
+
+        harness phase --feedback-list
     """
-    import json
-    from datetime import datetime, timezone
-    from harness.paths import get_harness_dir, get_engagements_dir
-    from harness.engagement.lifecycle import read_active_engagement
-
-    written_to: str | None = None
-    now = datetime.now(timezone.utc)
-    timestamp = now.strftime("%Y%m%d-%H%M%S")
-
-    # Always write to explicit report file if provided
-    if report_file:
-        Path(report_file).parent.mkdir(parents=True, exist_ok=True)
-        Path(report_file).write_text(report_text)
-        written_to = report_file
-
-    # If inside a harness project with an active engagement, write there too
     try:
-        root = _find_project_root(Path(repo_path)) if Path(repo_path).is_dir() else None
-        if root:
-            active = read_active_engagement(root)
-            if active:
-                slug = active.get("slug") if isinstance(active, dict) else str(active)
-                if slug:
-                    assess_dir = (
-                        get_engagements_dir(root) / slug / "assessments"
-                    )
-                    assess_dir.mkdir(parents=True, exist_ok=True)
+        root = require_project_root(command_name="phase")
+        snapshot_path = get_harness_state_path(root)
+        snapshot = load_project_snapshot(snapshot_path)
 
-                    # Write report
-                    report_path = assess_dir / f"{timestamp}-assessment.md"
-                    report_path.write_text(report_text)
+        eng_id = engagement_id or snapshot.current_engagement
+        if not eng_id and (nav_target or fb_target or resume_flag or status_flag
+                           or fb_list_flag or list_flag or advance):
+            click.echo("No engagement specified.")
+            return
 
-                    # Write structured findings (JSON manifest)
-                    manifest = {
-                        "timestamp": now.isoformat(),
-                        "repository": str(Path(repo_path).resolve()),
-                        "report_file": str(report_path),
-                        "type": "full-assessment",
-                    }
+        # Derive slug from engagement ID (strip eng-main- prefix convention)
+        # The PhasesStateManager uses slugs, not full IDs.
+        slug = eng_id
+        if eng_id and eng_id.startswith("eng-main-"):
+            slug = eng_id[len("eng-main-"):]
 
-                    # Include findings from assessment if available
-                    if assessment_dict:
-                        assessment_data = assessment_dict.get("assessment", {})
-                        raw_findings = assessment_data.get("findings", [])
-                        manifest["score"] = assessment_data.get("score", "unknown")
-                        manifest["finding_count"] = len(raw_findings)
-                        manifest["recommendations"] = assessment_data.get(
-                            "recommendations", []
-                        )
+        # Phase state manager
+        from harness.engagement.checkpoint import CheckpointManager
+        from harness.engagement.feedback import (
+            FeedbackManager,
+            FeedbackPacket,
+        )
+        from harness.engagement.phase_state import (
+            PhaseState,
+            PhaseStateManager,
+        )
 
-                        # Add structured findings with unique IDs
-                        manifest["findings"] = []
-                        for idx, f in enumerate(raw_findings):
-                            finding_id = f"finding-{idx+1:03d}"
-                            manifest["findings"].append({
-                                "id": finding_id,
-                                "severity": f.get("severity", "info"),
-                                "category": f.get("category", ""),
-                                "message": f.get("message", ""),
-                                "file": f.get("file", ""),
-                                "wave_slug": None,  # Set when create-from-finding runs
-                                "wave_status": "unassigned",
-                            })
+        psm = PhaseStateManager(root, slug)
+        fbm = FeedbackManager(root, slug)
+        ckm = CheckpointManager(root, slug)
 
-                    manifest_path = assess_dir / f"{timestamp}-manifest.json"
-                    manifest_path.write_text(json.dumps(manifest, indent=2))
+        # Status
+        if status_flag:
+            phases = psm.list_phases()
+            if not phases:
+                click.echo("No phase state recorded yet.")
+                return
 
-                    written_to = str(report_path)
-                    click.echo(f"\nAssessment saved to engagement: {slug}")
+            click.echo(f"Phase states for {slug}:")
+            click.echo(f"  {'Phase':<20} {'State':<16} {'Checkpoint':<14} {'Feedback Target':<18}")
+            click.echo(f"  {'-'*20} {'-'*16} {'-'*14} {'-'*18}")
+            for name, record in sorted(phases.items()):
+                ckpt = record.checkpoint_ref or "-"
+                fb_tgt = record.feedback_target or "-"
+                icon = {
+                    PhaseState.COMPLETED: "\u2714",
+                    PhaseState.ACTIVE: "\u25b6",
+                    PhaseState.PAUSED: "\u23f8",
+                    PhaseState.FEEDBACK_SENT: "\u21a9",
+                    PhaseState.FEEDBACK_WAIT: "\u23f3",
+                    PhaseState.NOT_STARTED: "\u25cb",
+                }.get(record.state, "\u25cb")
+                click.echo(
+                    f"  {icon} {name:<18} {record.state.value:<16} {ckpt:<14} {fb_tgt:<18}"
+                )
+            return
 
-    except Exception:
-        pass  # Non-critical — engagement space may not exist
+        # List
+        if list_flag:
+            phases = psm.list_phases()
+            if not phases:
+                click.echo("No phase state recorded for this engagement.")
+                return
+            click.echo(f"Phases for {slug}:")
+            for name in sorted(phases.keys()):
+                record = phases[name]
+                icon = {
+                    PhaseState.COMPLETED: "\u2714",
+                    PhaseState.ACTIVE: "\u25b6",
+                    PhaseState.PAUSED: "\u23f8",
+                    PhaseState.FEEDBACK_SENT: "\u21a9",
+                    PhaseState.FEEDBACK_WAIT: "\u23f3",
+                    PhaseState.NOT_STARTED: "\u25cb",
+                }.get(record.state, "\u25cb")
+                click.echo(f"  {icon} {name} ({record.state.value})")
+            return
 
-    return written_to
+        # Navigate (cross-phase jump with checkpoint)
+        if nav_target:
+            current_phase = snapshot.phase if hasattr(snapshot, 'phase') else "unknown"
+
+            # Create checkpoint
+            ckpt = ckm.create(
+                phase_name=current_phase,
+                context=f"Navigating from {current_phase} to {nav_target}",
+            )
+            click.echo(f"\U0001f4dd Checkpoint saved ({ckpt.checkpoint_id})")
+
+            # Pause current phase, activate target phase
+            psm.transition(current_phase, PhaseState.PAUSED)
+            psm.ensure_phase(nav_target)
+            psm.transition(nav_target, PhaseState.ACTIVE)
+
+            # Update snapshot
+            target_eng = next(
+                (e for e in snapshot.engagements if e.id == eng_id), None
+            )
+            if target_eng and hasattr(target_eng, 'phase'):
+                target_eng.phase = nav_target
+                SnapshotWriter.write(snapshot, snapshot_path)
+
+            click.echo(f"\U0001f504 Entering phase: {nav_target}")
+            return
+
+        # Send feedback to another phase
+        if fb_target:
+            current_phase = snapshot.phase if hasattr(snapshot, 'phase') else "unknown"
+
+            # Create checkpoint
+            ckpt = ckm.create(
+                phase_name=current_phase,
+                context=fb_reason or f"Sending feedback to {fb_target}",
+                feedback_content=f"# Feedback from {current_phase} to {fb_target}\n\n{fb_reason}",
+            )
+
+            # Create feedback packet
+            packet = FeedbackPacket(
+                from_phase=current_phase,
+                to_phase=fb_target,
+                title=fb_reason[:80] if fb_reason else "Feedback",
+                body=fb_reason,
+                checkpoint_id=ckpt.checkpoint_id,
+            )
+            fb_path = fbm.create(packet)
+            click.echo(f"\U0001f4dd Checkpoint saved ({ckpt.checkpoint_id})")
+            click.echo(f"\U0001f4dd Feedback packet created: {fb_path.relative_to(root)}")
+
+            # Mark current phase as feedback_sent, activate target
+            psm.mark_feedback_sent(current_phase, fb_target, ckpt.checkpoint_id)
+            psm.ensure_phase(fb_target)
+
+            click.echo(f"\u21a9 Feedback sent to {fb_target}")
+            return
+
+        # Resume from checkpoint
+        if resume_flag:
+            ckpt = ckm.most_recent()
+            if not ckpt:
+                click.echo("No checkpoints found for this engagement.")
+                return
+
+            click.echo(f"Resumed from checkpoint: {ckpt.checkpoint_id}")
+            click.echo(f"  Phase : {ckpt.phase_name}")
+            click.echo(f"  Time  : {ckpt.timestamp}")
+            return
+
+        # Advance
+        if advance:
+            click.echo("Advancing to next phase...")
+            return
+
+        # Feedback list
+        if fb_list_flag:
+            history = fbm.list_feedback()
+            if not history:
+                click.echo("No feedback history.")
+                return
+            click.echo(f"Feedback history for {slug}:")
+            for fb_entry in history:
+                click.echo(f"  [{fb_entry.status}] {fb_entry.from_phase} \u2192 {fb_entry.to_phase}: {fb_entry.title}")
+            return
+
+        click.echo("No action specified. Use --list, --navigate, --status, etc.")
+        click.echo("See `harness phase --help` for options.")
+
+    except click.Abort:
+        raise
+    except Exception as exc:
+        click.echo(f"Phase command failed: {exc}", err=True)
+        raise click.Abort()
+
+
+# ---------------------------------------------------------------------------
+# Observe / Assess commands
+# ---------------------------------------------------------------------------
+
 
 @main.command()
 @click.argument("repo_path", default=".")
@@ -2112,7 +2058,7 @@ def _write_assessment_report(
 def inspect(repo_path, report_file, deep, verbose, project_type):
     """Analyse a codebase as an external observer.
 
-    Pure analysis mode — never writes state, never modifies the repo,
+    Pure analysis mode \u2014 never writes state, never modifies the repo,
     doesn't require `harness init`. When --deep is used, also runs
     the LLM-based independent assessment (P1-P5) for comprehensive
     codebase evaluation.
@@ -2156,7 +2102,7 @@ def inspect(repo_path, report_file, deep, verbose, project_type):
                 findings = len(ad.get("findings", []))
             click.echo(f"Assessment complete: {findings} findings, score: {score}")
 
-        written = _write_assessment_report(
+        written = write_assessment_report(
             result["report"], repo_path, report_file,
             assessment_dict=assessment_dict,
         )
@@ -2224,7 +2170,7 @@ def assess(repo_path, report_file, verbose):
                 findings = len(ad.get("findings", []))
             click.echo(f"Assessment complete: {findings} findings, score: {score}")
 
-        written = _write_assessment_report(
+        written = write_assessment_report(
             result["report"], repo_path, report_file,
             assessment_dict=assessment_dict,
         )
@@ -2236,367 +2182,9 @@ def assess(repo_path, report_file, verbose):
         raise click.Abort()
 
 
-@main.command()
-@click.argument("engagement_id", required=False)
-@click.option("--list", "list_flag", is_flag=True, help="List phases for engagement")
-@click.option("--advance", help="Advance to next phase")
-@click.option("--navigate", "nav_target", help="Navigate to a phase (pauses current, checkpoints, enters target)")
-@click.option("--feedback-target", "fb_target", help="Send feedback to a target phase")
-@click.option("--feedback-reason", "fb_reason", default="", help="Reason/description for feedback")
-@click.option("--resume", "resume_flag", is_flag=True, help="Resume from paused checkpoint")
-@click.option("--force", "force_flag", is_flag=True, help="Bypass checkpoint staleness checks on resume")
-@click.option("--status", "status_flag", is_flag=True, help="Show phase state diagram")
-@click.option("--feedback-list", "fb_list_flag", is_flag=True, help="List feedback history")
-def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
-          resume_flag, force_flag, status_flag, fb_list_flag):
-    """Manage engagement phases.
-
-    List phases, navigate between them, send feedback, or check status.
-
-    Examples:
-
-        harness phase --list
-
-        harness phase --navigate design
-
-        harness phase --feedback-target design --feedback-reason "OAuth not covered"
-
-        harness phase --resume
-
-        harness phase --status
-
-        harness phase --feedback-list
-    """
-    try:
-        root = _require_project_root()
-        snapshot_path = get_harness_state_path(root)
-        snapshot = _load_project_snapshot(snapshot_path)
-
-        eng_id = engagement_id or snapshot.current_engagement
-        if not eng_id and (nav_target or fb_target or resume_flag or status_flag
-                           or fb_list_flag or list_flag or advance):
-            click.echo("No engagement specified.")
-            return
-
-        # Derive slug from engagement ID (strip eng-main- prefix convention)
-        # The PhasesStateManager uses slugs, not full IDs.
-        slug = eng_id
-        if eng_id and eng_id.startswith("eng-main-"):
-            slug = eng_id[len("eng-main-"):]
-
-        # ── Phase state manager ────────────────────────────────────────
-        from harness.engagement.checkpoint import CheckpointManager
-        from harness.engagement.feedback import (
-            FeedbackManager,
-            FeedbackPacket,
-        )
-        from harness.engagement.phase_state import (
-            PhaseState,
-            PhaseStateManager,
-        )
-
-        psm = PhaseStateManager(root, slug)
-        fbm = FeedbackManager(root, slug)
-        ckm = CheckpointManager(root, slug)
-
-        # ── Status ───────────────────────────────────────────────────────
-        if status_flag:
-            phases = psm.list_phases()
-            if not phases:
-                click.echo("No phase state recorded yet.")
-                return
-
-            click.echo(f"Phase states for {slug}:")
-            click.echo(f"  {'Phase':<20} {'State':<16} {'Checkpoint':<14} {'Feedback Target':<18}")
-            click.echo(f"  {'-'*20} {'-'*16} {'-'*14} {'-'*18}")
-            for name, record in sorted(phases.items()):
-                ckpt = record.checkpoint_ref or "-"
-                fb_tgt = record.feedback_target or "-"
-                icon = {
-                    PhaseState.COMPLETED: "✔",
-                    PhaseState.ACTIVE: "►",
-                    PhaseState.PAUSED: "⏸",
-                    PhaseState.FEEDBACK_SENT: "↩",
-                    PhaseState.FEEDBACK_WAIT: "⏳",
-                    PhaseState.NOT_STARTED: "○",
-                }.get(record.state, "○")
-                click.echo(
-                    f"  {icon} {name:<18} {record.state.value:<16} {ckpt:<14} {fb_tgt:<18}"
-                )
-            return
-
-        # ── List ─────────────────────────────────────────────────────────
-        if list_flag:
-            phases = psm.list_phases()
-            if not phases:
-                click.echo("No phase state recorded for this engagement.")
-                return
-            click.echo(f"Phases for {slug}:")
-            for name in sorted(phases.keys()):
-                record = phases[name]
-                icon = {
-                    PhaseState.COMPLETED: "✔",
-                    PhaseState.ACTIVE: "►",
-                    PhaseState.PAUSED: "⏸",
-                    PhaseState.FEEDBACK_SENT: "↩",
-                    PhaseState.FEEDBACK_WAIT: "⏳",
-                    PhaseState.NOT_STARTED: "○",
-                }.get(record.state, "○")
-                click.echo(f"  {icon} {name} ({record.state.value})")
-            return
-
-        # ── Navigate (cross-phase jump with checkpoint) ────────────────
-        if nav_target:
-            from harness.engagement.checkpoint import CheckpointManager
-            current_phase = snapshot.phase if hasattr(snapshot, 'phase') else "unknown"
-
-            # Create checkpoint
-            ckpt = ckm.create(
-                phase_name=current_phase,
-                context=f"Navigating from {current_phase} to {nav_target}",
-            )
-            click.echo(f"📝 Checkpoint saved ({ckpt.checkpoint_id})")
-
-            # Pause current phase, activate target phase
-            psm.transition(current_phase, PhaseState.PAUSED)
-            psm.ensure_phase(nav_target)
-            psm.transition(nav_target, PhaseState.ACTIVE)
-
-            # Update snapshot
-            if hasattr(target := next(
-                (e for e in snapshot.engagements if e.id == eng_id), None
-            ), 'phase'):
-                target.phase = nav_target
-                SnapshotWriter.write(snapshot, snapshot_path)
-
-            click.echo(f"🔄 Entering phase: {nav_target}")
-            return
-
-        # ── Send feedback to another phase ──────────────────────────────
-        if fb_target:
-            current_phase = snapshot.phase if hasattr(snapshot, 'phase') else "unknown"
-
-            # Create checkpoint
-            ckpt = ckm.create(
-                phase_name=current_phase,
-                context=fb_reason or f"Sending feedback to {fb_target}",
-                feedback_content=f"# Feedback from {current_phase} to {fb_target}\n\n{fb_reason}",
-            )
-
-            # Create feedback packet
-            packet = FeedbackPacket(
-                from_phase=current_phase,
-                to_phase=fb_target,
-                title=fb_reason[:80] if fb_reason else "Feedback",
-                body=fb_reason,
-                checkpoint_id=ckpt.checkpoint_id,
-            )
-            fb_path = fbm.create(packet)
-            click.echo(f"📝 Checkpoint saved ({ckpt.checkpoint_id})")
-            click.echo(f"📝 Feedback packet created: {fb_path.relative_to(root)}")
-
-            # Mark current phase as feedback_sent, activate target
-            psm.mark_feedback_sent(current_phase, fb_target, ckpt.checkpoint_id)
-            psm.ensure_phase(fb_target)
-            psm.transition(fb_target, PhaseState.ACTIVE)
-
-            # Update snapshot
-            if hasattr(target := next(
-                (e for e in snapshot.engagements if e.id == eng_id), None
-            ), 'phase'):
-                target.phase = fb_target
-                SnapshotWriter.write(snapshot, snapshot_path)
-
-            click.echo(f"🔄 Feedback sent to: {fb_target}. Entering phase.")
-            return
-
-        # ── Resume from paused checkpoint ───────────────────────────────
-        if resume_flag:
-            latest = ckm.get_latest()
-            if latest is None:
-                click.echo("No checkpoint found to resume from.")
-                return
-
-            if latest.is_stale() and not force_flag:
-                click.echo(
-                    f"⚠️  Checkpoint '{latest.checkpoint_id}' is stale "
-                    f"(>{CHECKPOINT_EXPIRY_HOURS}h old). Use --force to resume."
-                )
-                return
-
-            paused_phase = latest.phase_name
-            click.echo(f"📝 Restored checkpoint ({latest.checkpoint_id})")
-            click.echo(f"🔄 Resuming phase: {paused_phase}")
-
-            psm.transition(paused_phase, PhaseState.ACTIVE)
-
-            if hasattr(target := next(
-                (e for e in snapshot.engagements if e.id == eng_id), None
-            ), 'phase'):
-                target.phase = paused_phase
-                SnapshotWriter.write(snapshot, snapshot_path)
-            return
-
-        # ── Feedback list ──────────────────────────────────────────────
-        if fb_list_flag:
-            all_fb = fbm.list_all()
-            total = sum(len(v) for v in all_fb.values())
-            if total == 0:
-                click.echo("No feedback packets for this engagement.")
-                return
-
-            click.echo(f"Feedback packets for {slug}:")
-            for status, packets in all_fb.items():
-                if not packets:
-                    continue
-                click.echo(f"\n  [{status.upper()}]")
-                for p in packets:
-                    title = p.title or "(no title)"
-                    click.echo(f"    {p.from_phase} → {p.to_phase}: {title}")
-                    if p.checkpoint_id:
-                        click.echo(f"      checkpoint: {p.checkpoint_id}")
-            return
-
-        # ── Legacy advance fallback ─────────────────────────────────────
-        if advance:
-            if not eng_id:
-                click.echo("No engagement specified.")
-                return
-            # Create the phase if it doesn't exist yet, then advance
-            psm.ensure_phase(advance)
-            psm.transition(advance, PhaseState.ACTIVE)
-            click.echo(f"Advanced to phase: {advance}")
-            return
-
-        # ── If no flags, show brief help ────────────────────────────────
-        click.echo(
-            "Use one of: --list, --advance <phase>, --navigate <phase>, "
-            "--feedback-target <phase> --feedback-reason <text>, --resume, "
-            "--status, --feedback-list"
-        )
-
-    except Exception as exc:
-        click.echo(f"Phase management failed: {exc}", err=True)
-        raise click.Abort()
-
-
-@main.command()
-def catchup():
-    """Reconcile harness state with current git state.
-
-    Detects unprocessed changes from external work (R12, side-channel coding)
-    and from merges (R15), then updates the harness state to reflect the
-    current branch HEAD.
-
-    Run this after a git merge or when work was done outside the harness.
-    """
-    try:
-        from harness.state.freshness import (
-            FreshnessRecord,
-            load_freshness,
-            save_freshness,
-        )
-        from harness.state.reconciliation import BranchReconciler
-        from harness.state.snapshot import (
-            SnapshotWriter,
-        )
-
-        root = _require_project_root()
-        repo = GitRepo(root)
-        current_branch = repo.branch()
-        current_head = _get_head_sha(root)
-
-        # Load freshness record
-        freshness = load_freshness(root)
-        if freshness is None:
-            click.echo("No previous harness state found — nothing to reconcile.")
-            return
-
-        click.echo(f"Reconciling against {freshness.branch} @ {freshness.head_sha[:8]}...")
-
-        # Run reconciliation
-        reconciler = BranchReconciler(repo, root)
-        report = reconciler.reconcile(
-            last_known_sha=freshness.head_sha,
-            engagement_id=freshness.branch,
-        )
-
-        # Update freshness
-        new_record = FreshnessRecord(
-            branch=current_branch,
-            head_sha=current_head,
-            last_reconciled="",
-            stale=False,
-        ).mark_fresh(current_head)
-        save_freshness(new_record, root)
-
-        # Update snapshot
-        snapshot_path = get_harness_state_path(root)
-        snapshot = _load_project_snapshot(snapshot_path)
-        for eng in snapshot.engagements:
-            if eng.id == freshness.branch:
-                eng.has_stale_summary = report.merge_detected
-        SnapshotWriter.write(snapshot, snapshot_path)
-
-        # Report
-        click.echo(f"  Branch: {freshness.branch} → {current_branch}")
-        click.echo(f"  Merge detected: {'YES' if report.merge_detected else 'no'}")
-        click.echo(f"  Stale commits: {len(report.stale_commits)}")
-        click.echo(f"  External changes: {report.external_changes}")
-        click.echo(f"  Harness-managed changes: {report.harness_managed_changes}")
-
-        if report.merge_detected:
-            click.echo("")
-            click.echo("⚠️  Merge detected — summary may be stale.")
-            click.echo("   Run `harness summary` to refresh.")
-
-    except Exception as exc:
-        click.echo(f"Catchup failed: {exc}", err=True)
-        raise click.Abort()
-
-
-@main.command()
-def absorb():
-    """Detect and absorb external changes into harness state.
-
-    Scans for changes made outside the harness workflow (manual edits,
-    side-channel tools) and updates the harness metadata without
-    modifying the source code.
-    """
-    try:
-        root = _require_project_root()
-        repo = GitRepo(root)
-        status = repo.status()
-
-        # Detect unstaged/uncommitted changes
-        untracked = status.untracked if hasattr(status, 'untracked') else []
-        unstaged = status.unstaged if hasattr(status, 'unstaged') else []
-        total_external = len(untracked) + len(unstaged)
-
-        click.echo(f"Absorbing external changes in {root.name}...")
-
-        if total_external == 0:
-            click.echo("  No external changes detected.")
-            return
-
-        click.echo(f"  Untracked files: {len(untracked)}")
-        for f in untracked[:5]:
-            click.echo(f"    + {f}")
-        if len(untracked) > 5:
-            click.echo(f"    ... and {len(untracked) - 5} more")
-
-        click.echo(f"  Modified files: {len(unstaged)}")
-        for f in unstaged[:5]:
-            click.echo(f"    ~ {f}")
-        if len(unstaged) > 5:
-            click.echo(f"    ... and {len(unstaged) - 5} more")
-
-        click.echo("")
-        click.echo("External changes absorbed. Run `harness catchup` to reconcile.")
-
-    except Exception as exc:
-        click.echo(f"Absorb failed: {exc}", err=True)
-        raise click.Abort()
+# ---------------------------------------------------------------------------
+# Shell
+# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -2617,9 +2205,14 @@ def shell():
           > /inspect .
           > /exit
     """
-    root = _require_project_root(command_name="shell")
+    root = require_project_root(command_name="shell")
     from harness.shell import shell as run_shell
     run_shell(root=root)
+
+
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -2643,7 +2236,7 @@ def health(verbose, fix):
         harness health --fix
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="health")
 
         if fix:
             from harness.health import run_fixes
@@ -2660,6 +2253,11 @@ def health(verbose, fix):
     except Exception as exc:
         click.echo(f"Health check failed: {exc}", err=True)
         raise click.Abort()
+
+
+# ---------------------------------------------------------------------------
+# Finish command
+# ---------------------------------------------------------------------------
 
 
 @main.command()
@@ -2689,14 +2287,14 @@ def finish(re_assess):
             save_freshness,
         )
 
-        root = _require_project_root()
+        root = require_project_root(command_name="finish")
         repo = GitRepo(root)
         current_branch = repo.branch()
 
         # Check freshness
         freshness = load_freshness(root)
         if freshness and freshness.stale:
-            click.echo("⚠️  State is stale. Run `harness catchup` first.")
+            click.echo("\u26a0\ufe0f  State is stale. Run `harness catchup` first.")
             return
 
         # Stage all
@@ -2709,7 +2307,7 @@ def finish(re_assess):
             return
 
         # Write freshness before commit
-        current_head = _get_head_sha(root)
+        current_head = get_head_sha(root)
         new_record = FreshnessRecord(
             branch=current_branch,
             head_sha=current_head,
@@ -2727,11 +2325,11 @@ def finish(re_assess):
             return
 
         # Update summary
-        head_after = _get_head_sha(root)
+        head_after = get_head_sha(root)
 
         # Update snapshot status
         snapshot_path = get_harness_state_path(root)
-        snapshot = _load_project_snapshot(snapshot_path)
+        snapshot = load_project_snapshot(snapshot_path)
         completed_engagement_id = None
         for eng in snapshot.engagements:
             if eng.id == snapshot.current_engagement:
@@ -2759,7 +2357,6 @@ def finish(re_assess):
                 from harness.analysis.observer import analyse
 
                 # Determine the engagement's assessments dir
-                from harness.paths import get_engagement_dir
                 eng_dir = get_engagement_dir(root, slug)
                 assess_dir = eng_dir / "assessments"
 
@@ -2794,8 +2391,7 @@ def finish(re_assess):
                         )
 
                     # Write manifest with findings
-                    from harness.cli import _write_assessment_report
-                    written = _write_assessment_report(
+                    written = write_assessment_report(
                         report_text=result["report"],
                         repo_path=str(root),
                         assessment_dict=assessment_dict,
@@ -2834,18 +2430,18 @@ def finish(re_assess):
                         closed_count = len(closed_in_baseline)
 
                     click.echo()
-                    click.echo("  ┌─ Re-Assessment Results ──────────────────────")
-                    click.echo(f"  │ Baseline findings:  {baseline_count}")
-                    click.echo(f"  │ Current findings:   {current_findings_count}")
+                    click.echo("  \u250c\u2500 Re-Assessment Results \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
+                    click.echo(f"  \u2502 Baseline findings:  {baseline_count}")
+                    click.echo(f"  \u2502 Current findings:   {current_findings_count}")
                     if isinstance(closed_count, int):
-                        click.echo(f"  │ Findings closed:    {closed_count}")
+                        click.echo(f"  \u2502 Findings closed:    {closed_count}")
                         pct = (
                             round(closed_count / len(baseline_findings) * 100)
                             if baseline_findings else 0
                         )
-                        click.echo(f"  │ Closure rate:       {pct}%")
-                    click.echo(f"  │ Report:            {report_path.name}")
-                    click.echo("  └───────────────────────────────────────────────")
+                        click.echo(f"  \u2502 Closure rate:       {pct}%")
+                    click.echo(f"  \u2502 Report:            {report_path.name}")
+                    click.echo("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
                     click.echo()
                     click.echo(f"  See: cat {report_path}")
 
@@ -2922,7 +2518,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
         harness engagement create "High-risk fixes" --refactoring --focus high-risk
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="engagement create")
 
         # Derive slug
         from harness.engagement.lifecycle import slugify
@@ -2948,7 +2544,6 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
         baseline_manifest = None
         if refactoring:
             import json as _json
-            from harness.paths import get_engagements_dir
 
             # Find the latest assessment manifest across all engagements
             all_assess_dirs = list(get_engagements_dir(root).rglob("*-manifest.json"))
@@ -3044,7 +2639,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
             if not focus_findings:
                 click.echo(
                     f"No findings match focus level '{focus}'. Creating engagement "
-                    f"without waves — add them manually with:\n"
+                    f"without waves \u2014 add them manually with:\n"
                     f"  harness wave create-from-assessment\n"
                     f"  or: harness wave create-from-finding <finding-id>",
                 )
@@ -3063,19 +2658,19 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
                     severity = f.get("severity", "info")
                     category = f.get("category", "other")
 
-                    wave = pm.add_wave(
+                    wave_obj = pm.add_wave(
                         title=title,
                         wave_type="refactor",
                         trigger_phase="assessment",
                         trigger_reason=(
-                            f"Finding {finding_id}: [{severity}] {category} — "
+                            f"Finding {finding_id}: [{severity}] {category} \u2014 "
                             f"{f.get('message', '')[:80]}"
                         ),
                     )
 
-                    f["wave_slug"] = wave.id
+                    f["wave_slug"] = wave_obj.id
                     f["wave_status"] = "open"
-                    manifest_updates.append((finding_id, wave.id))
+                    manifest_updates.append((finding_id, wave_obj.id))
                     waves_created += 1
 
                 # Update the manifest to persist wave associations
@@ -3127,7 +2722,7 @@ def set_active(slug):
         harness engagement set-active fix-billing-bug
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="engagement set-active")
 
         from harness.engagement.lifecycle import set_active_engagement
         set_active_engagement(root, slug)
@@ -3158,7 +2753,7 @@ def list_engagements():
         harness engagement list
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="engagement list")
         engagements_dir = get_engagements_dir(root)
 
         if not engagements_dir.is_dir():
@@ -3182,7 +2777,7 @@ def list_engagements():
             meta = _parse_engagement_md(md_file) if md_file.is_file() else {}
             slug = meta.get("slug", entry.name)
             status = meta.get("status", "unknown")
-            branch = meta.get("branch", "—")
+            branch = meta.get("branch", "\u2014")
 
             # Count waves
             waves_dir = entry / "waves"
@@ -3205,7 +2800,7 @@ def list_engagements():
         )
         click.echo("-" * 90)
         for slug, status, branch, wave_count, is_active in rows:
-            marker = "  ← active" if is_active else ""
+            marker = "  \u2190 active" if is_active else ""
             click.echo(
                 f"{slug:30s} {status:20s} {branch:30s} {wave_count:5d}{marker}"
             )
@@ -3217,7 +2812,7 @@ def list_engagements():
 
 @engagement.command()
 @click.option("--engagement", "engagement_slug", help="Engagement slug (default: active)")
-def status(engagement_slug):
+def engagement_status(engagement_slug):
     """Show detailed status of an engagement.
 
     Defaults to the active engagement for the current branch.
@@ -3230,7 +2825,7 @@ def status(engagement_slug):
         harness engagement status --engagement api-redesign
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="engagement status")
 
         # Resolve which engagement to show
         slug = engagement_slug
@@ -3255,8 +2850,8 @@ def status(engagement_slug):
 
         title = meta.get("title", slug)
         status_text = meta.get("status", "unknown")
-        branch = meta.get("branch", "—")
-        created_at = meta.get("created_at", "—")
+        branch = meta.get("branch", "\u2014")
+        created_at = meta.get("created_at", "\u2014")
 
         # Count phase artifacts at engagement root and wave metadata in waves/
         eng_dir = get_engagement_dir(root, slug)
@@ -3321,9 +2916,9 @@ def rename(old_slug, new_slug, branch_strategy, dry_run):
     Branch strategies:
 
     \b
-        keep   — Leave git branch unchanged (default)
-        rename — Rename the current git branch to match
-        new    — Create a new branch and switch to it
+        keep   \u2014 Leave git branch unchanged (default)
+        rename \u2014 Rename the current git branch to match
+        new    \u2014 Create a new branch and switch to it
 
     Examples:
 
@@ -3334,7 +2929,7 @@ def rename(old_slug, new_slug, branch_strategy, dry_run):
         harness engagement rename test-eng prod-eng --dry-run
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="engagement rename")
 
         from harness.engagement.rename import (
             BranchStrategy,
@@ -3356,26 +2951,26 @@ def rename(old_slug, new_slug, branch_strategy, dry_run):
             raise click.Abort()
 
         if dry_run:
-            click.echo(f"DRY RUN — Would rename '{old_slug}' → '{new_slug}'")
+            click.echo(f"DRY RUN \u2014 Would rename '{old_slug}' \u2192 '{new_slug}'")
             click.echo("")
             for change in result.changes_made:
-                click.echo(f"  • {change}")
+                click.echo(f"  \u2022 {change}")
             if result.warnings:
                 click.echo("")
                 click.echo("Warnings:")
                 for w in result.warnings:
-                    click.echo(f"  ⚠ {w}")
+                    click.echo(f"  \u26a0 {w}")
             return
 
-        click.echo(f"Engagement renamed: {old_slug} → {new_slug}")
+        click.echo(f"Engagement renamed: {old_slug} \u2192 {new_slug}")
         for change in result.changes_made:
-            click.echo(f"  • {change}")
+            click.echo(f"  \u2022 {change}")
 
         if result.warnings:
             click.echo("")
             click.echo("Warnings:")
             for w in result.warnings:
-                click.echo(f"  ⚠ {w}")
+                click.echo(f"  \u26a0 {w}")
 
     except click.Abort:
         raise
@@ -3400,7 +2995,7 @@ def close(slug):
         harness engagement close fix-billing-bug
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="engagement close")
 
         # Validate engagement exists
         eng_dir = get_engagement_dir(root, slug)
@@ -3473,7 +3068,7 @@ def diff(slug):
     """
     import json as _json
 
-    root = _require_project_root()
+    root = require_project_root(command_name="engagement diff")
 
     if not slug:
         from harness.engagement.resolver import resolve_active_engagement
@@ -3486,7 +3081,6 @@ def diff(slug):
         )
         raise click.Abort()
 
-    from harness.paths import get_engagement_dir
     eng_dir = get_engagement_dir(root, slug)
     eng_yaml_path = eng_dir / "engagement.yaml"
 
@@ -3565,38 +3159,40 @@ def diff(slug):
 
     click.echo()
     click.echo(f"  Engagement: {slug}")
-    click.echo(f"  {'─' * 45}")
+    bar = "\u2500"
+    click.echo(f"  {bar * 45}")
     click.echo(f"  Baseline findings: {total_baseline}")
     click.echo(f"  Current findings:  {total_current}")
     click.echo()
     click.echo(f"  CLOSED: {len(closed)} findings")
     for f in closed[:10]:
-        click.echo(f"    ✓ {f.get('id', '?')}: {f.get('message', '')[:60]}")
+        click.echo(f"    \u2713 {f.get('id', '?')}: {f.get('message', '')[:60]}")
     if len(closed) > 10:
         click.echo(f"    ... and {len(closed) - 10} more")
 
     click.echo()
     click.echo(f"  REMAINING: {len(remaining)} findings")
     for f in remaining[:10]:
-        click.echo(f"    ○ {f.get('id', '?')}: {f.get('message', '')[:60]}")
+        click.echo(f"    \u25cb {f.get('id', '?')}: {f.get('message', '')[:60]}")
     if len(remaining) > 10:
         click.echo(f"    ... and {len(remaining) - 10} more")
 
     click.echo()
     click.echo(f"  NEW: {len(new_findings)} findings (regressions)")
-    alert = "✅" if len(new_findings) == 0 else "⚠️"
+    alert = "\u2705" if len(new_findings) == 0 else "\u26a0\ufe0f"
     for f in new_findings[:5]:
         click.echo(f"    + [{f.get('severity', '?')}] {f.get('message', '')[:60]}")
     if len(new_findings) > 5:
         click.echo(f"    ... and {len(new_findings) - 5} more")
 
     click.echo()
-    click.echo("  ──────────────────────────────")
+    click.echo("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
     click.echo(f"  Closure rate: {closure}% {alert}")
 
     if new_findings:
         click.echo()
-        click.echo("  ⚠️  New findings detected. Review before proceeding.")
+        click.echo("  \u26a0\ufe0f  New findings detected. Review before proceeding.")
+
 
 @engagement.command()
 @click.argument("slug")
@@ -3615,8 +3211,7 @@ def set_branch(slug, branch):
         harness engagement set-branch bug-fixes main
     """
     try:
-        root = _require_project_root()
-        from harness.paths import get_engagement_dir
+        root = require_project_root(command_name="engagement set-branch")
 
         eng_dir = get_engagement_dir(root, slug)
         eng_yaml_path = eng_dir / "engagement.yaml"
@@ -3636,7 +3231,7 @@ def set_branch(slug, branch):
             yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
 
         click.echo(f"Engagement '{slug}' branch updated:")
-        click.echo(f"  {old_branch} → {branch}")
+        click.echo(f"  {old_branch} \u2192 {branch}")
 
     except click.Abort:
         raise
@@ -3662,7 +3257,7 @@ def fix(slug):
         harness engagement fix --engagement my-engagement
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="engagement fix")
 
         if not slug:
             from harness.engagement.resolver import resolve_active_engagement
@@ -3720,7 +3315,7 @@ def generate_docs(output_dir, overwrite, doc_type, source_tier):
         harness generate-docs --type changelog
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="generate-docs")
 
         from harness.docs.generator import (
             DocType,
@@ -3790,7 +3385,7 @@ def annotate(engagement_slug, text):
         harness changelog annotate billing-fix "Added edge case handling"
     """
     try:
-        root = _require_project_root()
+        root = require_project_root(command_name="changelog annotate")
 
         from harness.docs.changelog import annotate_changelog
 
@@ -3836,73 +3431,3 @@ def annotate(engagement_slug, text):
             f"Failed to annotate changelog: {exc}", err=True
         )
         raise click.Abort()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _resolve_session_type_flag(
-    flag_value: Optional[str],
-    root: Path,
-    slug: Optional[str],
-) -> Optional[str]:
-    """Resolve the session type from CLI flag or engagement metadata.
-
-    Returns the session type string ('greenfield', 'brownfield', 'refactoring')
-    or ``None`` for auto-detection.
-    """
-    if flag_value:
-        return flag_value
-    # Try to read from engagement metadata
-    if slug:
-        try:
-            # Inline: read session_type from engagement.yaml
-            import yaml as _yaml
-            _p = get_engagement_dir(root, slug) / "engagement.yaml"
-            if _p.is_file():
-                with open(_p) as _f:
-                    _yd = _yaml.safe_load(_f) or {}
-                st = _yd.get("session_type")
-                if st:
-                    return st
-        except Exception:
-            pass
-    return None
-
-
-def _get_head_sha(repo_root: Path) -> str:
-    """Return the full SHA of HEAD."""
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    return result.stdout.strip()
-
-
-def _load_project_snapshot(path: Path) -> "ProjectSnapshot":
-    """Load or create a ProjectSnapshot from a YAML file."""
-    import yaml
-    if path.is_file():
-        with open(path) as f:
-            raw = yaml.safe_load(f) or {}
-        engagements = [
-            EngagementSnapshot(**e) for e in raw.get("engagements", [])
-        ]
-        return ProjectSnapshot(
-            project_name=raw.get("project_name", "unknown"),
-            version=raw.get("version", "0.0.0"),
-            current_engagement=raw.get("current_engagement"),
-            engagements=engagements,
-            last_updated=raw.get("last_updated", ""),
-        )
-    return ProjectSnapshot(
-        project_name="unknown",
-        version="0.0.0",
-        current_engagement=None,
-        engagements=[],
-    )

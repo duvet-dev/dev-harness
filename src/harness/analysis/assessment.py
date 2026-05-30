@@ -1,7 +1,7 @@
 """Assessment — independent codebase assessment via LLM analysis agents.
 
 Gathers repo context, dispatches P1-P5 analysis agents in parallel
-via AgentRunner, parses JSON responses, and aggregates into an
+via AgentOrchestrator, parses JSON responses, and aggregates into an
 AssessmentReport with scoring and formatting.
 
 R22 — Independent Repository Assessment
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Awaitable
 import click
 
-from harness.agents.runner import AgentRunner
+from harness.agents.orchestrator import AgentOrchestrator
 from harness.analysis.agents import AnalysisAgent, AnalysisAgentRegistry
 
 logger = logging.getLogger(__name__)
@@ -254,7 +254,7 @@ async def assess(
     """Run a full independent assessment of a codebase.
 
     This is the main entry point. Gathers context, dispatches all
-    selected analysis agents in parallel via AgentRunner, parses
+    selected analysis agents in parallel via AgentOrchestrator, parses
     JSON responses, and aggregates into an AssessmentReport.
 
     Args:
@@ -262,7 +262,7 @@ async def assess(
         deep: If True, run all P1-P5 agents. If False, run only
             P1 (Project Profiler) and P2 (Responsibility Decoder).
         agent_names: Specific agents to run (overrides deep flag).
-        runner_config: Optional config for AgentRunner.
+        runner_config: Optional config for AgentOrchestrator.
 
     Returns:
         AssessmentReport with all findings.
@@ -295,7 +295,7 @@ async def assess(
         return report
 
     # 4. Dispatch all agents in parallel
-    runner = AgentRunner(runner_config or {})
+    runner = AgentOrchestrator(runner_config or {})
     context_json = _format_context_for_llm(context)
 
     async def run_agent(agent: AnalysisAgent) -> tuple[str, dict[str, Any], str]:
@@ -412,7 +412,7 @@ async def assess(
 
 async def _run_critical_review(
     report: AssessmentReport,
-    runner: "AgentRunner",
+    runner: "AgentOrchestrator",
     root: Path,
 ) -> str | None:
     """Run P10 Critical Reviewer: deep cross-cutting analysis with RepoTool.
@@ -424,7 +424,7 @@ async def _run_critical_review(
 
     Args:
         report: The AssessmentReport with all P1-P8 agent results.
-        runner: The AgentRunner instance for running the LLM call.
+        runner: The AgentOrchestrator instance for running the LLM call.
         root: Project root path.
 
     Returns:
@@ -504,7 +504,7 @@ async def _run_critical_review(
 
 async def _run_refactoring_analysis(
     report: AssessmentReport,
-    runner: "AgentRunner",
+    runner: "AgentOrchestrator",
     root: Path,
 ) -> str | None:
     """Run P11 Refactoring Analyser: concept-extraction analysis with RepoTool.
@@ -518,7 +518,7 @@ async def _run_refactoring_analysis(
 
     Args:
         report: The AssessmentReport with all P1-P8 agent results.
-        runner: The AgentRunner instance for running the LLM call.
+        runner: The AgentOrchestrator instance for running the LLM call.
         root: Project root path.
 
     Returns:
@@ -599,7 +599,7 @@ async def _run_refactoring_analysis(
 
 async def _synthesize_report(
     report: AssessmentReport,
-    runner: "AgentRunner",
+    runner: "AgentOrchestrator",
     root: Path,
 ) -> str | None:
     """Run P9 Synthesis Agent: combine all P1-P8 outputs into a unified report.
@@ -617,7 +617,7 @@ async def _synthesize_report(
 
     Args:
         report: The completed AssessmentReport with all agent results.
-        runner: The AgentRunner instance for running the LLM call.
+        runner: The AgentOrchestrator instance for running the LLM call.
         root: Project root path.
 
     Returns:
@@ -1050,7 +1050,7 @@ def _build_agent_prompt(agent: AnalysisAgent, context: str) -> str:
 
     Combines the agent's system prompt, codebase context, and output
     schema instructions into a single spec_content string for the
-    AgentRunner.
+    AgentOrchestrator.
 
     When the agent has RepoTool access (agent_role="critical-analyser"),
     adds a tool announcement so the LLM knows it can read files.

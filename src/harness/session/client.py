@@ -333,7 +333,7 @@ class InteractiveClient:
 class SessionClient:
     """Tool-aware streaming LLM client for interactive sessions.
 
-    Wraps ``AgentRunner`` + ``ApiBackend`` to provide function-calling
+    Wraps ``AgentOrchestrator`` + ``ApiBackend`` to provide function-calling
     (RepoTool read/write/list/exists) during interactive chat and
     session loops. Builds a ``ContextPacket`` from session state,
     attaches the RepoTool via the agent runner, and streams the final
@@ -460,7 +460,7 @@ class SessionClient:
     async def stream(self, user_message: str, agent_role: str = "") -> AsyncIterator[str]:
         """Send a message and stream the response.
 
-        Builds a ContextPacket, runs via AgentRunner > ApiBackend with
+        Builds a ContextPacket, runs via AgentOrchestrator > ApiBackend with
         RepoTool attached. Tool calls execute silently (writing files),
         then the final response is streamed token by token.
 
@@ -511,12 +511,12 @@ class SessionClient:
         # Create runner and backend
         from harness.agents.backends.api_backend import ApiBackend
         from harness.agents.plugin_registry import PluginRegistry
-        from harness.agents.runner import AgentRunner
+        from harness.agents.orchestrator import AgentOrchestrator
 
         PluginRegistry.initialize()
 
         backend = ApiBackend()
-        runner = AgentRunner()
+        runner = AgentOrchestrator()
 
         # Prepare invocation
         invocation = await backend.prepare(packet)

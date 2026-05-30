@@ -312,7 +312,7 @@ class TestAgentOutputDir:
 class TestRunSingleAgent:
     """Tests for the run_single_agent activity in activities.py.
 
-    Note: This activity calls AgentRunner which has real async I/O.
+    Note: This activity calls AgentOrchestrator which has real async I/O.
     We test the validation gate that happens before runner invocation.
     """
 

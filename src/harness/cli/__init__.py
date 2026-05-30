@@ -16,30 +16,9 @@ from harness.cli.commands import (
     query_whats_next_command,
 )
 
-# Re-export the Click main group from the old monolithic cli.py
-# for backward compatibility (repl.py imports from harness.cli.main).
-# When both cli.py and cli/ exist, Python resolves harness.cli to
-# the package, so we import the module via importlib and re-export.
-from pathlib import Path
-import importlib.util
-import sys
-
-_cli_py = Path(__file__).resolve().parent.parent / "cli.py"
-if _cli_py.exists():
-    _spec = importlib.util.spec_from_file_location(
-        "harness._cli_monolith", str(_cli_py)
-    )
-    if _spec and _spec.loader:
-        _mod = importlib.util.module_from_spec(_spec)
-        sys.modules["harness._cli_monolith"] = _mod
-        _spec.loader.exec_module(_mod)
-        main = _mod.main
-    else:
-        from click import Group
-        main = Group(name="harness", help="Dev Harness CLI")
-else:
-    from click import Group
-    main = Group(name="harness", help="Dev Harness CLI")
+# Re-export the Click main group from the new cli/main.py module
+# (legacy monolithic cli.py has been fully replaced — no importlib hack)
+from harness.cli.main import main
 
 __all__ = [
     "abort_engagement_command",

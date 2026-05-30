@@ -1,15 +1,14 @@
-"""Agent runner — orchestrates backend execution.
+"""Agent orchestrator — backend-agnostic LLM agent execution.
 
-Ties together ContextPacket, backends, and Temporal activities.
-Handles backend resolution, execution, artifact collection, and
-result formatting.
+Replaces ``harness.agents.runner.AgentRunner`` with an API-compatible
+``AgentOrchestrator`` class.  Provides the same public interface:
 
-Architecture §2.3 — Agent System (Runner).
+- ``run(packet, backend_name)`` → ``BackendResult``
+- ``run_simple(spec_content, ...)`` → ``str``
+- ``attach_repo_tool(packet, invocation)`` — public method
+- ``attach_web_tool(packet, invocation)`` — new
 
-Wave 12a: Provider resolution and fallback chain. The runner loads
-provider configurations from the project and user configs, resolves
-the provider + model for each agent invocation, and passes the
-resolved config to the backend via ``Invocation.resolved_config``.
+Architecture §2.3 — Agent System (Orchestrator).
 """
 
 from __future__ import annotations
@@ -102,8 +101,8 @@ def _safety_rmtree(path: str | os.PathLike) -> None:
 
 
 @dataclass
-class RunnerConfig:
-    """Configuration for the agent runner."""
+class OrchestratorConfig:
+    """Configuration for the agent orchestrator."""
 
     default_backend: str = "api"
     timeout_seconds: int = 600
@@ -112,14 +111,14 @@ class RunnerConfig:
     project_dir: str = ""
     """Optional project root directory for provider config lookup.
 
-    If empty, the runner tries to derive it from the packet's
+    If empty, the orchestrator tries to derive it from the packet's
     ``target_directory`` by looking for a ``.harness/providers.yaml`` file.
     """
     max_fallbacks: int = 3
     """Maximum number of fallback backends to try before failing."""
 
     @classmethod
-    def from_dict(cls, config: dict) -> RunnerConfig:
+    def from_dict(cls, config: dict) -> OrchestratorConfig:
         c = cls()
         if "default_backend" in config:
             c.default_backend = config["default_backend"]
@@ -164,18 +163,20 @@ class CriticLoopError(Exception):
     """Raised when the critic loop encounters a terminal error."""
 
 
-class AgentRunner:
+class AgentOrchestrator:
     """Orchestrates agent backend execution.
 
-    Usage:
+    Replacement for ``AgentRunner`` with identical public API.
 
-        runner = AgentRunner(config)
-        result = await runner.run(packet)
+    Usage::
 
-    Or within a Temporal activity:
+        orchestrator = AgentOrchestrator(config)
+        result = await orchestrator.run(packet)
 
-        runner = AgentRunner()
-        result = await runner.run(
+    Or within a Temporal activity::
+
+        orchestrator = AgentOrchestrator()
+        result = await orchestrator.run(
             packet,
             backend_name="api",
             use_temp_dir=True,
@@ -183,7 +184,7 @@ class AgentRunner:
     """
 
     def __init__(self, config: dict[str, Any] | None = None):
-        self._config = RunnerConfig.from_dict(config or {})
+        self._config = OrchestratorConfig.from_dict(config or {})
         PluginRegistry.initialize(config)
 
     async def run(
@@ -340,8 +341,8 @@ class AgentRunner:
             if model:
                 invocation.model = model
 
-            # Inject RepoTool if the agent has tool permissions (Wave 13)
-            self._attach_repo_tool(packet, invocation)
+            # Attach tools
+            self.attach_repo_tool(packet, invocation)
 
             # Execute
             result = await backend.run(invocation)
@@ -366,7 +367,7 @@ class AgentRunner:
         """Derive the project root directory.
 
         Resolution order:
-        1. ``RunnerConfig.project_dir`` (if set)
+        1. ``OrchestratorConfig.project_dir`` (if set)
         2. ``target_directory`` traversal upwards looking for ``.harness/providers.yaml``
         3. ``target_directory`` itself (for minimal/embedded setups)
         """
@@ -378,7 +379,6 @@ class AgentRunner:
             # Walk up looking for .harness/providers.yaml
             for parent in [target] + list(target.parents):
                 if get_providers_path(parent).exists():
-                # Note: prefer get_providers_path() once root is known
                     return parent
             # Fall back to target directory
             return target
@@ -391,11 +391,7 @@ class AgentRunner:
         model_key: str,
         packet: ContextPacket,
     ) -> list[dict[str, str]]:
-        """Build the fallback chain from packet constraints.
-
-        Falls back. Looks at the ``fallbacks`` key in
-        ``constraint_section`` for a list of ``{backend, model}`` dicts.
-        """
+        """Build the fallback chain from packet constraints."""
         fallbacks: list[dict[str, str]] = []
 
         # Check packet constraints first
@@ -418,7 +414,7 @@ class AgentRunner:
         Resolution order:
         1. Explicit backend_name parameter
         2. packet.constraint_section['backend']
-        3. RunnerConfig.default_backend
+        3. OrchestratorConfig.default_backend
         """
         name = (
             backend_name
@@ -503,54 +499,10 @@ class AgentRunner:
     ) -> CriticLoopResult:
         """Run a complete design-critic multi-agent loop.
 
-        Orchestrates:
-
-            architect (writes design) → critic (reviews) →
-            architect (revises) → critic (re-reviews) → …
-
-        until convergence or the maximum iteration limit.  The loop
-        uses **files as memory** — each agent writes artifacts to
-        *engagement_dir*, and subsequent iterations read previous
-        outputs via input artifacts and the RepoTool.
-
-        Args:
-            spec_content:
-                The task description / requirements for the architect.
-            architecture_rules:
-                Optional architecture constraints or guidelines.
-            engagement_dir:
-                Directory where engagement artifacts live.  If
-                ``None``, a temporary directory is created (and
-                cleaned up on success).
-            config:
-                Critic loop configuration.  Defaults from
-                :func:`~harness.agents.agent_registry.get_default_critic_loop_config`
-                if not provided.
-            backend_name:
-                Backend name for all agent invocations.  ``None``
-                falls back to the runner's default_backend.
-
-        Returns:
-            :class:`CriticLoopResult` with per-iteration snapshots.
-
-        Raises:
-            :class:`CriticLoopError` on fatal errors.
-
-        Example::
-
-            runner = AgentRunner()
-            result = await runner.run_critic_loop(
-                spec_content="Build an OAuth token refresh system",
-                config=CriticLoopConfig(max_iterations=3),
-            )
-            if result.converged:
-                print(f"Converged in {result.iterations} iteration(s)")
+        Raises ``CriticLoopError`` — the CycleRunner engine has been
+        replaced by config-driven critic loops via template steps or
+        LoopRunner with convergence strategies.
         """
-        # cycle.py has been deleted — CycleRunner is replaced by
-        # the new config-driven critic loop system.
-        # Use LoopRunner with convergence strategies or template-based
-        # steps instead (see .harness/step_templates.yaml for built-in
-        # critic loop templates).
         raise CriticLoopError(
             "run_critic_loop() is deprecated. The CycleRunner engine (cycle.py) "
             "has been replaced by config-driven critic loops. Use:"
@@ -590,7 +542,7 @@ class AgentRunner:
                 return True
         return False
 
-    def _attach_repo_tool(
+    def attach_repo_tool(
         self,
         packet: ContextPacket,
         invocation: Invocation,
@@ -657,8 +609,6 @@ class AgentRunner:
             return
 
         # Create the tools & populate invocation
-        from harness.tools.web_search import WebSearchTool
-
         tools = []
 
         # RepoTool
@@ -677,17 +627,46 @@ class AgentRunner:
             perms.write_prefixes or "any",
         )
 
-        # WebSearchTool
+        # Web search (delegates to attach_web_tool logic)
         if perms.web_search:
-            web_tool = WebSearchTool()
-            invocation.tool_registry["web_search"] = web_tool
-            tools.append(web_tool.tool_spec())
-            logger.info(
-                "Attached WebSearchTool for agent '%s'",
-                agent_role_str,
-            )
+            self.attach_web_tool(packet, invocation)
 
         invocation.available_tools = tools
+
+    def attach_web_tool(
+        self,
+        packet: ContextPacket,
+        invocation: Invocation,
+    ) -> None:
+        """Attach the WebSearchTool to the invocation.
+
+        Adds a ``web_search`` entry to ``invocation.tool_registry``
+        and appends its tool spec to ``invocation.available_tools``.
+
+        This is a public method, separated from ``attach_repo_tool``
+        so it can be called independently when only web search is
+        needed.
+        """
+        from harness.tools.web_search import WebSearchTool
+
+        web_tool = WebSearchTool()
+        invocation.tool_registry["web_search"] = web_tool
+        if invocation.available_tools is None:
+            invocation.available_tools = []
+
+        # Check if the tool spec is already present
+        existing_names = {
+            t.get("function", {}).get("name", "") for t in invocation.available_tools
+        }
+        spec = web_tool.tool_spec()
+        spec_name = spec.get("function", {}).get("name", "")
+        if spec_name not in existing_names:
+            invocation.available_tools.append(spec)
+
+        logger.info(
+            "Attached WebSearchTool for packet engagement_id=%s",
+            packet.engagement_id,
+        )
 
 
 def _build_iterations_from_cycle(
@@ -734,4 +713,3 @@ def _build_iterations_from_cycle(
         ))
 
     return iterations
-

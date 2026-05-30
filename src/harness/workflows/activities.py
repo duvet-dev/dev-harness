@@ -80,7 +80,7 @@ async def validate_inputs(context_packet: dict) -> dict:
 async def run_single_agent(context_packet: dict) -> dict:
     """Run a single agent on the given context packet.
 
-    Uses AgentRunner with the configured backend. Falls back through
+    Uses AgentOrchestrator with the configured backend. Falls back through
     backend chain if the preferred backend is unavailable.
 
     Timeout: 32 minutes, heartbeat: 15 seconds.
@@ -103,7 +103,7 @@ async def run_single_agent(context_packet: dict) -> dict:
         from pathlib import Path
 
         from harness.agents.context import ContextPacket, OutputContract
-        from harness.agents.runner import AgentRunner
+        from harness.agents.orchestrator import AgentOrchestrator
 
         architecture_rules = context_packet.get("architecture_rules", [])
         if isinstance(architecture_rules, str):
@@ -135,8 +135,8 @@ async def run_single_agent(context_packet: dict) -> dict:
             "constraint_section", {}
         ).get("backend")
 
-        # Run through AgentRunner
-        runner = AgentRunner()
+        # Run through AgentOrchestrator
+        runner = AgentOrchestrator()
         result = await runner.run(packet, backend_name=backend_name)
 
         return {

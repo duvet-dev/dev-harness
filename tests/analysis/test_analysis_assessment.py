@@ -740,12 +740,12 @@ class TestAssessRepoToolWiring:
         """_attach_repo_tool is reachable because assess() passes agent_role
         and project_dir through run_simple() → constraint_section."""
         from harness.analysis.assessment import assess
-        from harness.agents.runner import AgentRunner
+        from harness.agents.orchestrator import AgentOrchestrator
 
         (tmp_path / "hello.py").write_text("x = 1\n")
 
-        # Patch AgentRunner.run_simple to verify it receives the right params
-        original_run_simple = AgentRunner.run_simple
+        # Patch AgentOrchestrator.run_simple to verify it receives the right params
+        original_run_simple = AgentOrchestrator.run_simple
 
         captured_kwargs = {}
 
@@ -756,7 +756,7 @@ class TestAssessRepoToolWiring:
             return '{"projects": [{"name": "test", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'
 
         with unittest.mock.patch.object(
-            AgentRunner, "run_simple", mock_run_simple
+            AgentOrchestrator, "run_simple", mock_run_simple
         ):
             result = await assess(str(tmp_path), deep=False, agent_names=["project-profiler"])
 
@@ -772,7 +772,7 @@ class TestAssessRepoToolWiring:
         """End-to-end: assess() with a valid path and patched LLM should
         successfully complete, showing the agent_role flowed through."""
         from harness.analysis.assessment import assess
-        from harness.agents.runner import AgentRunner
+        from harness.agents.orchestrator import AgentOrchestrator
 
         (tmp_path / "src" / "main.py").parent.mkdir(parents=True)
         (tmp_path / "src" / "main.py").write_text("def hello(): print('hello')\n")
@@ -786,7 +786,7 @@ class TestAssessRepoToolWiring:
             return '{"projects": [{"name": "app", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'
 
         with unittest.mock.patch.object(
-            AgentRunner, "run_simple", tracking_run_simple
+            AgentOrchestrator, "run_simple", tracking_run_simple
         ):
             report = await assess(str(tmp_path), deep=False, agent_names=["project-profiler"])
 

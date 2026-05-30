@@ -2,7 +2,7 @@
 
 Provides:
 - ``InteractiveClient`` — direct LLM API caller with streaming
-- ``SessionClient`` — tool-aware streaming via AgentRunner + ApiBackend
+- ``SessionClient`` — tool-aware streaming via AgentOrchestrator + ApiBackend
 - ``chat_loop`` — interactive terminal prompt loop
 - ``session_loop`` — phase-by-phase orchestration flow
 - ``resolve_provider`` — reads .harness/providers.yaml and resolves ENV vars

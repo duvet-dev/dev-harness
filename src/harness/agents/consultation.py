@@ -12,9 +12,10 @@ Phase 3 of Wave 18 (Option G — Fleet & Cycle).
 Usage::
 
     from harness.agents.consultation import ConsultationOrchestrator
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+from harness.team.defaults import BUILTIN_TEAMS
 
-    registry = FleetRegistry(root)  # or TeamRegistry
+    registry = TeamRegistry(builtin=BUILTIN_TEAMS)
     orch = ConsultationOrchestrator(registry)
 
     # Route a single question
@@ -188,7 +189,7 @@ class ConsultationOrchestrator:
         5. CycleRunner auto-consults only support advisory mode.
 
     Args:
-        registry: A :class:`~harness.agents.fleet_registry.FleetRegistry`
+        registry: A :class:`~harness.team.registry.TeamRegistry`
             instance with loaded fleet definitions.
     """
 

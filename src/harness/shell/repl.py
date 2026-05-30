@@ -270,7 +270,7 @@ class HarnessREPL:
         if cmd_name == "get-well":
             """Run a get-well remediation session on the active engagement."""
             import asyncio
-            from harness.session.runners import session_loop
+            from harness.session.session_orchestrator import run_phase_session
             from harness.engagement.resolver import resolve_active_engagement
 
             slug = resolve_active_engagement(self.root)
@@ -285,7 +285,7 @@ class HarnessREPL:
             click.echo()
 
             try:
-                asyncio.run(session_loop(
+                asyncio.run(run_phase_session(
                     self.root, slug,
                     start_phase=phase,
                     session_type="get-well",
@@ -302,7 +302,7 @@ class HarnessREPL:
             # Support --get-well flag directly in REPL
             if "--get-well" in cmd_args:
                 import asyncio
-                from harness.session.runners import session_loop
+                from harness.session.session_orchestrator import run_phase_session
                 from harness.engagement.resolver import resolve_active_engagement
 
                 slug = resolve_active_engagement(self.root)
@@ -318,7 +318,7 @@ class HarnessREPL:
                 click.echo()
 
                 try:
-                    asyncio.run(session_loop(
+                    asyncio.run(run_phase_session(
                         self.root, slug,
                         start_phase=phase,
                         session_type="get-well",

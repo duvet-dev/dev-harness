@@ -165,6 +165,85 @@ def query_whats_next_command(slug: str) -> Command:
     return Command(slug=slug, command_type="query_whats_next")
 
 
+def init_project_command(
+    project_dir: str | None = None,
+    template: str | None = None,
+    seed: str | None = None,
+    no_git: bool = False,
+    force: bool = False,
+    root: str | Path | None = None,
+) -> Command:
+    """Create an ``InitProject`` command for the CommandBus.
+
+    Args:
+        project_dir: Subdirectory name (optional).
+        template: Template name (optional).
+        seed: Context to seed from (optional).
+        no_git: Skip git init.
+        force: Re-initialise even if already set up.
+        root: Project root (default: cwd).
+
+    Returns:
+        A Command with ``command_type="init_project"``.
+    """
+    from pathlib import Path
+    data: dict[str, Any] = {
+        "root": str(root or Path.cwd()),
+        "no_git": no_git,
+        "force": force,
+    }
+    if project_dir is not None:
+        data["project_dir"] = project_dir
+    if template is not None:
+        data["template"] = template
+    if seed is not None:
+        data["seed"] = seed
+    return Command(
+        slug="",
+        command_type="init_project",
+        data=data,
+    )
+
+
+def manage_phase_command(
+    slug: str,
+    action: str,
+    target: str | None = None,
+    feedback_reason: str = "",
+    force: bool = False,
+    root: str | Path | None = None,
+) -> Command:
+    """Create a ``ManagePhase`` command for the CommandBus.
+
+    Args:
+        slug: The engagement slug.
+        action: Phase action (list, navigate, feedback, resume, status,
+            feedback_list).
+        target: Target phase for navigate/feedback.
+        feedback_reason: Reason for feedback.
+        force: Bypass checkpoint staleness checks.
+        root: Project root (default: cwd).
+
+    Returns:
+        A Command with ``command_type="manage_phase"``.
+    """
+    from pathlib import Path
+    data: dict[str, Any] = {
+        "action": action,
+        "root": str(root or Path.cwd()),
+        "force": force,
+    }
+    if target is not None:
+        data["target"] = target
+    if feedback_reason:
+        data["feedback_reason"] = feedback_reason
+    return Command(
+        slug=slug,
+        command_type="manage_phase",
+        data=data,
+    )
+
+
 # ── Dispatch Helper ────────────────────────────────────────────────────
 
 

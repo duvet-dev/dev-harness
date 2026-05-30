@@ -793,6 +793,403 @@ class QueryWhatsNextHandler(CommandHandler):
             )
 
 
+class InitProjectHandler(CommandHandler):
+    """Initialises a new harness project.
+
+    Delegates to constitution scaffolding, agent profile seeding,
+    template scaffolding, snapshot creation, and optional git init.
+    """
+
+    def handle(self, command: Command) -> CommandResult:
+        """Handle project initialisation.
+
+        Command data fields:
+            project_dir (str | None): Subdirectory name.
+            template (str | None): Template name.
+            seed (str | None): Context to seed from.
+            no_git (bool): Skip git init.
+            force (bool): Re-initialise even if already set up.
+        """
+        try:
+            from pathlib import Path
+
+            root = Path(command.data.get("root", Path.cwd()))
+            project_dir = command.data.get("project_dir")
+            template = command.data.get("template")
+            no_git = command.data.get("no_git", False)
+            force = command.data.get("force", False)
+
+            if project_dir:
+                project_path = root / project_dir
+                if project_path.exists():
+                    if project_path.is_file():
+                        return CommandResult(
+                            success=False,
+                            error=f"{project_path} is a file, not a directory",
+                        )
+                else:
+                    project_path.mkdir(parents=True, exist_ok=True)
+            else:
+                project_path = root
+
+            from harness.paths import get_harness_dir
+            already_initted = get_harness_dir(project_path).is_dir()
+            if already_initted and not force:
+                return CommandResult(
+                    success=False,
+                    error=(
+                        f"{project_path} is already a harness project. "
+                        "Use --force to re-initialise."
+                    ),
+                )
+
+            project_name = project_path.name
+
+            from harness.constitution.loader import scaffold as scaffold_constitution
+            from harness.cli.helpers import (
+                write_minimal_constitution,
+                init_git,
+                initial_commit,
+            )
+            from harness.scm.gitignore import write_gitignore as _write_gitignore
+            from harness.constitution.templates.template_registry import (
+                TemplateRegistry,
+                seed_agent_profiles,
+            )
+            from harness.state.snapshot import ProjectSnapshot, SnapshotWriter
+            from harness.paths import (
+                get_engagements_dir,
+                get_harness_state_path,
+            )
+
+            # Scaffold constitution
+            constitution_path = project_path / "constitution.yaml"
+            if template:
+                scaffold_constitution(
+                    template, project_name, constitution_path, overrides={}
+                )
+            else:
+                write_minimal_constitution(constitution_path, project_name)
+
+            # .gitignore
+            gitignore_path = project_path / ".gitignore"
+            if not gitignore_path.exists():
+                _write_gitignore(gitignore_path, template=template or "none")
+
+            # Seed agent profiles
+            ALL_AGENTS = [
+                {"name": "requirements-builder", "phase": "planning"},
+                {"name": "planner", "phase": "planning"},
+                {"name": "researcher", "phase": "research"},
+                {"name": "architect", "phase": "design"},
+                {"name": "architect-critic", "phase": "design"},
+                {"name": "coder", "phase": "implementation"},
+                {"name": "tester", "phase": "testing"},
+                {"name": "reviewer", "phase": "review"},
+            ]
+            seed_agent_profiles(project_path, ALL_AGENTS)
+
+            # Scaffold template directories
+            if template:
+                TemplateRegistry.scaffold(template, project_name, project_path)
+
+            # Create .harness/
+            get_engagements_dir(project_path).mkdir(parents=True, exist_ok=True)
+            get_harness_dir(project_path).joinpath(".gitkeep").write_text("")
+
+            # Initial snapshot
+            snapshot_path = get_harness_state_path(project_path)
+            snapshot = ProjectSnapshot(
+                project_name=project_name,
+                version="0.1.0",
+                current_engagement=None,
+                engagements=[],
+            )
+            SnapshotWriter.write(snapshot, snapshot_path)
+
+            # Git init (optional)
+            git_ok = False
+            if not no_git:
+                git_ok = init_git(project_path)
+                if git_ok:
+                    initial_commit(project_path)
+
+            data: dict[str, Any] = {
+                "project": project_name,
+                "template": template or "(none)",
+                "path": str(project_path),
+                "git_initted": git_ok,
+            }
+            return CommandResult(
+                success=True,
+                message=(
+                    f"Project '{project_name}' initialised "
+                    f"(template: {template or 'none'}, "
+                    f"git: {'yes' if git_ok else 'no'})"
+                ),
+                data=data,
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Init failed: {exc}",
+            )
+
+
+class PhaseManagementHandler(CommandHandler):
+    """Manages engagement phases: list, navigate, feedback, resume, status.
+
+    Delegates to PhaseStateManager, CheckpointManager, FeedbackManager.
+    """
+
+    def handle(self, command: Command) -> CommandResult:
+        """Handle phase management actions.
+
+        Command data fields:
+            action (str): One of "list", "navigate", "feedback",
+                "resume", "status", "feedback_list".
+            target (str): Target phase for navigate/feedback.
+            feedback_reason (str): Reason for feedback (optional).
+            force (bool): Bypass checkpoint staleness checks.
+        """
+        try:
+            from pathlib import Path
+            from harness.paths import get_harness_state_path
+            from harness.cli.helpers import load_project_snapshot
+            from harness.state.snapshot import SnapshotWriter
+
+            root = Path(command.data.get("root", Path.cwd()))
+            slug = command.slug
+            action = command.data.get("action", "")
+
+            if not slug and action not in ("", None):
+                return CommandResult(
+                    success=False,
+                    error="No engagement slug specified",
+                )
+            if not slug:
+                slug = command.slug
+            if not slug:
+                return CommandResult(
+                    success=False,
+                    error="No engagement slug provided",
+                )
+
+            from harness.engagement.checkpoint import CheckpointManager
+            from harness.engagement.feedback import (
+                FeedbackManager,
+                FeedbackPacket,
+            )
+            from harness.engagement.phase_state import (
+                PhaseState,
+                PhaseStateManager,
+            )
+
+            psm = PhaseStateManager(root, slug)
+            fbm = FeedbackManager(root, slug)
+            ckm = CheckpointManager(root, slug)
+
+            # List phases
+            if action == "list":
+                phases = psm.list_phases()
+                if not phases:
+                    return CommandResult(
+                        success=True,
+                        message=f"No phases recorded for '{slug}'.",
+                        data={"slug": slug, "phases": []},
+                    )
+                phase_list = [
+                    {"name": name, "state": record.state.value}
+                    for name, record in sorted(phases.items())
+                ]
+                return CommandResult(
+                    success=True,
+                    message=f"{len(phase_list)} phase(s) for '{slug}'.",
+                    data={"slug": slug, "phases": phase_list},
+                )
+
+            # Navigate (cross-phase jump with checkpoint)
+            target = command.data.get("target", "")
+            if action == "navigate":
+                if not target:
+                    return CommandResult(
+                        success=False,
+                        error="No target phase specified",
+                    )
+                snapshot_path = get_harness_state_path(root)
+                snapshot = load_project_snapshot(snapshot_path)
+                current_phase = (
+                    snapshot.phase
+                    if hasattr(snapshot, "phase") else "unknown"
+                )
+
+                ckpt = ckm.create(
+                    phase_name=current_phase,
+                    context=f"Navigating from {current_phase} to {target}",
+                )
+                psm.transition(current_phase, PhaseState.PAUSED)
+                psm.ensure_phase(target)
+                psm.transition(target, PhaseState.ACTIVE)
+
+                target_slug = (
+                    f"eng-main-{slug}" if not slug.startswith("eng-main-")
+                    else slug
+                )
+                for eng in snapshot.engagements:
+                    if eng.id == target_slug or eng.id == slug:
+                        if hasattr(eng, "phase"):
+                            eng.phase = target
+                        SnapshotWriter.write(snapshot, snapshot_path)
+                        break
+
+                return CommandResult(
+                    success=True,
+                    message=(
+                        f"Navigated from '{current_phase}' to '{target}'. "
+                        f"Checkpoint: {ckpt.checkpoint_id}"
+                    ),
+                    data={
+                        "slug": slug,
+                        "from_phase": current_phase,
+                        "to_phase": target,
+                        "checkpoint": ckpt.checkpoint_id,
+                    },
+                )
+
+            # Send feedback
+            fb_target = command.data.get("target", "")
+            fb_reason = command.data.get("feedback_reason", "")
+            if action == "feedback":
+                if not fb_target:
+                    return CommandResult(
+                        success=False,
+                        error="No feedback target phase specified",
+                    )
+
+                snapshot_path = get_harness_state_path(root)
+                snapshot = load_project_snapshot(snapshot_path)
+                current_phase = (
+                    snapshot.phase
+                    if hasattr(snapshot, "phase") else "unknown"
+                )
+
+                ckpt = ckm.create(
+                    phase_name=current_phase,
+                    context=fb_reason or f"Feedback to {fb_target}",
+                    feedback_content=fb_reason or "",
+                )
+                packet = FeedbackPacket(
+                    from_phase=current_phase,
+                    to_phase=fb_target,
+                    title=(fb_reason[:80] if fb_reason else "Feedback"),
+                    body=fb_reason,
+                    checkpoint_id=ckpt.checkpoint_id,
+                )
+                fb_path = fbm.create(packet)
+
+                psm.mark_feedback_sent(current_phase, fb_target, ckpt.checkpoint_id)
+                psm.ensure_phase(fb_target)
+
+                return CommandResult(
+                    success=True,
+                    message=(
+                        f"Feedback sent from '{current_phase}' to "
+                        f"'{fb_target}'."
+                    ),
+                    data={
+                        "slug": slug,
+                        "from_phase": current_phase,
+                        "to_phase": fb_target,
+                        "feedback_path": str(fb_path),
+                        "checkpoint": ckpt.checkpoint_id,
+                    },
+                )
+
+            # Resume
+            force_flag = command.data.get("force", False)
+            if action == "resume":
+                ckpt = ckm.most_recent()
+                if not ckpt:
+                    return CommandResult(
+                        success=True,
+                        message=f"No checkpoints for '{slug}'.",
+                        data={"slug": slug, "resumed": False},
+                    )
+                return CommandResult(
+                    success=True,
+                    message=(
+                        f"Resumed from checkpoint: {ckpt.checkpoint_id} "
+                        f"(phase: {ckpt.phase_name})"
+                    ),
+                    data={
+                        "slug": slug,
+                        "resumed": True,
+                        "checkpoint": ckpt.checkpoint_id,
+                        "phase": ckpt.phase_name,
+                    },
+                )
+
+            # Status
+            if action == "status":
+                phases = psm.list_phases()
+                if not phases:
+                    return CommandResult(
+                        success=True,
+                        message=f"No phase state for '{slug}'.",
+                        data={"slug": slug, "phases": {}},
+                    )
+                phase_data = {
+                    name: {
+                        "state": record.state.value,
+                        "checkpoint_ref": record.checkpoint_ref or "",
+                        "feedback_target": record.feedback_target or "",
+                    }
+                    for name, record in sorted(phases.items())
+                }
+                return CommandResult(
+                    success=True,
+                    message=f"Phase states for '{slug}'.",
+                    data={"slug": slug, "phases": phase_data},
+                )
+
+            # Feedback list
+            if action == "feedback_list":
+                history = fbm.list_feedback()
+                entries = [
+                    {
+                        "status": fb.status,
+                        "from": fb.from_phase,
+                        "to": fb.to_phase,
+                        "title": fb.title,
+                    }
+                    for fb in history
+                ] if history else []
+                return CommandResult(
+                    success=True,
+                    message=(
+                        f"{len(entries)} feedback entry/entries for "
+                        f"'{slug}'."
+                    ),
+                    data={"slug": slug, "feedback": entries},
+                )
+
+            # No action
+            return CommandResult(
+                success=False,
+                error="No action specified",
+                message="Specify an action: list, navigate, feedback, resume, status, or feedback_list",
+            )
+
+        except Exception as exc:
+            return CommandResult(
+                success=False,
+                error=str(exc),
+                message=f"Phase command failed: {exc}",
+            )
+
+
 # ── Convenience: register all handlers ──────────────────────────────
 
 
@@ -816,5 +1213,7 @@ def register_all_handlers(
         "query_whats_next": QueryWhatsNextHandler(),
         "finish_engagement": FinishEngagementHandler(),
         "review_engagement": ReviewEngagementHandler(),
+        "init_project": InitProjectHandler(),
+        "manage_phase": PhaseManagementHandler(),
     }
     registry.register_all(handlers)

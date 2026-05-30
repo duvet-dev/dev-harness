@@ -23,6 +23,8 @@ from harness.cli.commands import (
     dispatch_cli_command,
     enter_phase_command,
     finish_engagement_command,
+    init_project_command,
+    manage_phase_command,
     next_command,
     query_status_command,
     query_whats_next_command,
@@ -233,11 +235,11 @@ def enter_phase(slug, phase):
 def init(project_dir, template, seed, no_git, force):
     """Initialise a harness project in the current or specified directory.
 
-    Without arguments, initialises the current directory (like ``git init``).
+    Without arguments, initialises the current directory (like git init).
     Optionally pass a directory name to create and initialise a new subdirectory.
 
-    If the project is already initialised (``.harness/`` exists), this command
-    will refuse to re-initialise unless ``--force`` is passed.
+    If the project is already initialised (.harness/ exists), this command
+    will refuse to re-initialise unless --force is passed.
 
     Examples::
 
@@ -246,115 +248,34 @@ def init(project_dir, template, seed, no_git, force):
         harness init --template backend-service
         harness init --force                 # re-init (overwrites state)
     """
-    if project_dir:
-        project_path = Path.cwd() / project_dir
-        if project_path.exists():
-            if project_path.is_file():
-                click.echo(
-                    f"Error: {project_path} is a file, not a directory.",
-                    err=True,
-                )
-                raise click.Abort()
-        else:
-            project_path.mkdir(parents=True, exist_ok=True)
-    else:
-        project_path = Path.cwd()
-
-    # Check if already initialised
-    already_initted = get_harness_dir(project_path).is_dir()
-    if already_initted and not force:
-        click.echo(
-            f"Error: {project_path} is already a harness project."
-            f"\nUse --force to re-initialise (overwrites constitution,"
-            f" agent profiles, and engagement state).",
-            err=True,
-        )
-        raise click.Abort()
-
-    project_name = project_path.name
-
-    # Wrap all scaffold steps in try/except
     try:
-        # 2. Scaffold constitution.yaml
-        constitution_path = project_path / "constitution.yaml"
-        if template:
-            scaffold_constitution(
-                template, project_name, constitution_path, overrides={}
-            )
-        else:
-            write_minimal_constitution(constitution_path, project_name)
-        click.echo(f"  Created {constitution_path}")
-
-        gitignore_path = project_path / ".gitignore"
-        if not gitignore_path.exists():
-            write_gitignore(gitignore_path, template=template or "none")
-            click.echo(f"  Created {gitignore_path}")
-
-        # 3. Seed all agent profiles (always — template just controls phase activation)
-        ALL_AGENTS = [
-            {"name": "requirements-builder", "phase": "planning"},
-            {"name": "planner", "phase": "planning"},
-            {"name": "researcher", "phase": "research"},
-            {"name": "architect", "phase": "design"},
-            {"name": "architect-critic", "phase": "design"},
-            {"name": "coder", "phase": "implementation"},
-            {"name": "tester", "phase": "testing"},
-            {"name": "reviewer", "phase": "review"},
-        ]
-        seed_agent_profiles(project_path, ALL_AGENTS)
-        click.echo(f"  Created {len(ALL_AGENTS)} agent profile(s)")
-
-        # 4. Scaffold template directory structure (only if template chosen)
-        if template:
-            created_dirs = TemplateRegistry.scaffold(
-                template, project_name, project_path
-            )
-            click.echo(f"  Created {len(created_dirs)} scaffold directories")
-        else:
-            click.echo("  (no template — no scaffold directories created)")
-
-        # 5. Create .harness/ directory structure
-        get_engagements_dir(project_path).mkdir(parents=True, exist_ok=True)
-        get_harness_dir(project_path).joinpath(".gitkeep").write_text("")
-        click.echo("  Created .harness/ (engagement state directory)")
-
-        # 6. Create initial state snapshot
-        snapshot_path = get_harness_state_path(project_path)
-        snapshot = ProjectSnapshot(
-            project_name=project_name,
-            version="0.1.0",
-            current_engagement=None,
-            engagements=[],
+        cmd = init_project_command(
+            project_dir=project_dir,
+            template=template,
+            seed=seed,
+            no_git=no_git,
+            force=force,
         )
-        SnapshotWriter.write(snapshot, snapshot_path)
-        click.echo(f"  Created {snapshot_path}")
+        result = dispatch_cli_command(cmd)
 
-        # 7. Initialise git (unless --no-git) and make initial commit
-        if not no_git:
-            git_ok = init_git(project_path)
-            if git_ok:
-                click.echo("  Initialised git repository")
-                initial_commit(project_path)
-            else:
-                click.echo(
-                    "  Warning: git init failed. Project was still created."
-                )
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
 
-        # 8. Print summary
-        click.echo("")
-        click.echo("Done!")
-        click.echo(f"  Project : {project_name}")
-        click.echo(f"  Template: {template or '(none)'}")
-        click.echo(f"  Path    : {project_path}")
+        click.echo(result.message)
+        data = result.data
+        click.echo(f"  Project : {data.get('project', '?')}")
+        click.echo(f"  Template: {data.get('template', '(none)')}")
+        click.echo(f"  Path    : {data.get('path', '?')}")
 
-    except KeyError as exc:
-        click.echo(f"Error: Unknown template — {exc}", err=True)
-        raise click.Abort()
+        if data.get('git_initted'):
+            click.echo("  Git     : initialised")
+
+    except click.Abort:
+        raise
     except Exception as exc:
-        click.echo(f"Error during scaffolding: {exc}", err=True)
+        click.echo(f"Init failed: {exc}", err=True)
         raise click.Abort()
-
-
 @main.command()
 @click.argument("project_dir", required=False, default=None)
 @click.option(
@@ -1786,9 +1707,11 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
           resume_flag, force_flag, status_flag, fb_list_flag):
     """Manage engagement phases.
 
-    List phases, navigate between them, send feedback, or check status.
+    Dispatches a ManagePhase command via the CommandBus.
+    Handler delegates to PhaseStateManager, CheckpointManager,
+    and FeedbackManager.
 
-    Examples:
+    Examples::
 
         harness phase --list
 
@@ -1803,189 +1726,103 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
         harness phase --feedback-list
     """
     try:
-        root = require_project_root(command_name="phase")
-        snapshot_path = get_harness_state_path(root)
-        snapshot = load_project_snapshot(snapshot_path)
-
-        eng_id = engagement_id or snapshot.current_engagement
-        if not eng_id and (nav_target or fb_target or resume_flag or status_flag
-                           or fb_list_flag or list_flag or advance):
-            click.echo("No engagement specified.")
-            return
-
-        # Derive slug from engagement ID (strip eng-main- prefix convention)
-        # The PhasesStateManager uses slugs, not full IDs.
-        slug = eng_id
-        if eng_id and eng_id.startswith("eng-main-"):
-            slug = eng_id[len("eng-main-"):]
-
-        # Phase state manager
-        from harness.engagement.checkpoint import CheckpointManager
-        from harness.engagement.feedback import (
-            FeedbackManager,
-            FeedbackPacket,
-        )
-        from harness.engagement.phase_state import (
-            PhaseState,
-            PhaseStateManager,
-        )
-
-        psm = PhaseStateManager(root, slug)
-        fbm = FeedbackManager(root, slug)
-        ckm = CheckpointManager(root, slug)
-
-        # Status
-        if status_flag:
-            phases = psm.list_phases()
-            if not phases:
-                click.echo("No phase state recorded yet.")
-                return
-
-            click.echo(f"Phase states for {slug}:")
-            click.echo(f"  {'Phase':<20} {'State':<16} {'Checkpoint':<14} {'Feedback Target':<18}")
-            click.echo(f"  {'-'*20} {'-'*16} {'-'*14} {'-'*18}")
-            for name, record in sorted(phases.items()):
-                ckpt = record.checkpoint_ref or "-"
-                fb_tgt = record.feedback_target or "-"
-                icon = {
-                    PhaseState.COMPLETED: "\u2714",
-                    PhaseState.ACTIVE: "\u25b6",
-                    PhaseState.PAUSED: "\u23f8",
-                    PhaseState.FEEDBACK_SENT: "\u21a9",
-                    PhaseState.FEEDBACK_WAIT: "\u23f3",
-                    PhaseState.NOT_STARTED: "\u25cb",
-                }.get(record.state, "\u25cb")
-                click.echo(
-                    f"  {icon} {name:<18} {record.state.value:<16} {ckpt:<14} {fb_tgt:<18}"
-                )
-            return
-
-        # List
+        # Determine action from flags
+        action = None
+        target = None
         if list_flag:
-            phases = psm.list_phases()
+            action = 'list'
+        elif nav_target:
+            action = 'navigate'
+            target = nav_target
+        elif fb_target:
+            action = 'feedback'
+            target = fb_target
+        elif resume_flag:
+            action = 'resume'
+        elif status_flag:
+            action = 'status'
+        elif fb_list_flag:
+            action = 'feedback_list'
+        elif advance:
+            action = 'advance'
+
+        if not action:
+            click.echo('No action specified. Use --list, --navigate, --status, etc.')
+            click.echo('See harness phase --help for options.')
+            return
+
+        root = require_project_root(command_name='phase')
+        cmd = manage_phase_command(
+            slug=engagement_id or '',
+            action=action,
+            target=target,
+            feedback_reason=fb_reason,
+            force=force_flag,
+            root=root,
+        )
+        result = dispatch_cli_command(cmd)
+
+        if not result.success:
+            click.echo(f"Error: {result.error}", err=True)
+            raise click.Abort()
+
+        data = result.data
+
+        if action == 'list':
+            phases = data.get('phases', [])
             if not phases:
-                click.echo("No phase state recorded for this engagement.")
+                click.echo('No phases recorded for this engagement.')
                 return
-            click.echo(f"Phases for {slug}:")
-            for name in sorted(phases.keys()):
-                record = phases[name]
-                icon = {
-                    PhaseState.COMPLETED: "\u2714",
-                    PhaseState.ACTIVE: "\u25b6",
-                    PhaseState.PAUSED: "\u23f8",
-                    PhaseState.FEEDBACK_SENT: "\u21a9",
-                    PhaseState.FEEDBACK_WAIT: "\u23f3",
-                    PhaseState.NOT_STARTED: "\u25cb",
-                }.get(record.state, "\u25cb")
-                click.echo(f"  {icon} {name} ({record.state.value})")
-            return
+            click.echo(f"Phases for {engagement_id}:")
+            for p in phases:
+                icon = {'completed': '✔', 'active': '▶',
+                        'paused': '⏸'}.get(p['state'], '○')
+                click.echo(f"  {icon} {p['name']} ({p['state']})")
 
-        # Navigate (cross-phase jump with checkpoint)
-        if nav_target:
-            current_phase = snapshot.phase if hasattr(snapshot, 'phase') else "unknown"
+        elif action == 'navigate':
+            click.echo(f"Navigated to phase '{target}'.")
+            if data.get('checkpoint'):
+                click.echo(f"  Checkpoint: {data['checkpoint']}")
 
-            # Create checkpoint
-            ckpt = ckm.create(
-                phase_name=current_phase,
-                context=f"Navigating from {current_phase} to {nav_target}",
-            )
-            click.echo(f"\U0001f4dd Checkpoint saved ({ckpt.checkpoint_id})")
+        elif action == 'feedback':
+            click.echo(f"Feedback sent to '{target}'.")
+            click.echo(f"  Path: {data.get('feedback_path', '-')}")
 
-            # Pause current phase, activate target phase
-            psm.transition(current_phase, PhaseState.PAUSED)
-            psm.ensure_phase(nav_target)
-            psm.transition(nav_target, PhaseState.ACTIVE)
+        elif action == 'resume':
+            if data.get('resumed'):
+                click.echo(f"Resumed from checkpoint: {data.get('checkpoint', '-')}")
+                click.echo(f"  Phase: {data.get('phase', '-')}")
+            else:
+                click.echo('No checkpoints found.')
 
-            # Update snapshot
-            target_eng = next(
-                (e for e in snapshot.engagements if e.id == eng_id), None
-            )
-            if target_eng and hasattr(target_eng, 'phase'):
-                target_eng.phase = nav_target
-                SnapshotWriter.write(snapshot, snapshot_path)
-
-            click.echo(f"\U0001f504 Entering phase: {nav_target}")
-            return
-
-        # Send feedback to another phase
-        if fb_target:
-            current_phase = snapshot.phase if hasattr(snapshot, 'phase') else "unknown"
-
-            # Create checkpoint
-            ckpt = ckm.create(
-                phase_name=current_phase,
-                context=fb_reason or f"Sending feedback to {fb_target}",
-                feedback_content=f"# Feedback from {current_phase} to {fb_target}\n\n{fb_reason}",
-            )
-
-            # Create feedback packet
-            packet = FeedbackPacket(
-                from_phase=current_phase,
-                to_phase=fb_target,
-                title=fb_reason[:80] if fb_reason else "Feedback",
-                body=fb_reason,
-                checkpoint_id=ckpt.checkpoint_id,
-            )
-            fb_path = fbm.create(packet)
-            click.echo(f"\U0001f4dd Checkpoint saved ({ckpt.checkpoint_id})")
-            click.echo(f"\U0001f4dd Feedback packet created: {fb_path.relative_to(root)}")
-
-            # Mark current phase as feedback_sent, activate target
-            psm.mark_feedback_sent(current_phase, fb_target, ckpt.checkpoint_id)
-            psm.ensure_phase(fb_target)
-
-            click.echo(f"\u21a9 Feedback sent to {fb_target}")
-            return
-
-        # Resume from checkpoint
-        if resume_flag:
-            ckpt = ckm.most_recent()
-            if not ckpt:
-                click.echo("No checkpoints found for this engagement.")
+        elif action == 'status':
+            phases = data.get('phases', {})
+            if not phases:
+                click.echo('No phase state recorded yet.')
                 return
+            click.echo(f"Phase states for {engagement_id}:")
+            for name, record in sorted(phases.items()):
+                state = record.get('state', 'unknown')
+                ckpt = record.get('checkpoint_ref', '') or '-'
+                fb_tgt = record.get('feedback_target', '') or '-'
+                icon = {'completed': '✔', 'active': '▶',
+                        'paused': '⏸'}.get(state, '○')
+                click.echo(f"  {icon} {name}: {state} (ck: {ckpt}, fb: {fb_tgt})")
 
-            click.echo(f"Resumed from checkpoint: {ckpt.checkpoint_id}")
-            click.echo(f"  Phase : {ckpt.phase_name}")
-            click.echo(f"  Time  : {ckpt.timestamp}")
-            return
-
-        # Advance
-        if advance:
-            click.echo("Advancing to next phase...")
-            return
-
-        # Feedback list
-        if fb_list_flag:
-            history = fbm.list_feedback()
-            if not history:
-                click.echo("No feedback history.")
+        elif action == 'feedback_list':
+            entries = data.get('feedback', [])
+            if not entries:
+                click.echo('No feedback history.')
                 return
-            click.echo(f"Feedback history for {slug}:")
-            for fb_entry in history:
-                click.echo(f"  [{fb_entry.status}] {fb_entry.from_phase} \u2192 {fb_entry.to_phase}: {fb_entry.title}")
-            return
-
-        click.echo("No action specified. Use --list, --navigate, --status, etc.")
-        click.echo("See `harness phase --help` for options.")
+            click.echo(f"Feedback history:")
+            for fb in entries:
+                click.echo(f"  [{fb.get('status', '?')}] {fb.get('from', '?')} -> {fb.get('to', '?')}: {fb.get('title', '')}")
 
     except click.Abort:
         raise
     except Exception as exc:
         click.echo(f"Phase command failed: {exc}", err=True)
         raise click.Abort()
-
-
-# ---------------------------------------------------------------------------
-# Observe / Assess commands
-# ---------------------------------------------------------------------------
-
-
-@main.command()
-@click.argument("repo_path", default=".")
-@click.option("--report", "report_file", default=None, help="Write report to file")
-@click.option("--deep", is_flag=True, help="Run full deep analysis + LLM-based assessment (P1-P5)")
-@click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
-@click.option("--project-type", default="python", help="Project archetype for conformance")
 def inspect(repo_path, report_file, deep, verbose, project_type):
     """Analyse a codebase as an external observer.
 

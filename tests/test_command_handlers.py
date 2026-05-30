@@ -286,7 +286,7 @@ class TestRegisterAllHandlers:
         assert "query_whats_next" in types
         assert "finish_engagement" in types
         assert "review_engagement" in types
-        assert len(types) == 11
+        assert len(types) == 13
 
     def test_each_handler_is_distinct_instance(self):
         registry = CommandRegistry()

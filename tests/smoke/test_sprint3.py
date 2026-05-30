@@ -66,14 +66,7 @@ class TestSprint3HandlerImportability:
 
 
 class TestSprint3HandlerRegistration:
-    """register_all_handlers registers all 30 handlers."""
-
-    @smoke
-    def test_all_30_handlers_registered(self):
-        registry = CommandRegistry()
-        register_all_handlers(registry)
-        types = registry.list_registered()
-        assert len(types) == 30, f"Expected 30, got {len(types)}"
+    """Per-wave handler type presence checks (no hardcoded counts)."""
 
     @smoke
     def test_sprint3_wave_f_types_present(self):

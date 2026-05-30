@@ -360,16 +360,26 @@ class TestAgentOrchestratorAttachWebTool:
         assert count == 1
 
 
-# ── Async integration tests (patched backends) ─────────────────────────────────
+# ── Async unit tests (mocked backends) ─────────────────────────────────────
+# These tests mock _run_with_resolved_config to avoid real LLM backend calls.
+# The real backend connections timeout at ~10-50s each, making 4 tests take 92s.
+# Mocking here keeps coverage while keeping the suite fast (<30s total).
 
 
 @pytest.mark.asyncio
 async def test_run_simple_returns_string():
-    """run_simple returns a string regardless of success/failure."""
+    """run_simple returns artifact text on success."""
     o = AgentOrchestrator()
-    result = await o.run_simple("do something impossible")
+    fake_result = BackendResult(
+        status="success",
+        artifacts={"output": "analysis result"},
+        metrics={"duration_ms": 42},
+    )
+    with unittest.mock.patch.object(o, '_run_with_resolved_config',
+                                     return_value=fake_result):
+        result = await o.run_simple("do something impossible")
     assert isinstance(result, str)
-    assert len(result) > 0
+    assert result == "analysis result"
 
 
 @pytest.mark.asyncio
@@ -377,34 +387,57 @@ async def test_run_simple_with_project_dir(tmp_path):
     """Providing a project_dir should not raise."""
     o = AgentOrchestrator()
     (tmp_path / "hello.py").write_text("x = 1\n")
-    result = await o.run_simple(
-        "analyse this",
-        project_dir=str(tmp_path),
-        agent_role="critical-analyser",
+    fake_result = BackendResult(
+        status="success",
+        artifacts={"output": "analysis result"},
+        metrics={"duration_ms": 42},
     )
+    with unittest.mock.patch.object(o, '_run_with_resolved_config',
+                                     return_value=fake_result):
+        result = await o.run_simple(
+            "analyse this",
+            project_dir=str(tmp_path),
+            agent_role="critical-analyser",
+        )
     assert isinstance(result, str)
-    assert len(result) > 0
+    assert result == "analysis result"
 
 
 @pytest.mark.asyncio
 async def test_run_returns_backend_result():
+    """run() returns a BackendResult with expected attributes."""
     o = AgentOrchestrator()
-    packet = ContextPacket("test", "build", "t1", "do something")
-    result = await o.run(packet)
-    assert hasattr(result, "status")
-    assert hasattr(result, "artifacts")
-    assert hasattr(result, "metrics")
+    fake_result = BackendResult(
+        status="success",
+        artifacts={"output": "hello"},
+        metrics={"duration_ms": 42, "backend": "api"},
+    )
+    with unittest.mock.patch.object(o, '_run_with_resolved_config',
+                                     return_value=fake_result):
+        packet = ContextPacket("test", "build", "t1", "do something")
+        result = await o.run(packet)
+    assert result.status == "success"
+    assert "output" in result.artifacts
+    assert "duration_ms" in result.metrics
 
 
 @pytest.mark.asyncio
 async def test_run_with_use_temp_dir():
+    """run() with use_temp_dir=True passes through and returns metrics."""
     o = AgentOrchestrator()
-    packet = ContextPacket(
-        "test", "build", "t1", "do something",
-        target_directory=Path("/tmp"),
+    fake_result = BackendResult(
+        status="success",
+        artifacts={"output": "hello"},
+        metrics={"duration_ms": 42, "backend": "api"},
     )
-    result = await o.run(packet, use_temp_dir=True)
-    assert hasattr(result, "status")
+    with unittest.mock.patch.object(o, '_run_with_resolved_config',
+                                     return_value=fake_result):
+        packet = ContextPacket(
+            "test", "build", "t1", "do something",
+            target_directory=Path("/tmp"),
+        )
+        result = await o.run(packet, use_temp_dir=True)
+    assert result.status == "success"
     assert "backend" in result.metrics
 
 

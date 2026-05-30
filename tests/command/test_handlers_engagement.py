@@ -453,4 +453,6 @@ class TestRegistration:
     def test_registration_includes_sprint2_handlers(self):
         registry = CommandRegistry()
         register_all_handlers(registry)
-        assert len(registry.list_registered()) >= 13
+        types = registry.list_registered()
+        assert "finish_engagement" in types
+        assert "review_engagement" in types

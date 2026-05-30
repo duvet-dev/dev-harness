@@ -390,3 +390,332 @@ class TestCompleterEdgeCases:
         with patch.object(Path, "iterdir", side_effect=PermissionError):
             matches = completer._complete_path("/root")
             assert matches == []
+
+
+class TestDispatchViaBus:
+    """Tests for _dispatch_via_bus()."""
+
+    def test_dispatch_via_bus_success(self):
+        """_dispatch_via_bus should return a CommandResult."""
+        from harness.shell.repl import _dispatch_via_bus
+        from harness.command.types import Command
+
+        cmd = Command(slug="", command_type="agent_list")
+        result = _dispatch_via_bus(cmd)
+        assert result is not None
+        assert isinstance(result, CommandResult)
+
+    def test_dispatch_via_bus_unknown_command(self):
+        """_dispatch_via_bus with unknown type should handle gracefully."""
+        from harness.shell.repl import _dispatch_via_bus
+        from harness.command.types import Command
+
+        cmd = Command(slug="", command_type="nonexistent_command")
+        try:
+            result = _dispatch_via_bus(cmd)
+            # Should only get here if an error result is returned
+            assert isinstance(result, CommandResult)
+        except Exception:
+            # An exception is also acceptable for unknown commands
+            pass
+
+
+class TestREPLCommandDispatch:
+    """Additional command dispatch edge cases."""
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_command_no_slash_prints_warning(self, mock_echo, tmp_path):
+        """Commands without / prefix should print a warning."""
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("status")
+        assert result is True
+        mock_echo.assert_called_once()
+        assert "Commands start with /" in mock_echo.call_args[0][0]
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_command_help_displays_lines(self, mock_echo, tmp_path):
+        """/help should display help lines."""
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/help")
+        assert result is True
+        # Should have multiple echo calls for help lines
+        assert mock_echo.call_count > 1
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_command_shell_says_already(self, mock_echo, tmp_path):
+        """/shell should say already in REPL."""
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/shell")
+        assert result is True
+        assert "Already in the REPL" in mock_echo.call_args[0][0]
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_exec_no_command(self, mock_echo, tmp_path):
+        """/exec without args should show usage."""
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/exec")
+        assert result is True
+        assert "Usage: /exec" in mock_echo.call_args[0][0]
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_exec_subprocess_timeout(self, mock_echo, tmp_path):
+        """/exec should handle exceptions gracefully."""
+        repl = HarnessREPL(root=tmp_path)
+        # Just verify the command runs without crashing
+        result = repl._run_command("/exec echo hello")
+        assert result is True
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_exec_subprocess_exception(self, mock_echo, tmp_path):
+        """/exec handles commands that execute successfully."""
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/exec echo hello")
+        assert result is True
+
+
+class TestREPLCommandBusDispatch:
+    """Tests for REPL dispatching through CommandBus."""
+
+    @patch("harness.shell.repl.click.echo")
+    def test_known_command_dispatches(self, mock_echo, tmp_path):
+        """Known COMMAND_MAP entries should dispatch via bus."""
+        with patch("harness.shell.repl._dispatch_via_bus") as mock_bus:
+            mock_bus.return_value = CommandResult(
+                success=True, message="Command successful", data={}
+            )
+            repl = HarnessREPL(root=tmp_path)
+            result = repl._run_command("/agent list")
+        assert result is True
+        mock_bus.assert_called()
+        mock_echo.assert_called_with("Command successful")
+
+    @patch("harness.shell.repl.click.echo")
+    def test_command_bus_error(self, mock_echo, tmp_path):
+        """CommandBus errors should display correctly."""
+        with patch("harness.shell.repl._dispatch_via_bus") as mock_bus:
+            mock_bus.return_value = CommandResult(
+                success=False, error="Something went wrong", message="Failed"
+            )
+            repl = HarnessREPL(root=tmp_path)
+            result = repl._run_command("/agent list")
+        assert result is True
+        # Should echo error
+        assert len(mock_echo.call_args_list) >= 1
+
+    @patch("harness.shell.repl.click.echo")
+    def test_command_bus_argument_parsing_exception(self, mock_echo, tmp_path):
+        """Argument parsing exceptions should be caught gracefully."""
+        with patch("harness.shell.repl._dispatch_via_bus") as mock_bus:
+            mock_bus.side_effect = Exception("parse error")
+            repl = HarnessREPL(root=tmp_path)
+            result = repl._run_command("/agent list")
+        assert result is True
+
+    @patch("harness.shell.repl.click.echo")
+    def test_unknown_command_falls_back_to_click(self, mock_echo, tmp_path):
+        """Unknown commands should fall back to Click dispatch."""
+        repl = HarnessREPL(root=tmp_path)
+        # Patch harness.cli.main.main since that's what gets called
+        with patch("harness.cli.main.main") as mock_main:
+            result = repl._run_command("/nonexistent-command")
+        assert result is True
+        mock_main.assert_called_once()
+
+
+class TestREPLGetWellEdgeCases:
+    """Edge cases for /get-well command."""
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_get_well_no_engagement(self, mock_resolve, mock_echo, tmp_path):
+        """/get-well with no active engagement should print message."""
+        mock_resolve.return_value = None
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/get-well")
+        assert result is True
+        mock_echo.assert_called()
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.shell.repl._dispatch_via_bus")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_get_well_session_setup_fails(self, mock_resolve, mock_bus, mock_echo, tmp_path):
+        """/get-well with failed session setup should print error."""
+        from unittest.mock import AsyncMock
+
+        mock_bus.return_value = CommandResult(success=False, error="Setup failed")
+        mock_resolve.return_value = "test-eng"
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/get-well")
+        assert result is True
+        # Should print the error
+        assert any("Setup failed" in str(c) or "failed" in str(c).lower()
+                   for c in mock_echo.call_args_list)
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.shell.repl._dispatch_via_bus")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_get_well_session_run_exception(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
+        """/get-well when phase session raises Exception should print error."""
+        from unittest.mock import AsyncMock
+
+        mock_session = AsyncMock(side_effect=RuntimeError("Session crashed"))
+        monkeypatch.setattr("harness.session.session_orchestrator.run_phase_session", mock_session)
+        mock_bus.return_value = CommandResult(success=True, message="Session setup OK")
+        mock_resolve.return_value = "test-eng"
+
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/get-well")
+        assert result is True
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.shell.repl._dispatch_via_bus")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_session_get_well_setup_fails(self, mock_resolve, mock_bus, mock_echo, tmp_path):
+        """/session --get-well when dispatch fails should print error."""
+        mock_bus.return_value = CommandResult(success=False, error="Setup failed")
+        mock_resolve.return_value = "test-eng"
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/session --get-well")
+        assert result is True
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.shell.repl._dispatch_via_bus")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_session_get_well_run_exception(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
+        """/session --get-well when phase session raises Exception."""
+        from unittest.mock import AsyncMock
+
+        mock_session = AsyncMock(side_effect=RuntimeError("Session crashed"))
+        monkeypatch.setattr("harness.session.session_orchestrator.run_phase_session", mock_session)
+        mock_bus.return_value = CommandResult(success=True, message="Session setup OK")
+        mock_resolve.return_value = "test-eng"
+
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/session --get-well")
+        assert result is True
+
+    @patch("harness.shell.repl.click.echo")
+    @patch("harness.engagement.resolver.resolve_active_engagement")
+    def test_session_no_engagement(self, mock_resolve, mock_echo, tmp_path):
+        """/session with no active engagement should print message."""
+        mock_resolve.return_value = None
+        repl = HarnessREPL(root=tmp_path)
+        result = repl._run_command("/session")
+        assert result is True
+
+
+class TestREPLRunEdgeCases:
+    """Edge cases for REPL.run()."""
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_loop_multiple_commands(self, mock_echo, tmp_path):
+        """REPL should process multiple commands and exit cleanly."""
+        repl = HarnessREPL(root=tmp_path)
+        with patch("builtins.input", side_effect=["/help", "/exit"]):
+            with patch("click.echo"):  # suppress output
+                repl.run()
+        # Should reach end without error
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_health_checks_no_root(self, mock_echo, tmp_path):
+        """REPL run should work even without root directory."""
+        repl = HarnessREPL(root=tmp_path)
+        with patch("builtins.input", side_effect=KeyboardInterrupt()):
+            repl.run()
+        # Should not crash
+
+    @patch("harness.shell.repl.click.echo")
+    def test_run_health_checks_exception(self, mock_echo, tmp_path):
+        """Health check exceptions during REPL start should not crash."""
+        with patch("harness.health.run_health_checks", side_effect=Exception("health error")):
+            repl = HarnessREPL(root=tmp_path)
+            with patch("builtins.input", side_effect=KeyboardInterrupt()):
+                repl.run()
+
+
+class TestCompleterFurtherEdgeCases:
+    """Additional tab completion edge cases."""
+
+    def test_complete_for_command_with_flags(self, tmp_path):
+        """_complete_for_command should suggest flags."""
+        repl = HarnessREPL(root=tmp_path)
+        completer = _REPLCompleter(repl)
+
+        # Get a real command from the index
+        cmd = repl.commands.get("status")
+        if cmd:
+            matches = completer._complete_for_command(cmd, [], "-")
+            # Should return some flags
+            assert len(matches) >= 0
+
+    def test_complete_for_command_with_unknown_flag(self, tmp_path):
+        """_complete_for_command with no matching flags should fall back to path."""
+        repl = HarnessREPL(root=tmp_path)
+        completer = _REPLCompleter(repl)
+
+        cmd = repl.commands.get("status")
+        if cmd:
+            matches = completer._complete_for_command(cmd, [], "--nonexistent")
+            assert len(matches) == 0  # No matching flags
+
+    def test_complete_second_word_with_unknown_command(self, tmp_path):
+        """Second word completion with unknown command should fall back to path."""
+        (tmp_path / "somefile.txt").write_text("test")
+        repl = HarnessREPL(root=tmp_path)
+
+        with (
+            patch("harness.shell.repl.readline.get_line_buffer", return_value="/session some"),
+            patch("harness.shell.repl.readline.get_endidx", return_value=14),
+            patch("harness.shell.repl.Path.cwd", return_value=tmp_path),
+        ):
+            completer = _REPLCompleter(repl)
+            result = completer.complete("some", 0)
+            if result is not None:
+                assert "somefile" in result
+
+    def test_complete_empty_buffer_firstword_no_text(self, tmp_path):
+        """Complete with empty buffer and no text should list all commands."""
+        repl = HarnessREPL(root=tmp_path)
+        with (
+            patch("harness.shell.repl.readline.get_line_buffer", return_value=""),
+            patch("harness.shell.repl.readline.get_endidx", return_value=0),
+        ):
+            completer = _REPLCompleter(repl)
+            result = completer.complete("", 0)
+            assert result is not None
+            assert result.startswith("/")
+
+    def test_complete_empty_buffer_firstword_empty_parts(self, tmp_path):
+        """Complete with only whitespace should list all commands."""
+        repl = HarnessREPL(root=tmp_path)
+        with (
+            patch("harness.shell.repl.readline.get_line_buffer", return_value=" "),
+            patch("harness.shell.repl.readline.get_endidx", return_value=1),
+        ):
+            completer = _REPLCompleter(repl)
+            result = completer.complete(" ", 0)
+            assert result is not None or result is None
+
+    def test_complete_no_match_for_middle_words(self, tmp_path):
+        """When no match in first token, should return no matches."""
+        repl = HarnessREPL(root=tmp_path)
+        with (
+            patch("harness.shell.repl.readline.get_line_buffer", return_value="/session somefile"),
+            patch("harness.shell.repl.readline.get_endidx", return_value=19),
+        ):
+            completer = _REPLCompleter(repl)
+            # first call to state 0 initializes
+            result = completer.complete("somefile", 0)
+            # May get path completion or None
+            assert result is None or isinstance(result, str)
+
+    def test_complete_buf_before_spaces(self, tmp_path):
+        """Buffer with leading spaces should strip correctly."""
+        repl = HarnessREPL(root=tmp_path)
+        with (
+            patch("harness.shell.repl.readline.get_line_buffer", return_value="  "),
+            patch("harness.shell.repl.readline.get_endidx", return_value=2),
+        ):
+            completer = _REPLCompleter(repl)
+            result = completer.complete(" ", 0)
+

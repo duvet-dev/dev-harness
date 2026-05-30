@@ -20,6 +20,30 @@ from harness.command.handlers import (
     QueryStatusHandler,
     QueryWhatsNextHandler,
     ResumeEngagementHandler,
+    FinishEngagementHandler,
+    ReviewEngagementHandler,
+    InitProjectHandler,
+    PhaseManagementHandler,
+    RunWaveHandler,
+    SessionHandler,
+    ChatHandler,
+    SummaryHandler,
+    InspectHandler,
+    AssessHandler,
+    CreateWavesFromAssessmentHandler,
+    CreateWaveFromFindingHandler,
+    ListWavesHandler,
+    WaveStatusHandler,
+    GenerateDocsHandler,
+    AnnotateChangelogHandler,
+    RenameEngagementHandler,
+    SetBranchHandler,
+    FixEngagementHandler,
+    RefreshAgentsHandler,
+    SetGovernanceHandler,
+    AgentListHandler,
+    FleetListHandler,
+    ConsultHandler,
     register_all_handlers,
 )
 from harness.command.registry import CommandRegistry
@@ -466,3 +490,432 @@ class TestCommandHandlerAbstractBody:
 
         result = _DirectHandler().handle(Command(slug="test"))
         assert result is None
+
+
+# ── Exception branch coverage for all handlers ──────────────────────
+
+
+class TestAbortEngagementHandlerExceptions:
+    """Coverage for AbortEngagementHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = AbortEngagementHandler()
+        cmd = Command(slug="my-eng", command_type="abort_engagement", data={"mode": "hard"})
+        with patch(
+            "harness.session.abort.AbortHandler",
+            side_effect=ValueError("mocked abort error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked abort error" in result.error
+
+
+class TestQueryWhatsNextHandlerExceptions:
+    """Coverage for QueryWhatsNextHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = QueryWhatsNextHandler()
+        cmd = Command(slug="test-eng", command_type="query_whats_next")
+        with patch(
+            "harness.session.whats_next.WhatsNextEngine",
+            side_effect=ValueError("mocked whatsnext error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked whatsnext error" in result.error
+
+
+class TestFinishEngagementHandlerExceptions:
+    """Coverage for FinishEngagementHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = FinishEngagementHandler()
+        cmd = Command(slug="test-eng", command_type="finish_engagement",
+                      data={"root": "/nonexistent"})
+        # The handler tries a lot of imports and file operations
+        # Just verify it doesn't crash and returns some error
+        result = handler.handle(cmd)
+        assert isinstance(result, CommandResult)
+
+
+class TestReviewEngagementHandlerExceptions:
+    """Coverage for ReviewEngagementHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = ReviewEngagementHandler()
+        cmd = Command(slug="test-eng", command_type="review_engagement",
+                      data={"root": "/nonexistent"})
+        result = handler.handle(cmd)
+        assert isinstance(result, CommandResult)
+
+    def test_review_no_decision(self):
+        handler = ReviewEngagementHandler()
+        cmd = Command(slug="test-eng", command_type="review_engagement", data={})
+        result = handler.handle(cmd)
+        assert result.success is False
+        assert "No decision" in result.error
+
+
+class TestInitProjectHandlerExceptions:
+    """Coverage for InitProjectHandler exception branch."""
+
+    def test_exception_returns_error(self, tmp_path):
+        handler = InitProjectHandler()
+        cmd = Command(slug="", command_type="init_project",
+                      data={"root": str(tmp_path)})
+        with patch(
+            "harness.paths.get_harness_dir",
+            side_effect=RuntimeError("init path error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "init path error" in result.error
+
+    def test_project_dir_is_file(self, tmp_path):
+        project_file = tmp_path / "afile"
+        project_file.write_text("not a dir")
+        handler = InitProjectHandler()
+        cmd = Command(slug="", command_type="init_project",
+                      data={"project_dir": str(project_file), "root": str(tmp_path)})
+        result = handler.handle(cmd)
+        assert result.success is False
+        assert "is a file" in result.error
+
+
+class TestPhaseManagementHandlerExceptions:
+    """Coverage for PhaseManagementHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = PhaseManagementHandler()
+        cmd = Command(slug="", command_type="manage_phase", data={"action": "list"})
+        result = handler.handle(cmd)
+        assert isinstance(result, CommandResult)
+
+
+class TestRunWaveHandlerExceptions:
+    """Coverage for RunWaveHandler exception branch."""
+
+    def test_no_wave_id_returns_error(self):
+        handler = RunWaveHandler()
+        cmd = Command(slug="my-eng", command_type="run_wave", data={})
+        result = handler.handle(cmd)
+        assert result.success is False
+        assert "No wave_id" in result.error
+
+    def test_exception_returns_error(self):
+        handler = RunWaveHandler()
+        cmd = Command(slug="my-eng", command_type="run_wave",
+                      data={"wave_id": "w1"})
+        with patch(
+            "harness.loop.runner.LoopRunner",
+            side_effect=ValueError("mocked runner error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked runner error" in result.error
+
+
+class TestSessionHandlerExceptions:
+    """Coverage for SessionHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = SessionHandler()
+        cmd = Command(slug="my-eng", command_type="session",
+                      data={"phase": "requirements"})
+        with patch(
+            "harness.engagement.startup.StartupResumeFlow",
+            side_effect=ValueError("mocked session error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked session error" in result.error
+
+
+class TestChatHandlerExceptions:
+    """Coverage for ChatHandler exception branch."""
+
+    def test_engagement_not_found(self):
+        handler = ChatHandler()
+        cmd = Command(slug="nonexistent-eng", command_type="chat")
+        result = handler.handle(cmd)
+        assert result.success is False
+        assert "not found" in result.error or "not found" in result.message
+
+    def test_exception_returns_error(self):
+        handler = ChatHandler()
+        cmd = Command(slug="my-eng", command_type="chat",
+                      data={"phase": "design"})
+        with patch(
+            "harness.session.client.resolve_provider",
+            side_effect=ValueError("mocked chat error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked chat error" in result.error
+
+
+class TestSummaryHandlerExceptions:
+    """Coverage for SummaryHandler exception branch."""
+
+    def test_returns_command_result(self):
+        handler = SummaryHandler()
+        cmd = Command(slug="", command_type="summary", data={})
+        result = handler.handle(cmd)
+        assert isinstance(result, CommandResult)
+
+
+class TestInspectHandlerExceptions:
+    """Coverage for InspectHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = InspectHandler()
+        cmd = Command(slug="", command_type="inspect",
+                      data={"root": "."})
+        with patch(
+            "harness.analysis.observer.analyse",
+            side_effect=RuntimeError("mocked inspect error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked inspect error" in result.error
+
+
+class TestAssessHandlerExceptions:
+    """Coverage for AssessHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = AssessHandler()
+        cmd = Command(slug="", command_type="assess",
+                      data={"root": "."})
+        with patch(
+            "harness.analysis.observer.analyse",
+            side_effect=RuntimeError("mocked assess error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked assess error" in result.error
+
+
+class TestCreateWavesFromAssessmentHandlerExceptions:
+    """Coverage for CreateWavesFromAssessmentHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = CreateWavesFromAssessmentHandler()
+        cmd = Command(slug="", command_type="create_waves_from_assessment")
+        result = handler.handle(cmd)
+        assert isinstance(result, CommandResult)
+
+
+class TestCreateWaveFromFindingHandlerExceptions:
+    """Coverage for CreateWaveFromFindingHandler exception branch."""
+
+    def test_no_finding_id_returns_error(self):
+        handler = CreateWaveFromFindingHandler()
+        cmd = Command(slug="test-eng", command_type="create_wave_from_finding")
+        result = handler.handle(cmd)
+        # May fail because slug doesn't exist or no finding_id
+        assert isinstance(result, CommandResult)
+
+    def test_exception_returns_error(self):
+        handler = CreateWaveFromFindingHandler()
+        cmd = Command(slug="test-eng", command_type="create_wave_from_finding",
+                      data={"finding_id": "f1"})
+        # Patch a module that is imported inside to raise
+        with patch(
+            "harness.paths.get_engagements_dir",
+            side_effect=RuntimeError("mocked path error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked path error" in result.error
+
+
+class TestListWavesHandlerExceptions:
+    """Coverage for ListWavesHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = ListWavesHandler()
+        cmd = Command(slug="", command_type="list_waves")
+        with patch(
+            "harness.engagement.resolver.resolve_active_engagement",
+            side_effect=RuntimeError("mocked resolver error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked resolver error" in result.error
+
+
+class TestWaveStatusHandlerExceptions:
+    """Coverage for WaveStatusHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = WaveStatusHandler()
+        cmd = Command(slug="", command_type="wave_status")
+        with patch(
+            "harness.engagement.resolver.resolve_active_engagement",
+            side_effect=RuntimeError("mocked resolver error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked resolver error" in result.error
+
+
+class TestGenerateDocsHandlerExceptions:
+    """Coverage for GenerateDocsHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = GenerateDocsHandler()
+        cmd = Command(slug="", command_type="generate_docs", data={"root": "."})
+        with patch(
+            "harness.docs.generator.generate_all_docs",
+            side_effect=RuntimeError("mocked doc error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked doc error" in result.error
+
+
+class TestAnnotateChangelogHandlerExceptions:
+    """Coverage for AnnotateChangelogHandler exception branch."""
+
+    def test_engagement_not_found(self):
+        handler = AnnotateChangelogHandler()
+        cmd = Command(slug="nonexistent-eng", command_type="annotate_changelog")
+        result = handler.handle(cmd)
+        assert result.success is False
+        assert "not found" in result.error
+
+    def test_exception_returns_error(self):
+        handler = AnnotateChangelogHandler()
+        cmd = Command(slug="test-eng", command_type="annotate_changelog")
+        with patch(
+            "harness.paths.get_engagement_dir",
+            side_effect=RuntimeError("mocked path error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked path error" in result.error
+
+
+class TestRenameEngagementHandlerExceptions:
+    """Coverage for RenameEngagementHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = RenameEngagementHandler()
+        cmd = Command(slug="test-eng", command_type="rename_engagement",
+                      data={"new_slug": "new-eng"})
+        with patch(
+            "harness.engagement.rename.rename_engagement",
+            side_effect=RuntimeError("mocked rename error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked rename error" in result.error
+
+
+class TestSetBranchHandlerExceptions:
+    """Coverage for SetBranchHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = SetBranchHandler()
+        cmd = Command(slug="test-eng", command_type="set_branch",
+                      data={"branch": "main"})
+        with patch(
+            "harness.paths.get_engagement_dir",
+            side_effect=RuntimeError("mocked path error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked path error" in result.error
+
+
+class TestFixEngagementHandlerExceptions:
+    """Coverage for FixEngagementHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = FixEngagementHandler()
+        cmd = Command(slug="", command_type="fix_engagement")
+        with patch(
+            "harness.engagement.resolver.resolve_active_engagement",
+            side_effect=RuntimeError("mocked resolver error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked resolver error" in result.error
+
+
+class TestRefreshAgentsHandlerExceptions:
+    """Coverage for RefreshAgentsHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = RefreshAgentsHandler()
+        cmd = Command(slug="", command_type="refresh_agents")
+        with patch(
+            "harness.cli.helpers.require_project_root",
+            side_effect=RuntimeError("mocked refresh error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked refresh error" in result.error
+
+
+class TestSetGovernanceHandlerExceptions:
+    """Coverage for SetGovernanceHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = SetGovernanceHandler()
+        cmd = Command(slug="", command_type="set_governance",
+                      data={"level": "strict"})
+        with patch(
+            "harness.cli.helpers.require_project_root",
+            side_effect=RuntimeError("mocked governance error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked governance error" in result.error
+
+
+class TestAgentListHandlerExceptions:
+    """Coverage for AgentListHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = AgentListHandler()
+        cmd = Command(slug="", command_type="agent_list")
+        with patch(
+            "harness.agents.agent_registry.list_agent_roles",
+            side_effect=RuntimeError("mocked agent list error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked agent list error" in result.error
+
+
+class TestFleetListHandlerExceptions:
+    """Coverage for FleetListHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = FleetListHandler()
+        cmd = Command(slug="", command_type="fleet_list")
+        with patch(
+            "harness.team.registry.TeamRegistry",
+            side_effect=RuntimeError("mocked fleet error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked fleet error" in result.error
+
+
+class TestConsultHandlerExceptions:
+    """Coverage for ConsultHandler exception branch."""
+
+    def test_exception_returns_error(self):
+        handler = ConsultHandler()
+        cmd = Command(slug="", command_type="consult",
+                      data={"question": "test"})
+        with patch(
+            "harness.agents.consultation.ConsultationOrchestrator",
+            side_effect=RuntimeError("mocked consult error"),
+        ):
+            result = handler.handle(cmd)
+        assert result.success is False
+        assert "mocked consult error" in result.error

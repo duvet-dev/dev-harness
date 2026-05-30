@@ -122,6 +122,16 @@ test-e2e:
 test-smoke:
 	$(PYTHON) -m pytest -m smoke --tb=short -v
 	@echo ""
+
+# ── Profiling ──────────────────────────────────────────────────────────────
+
+.PHONY: test-profile
+test-profile:
+	@echo "Running full test suite with duration profiling..."
+	@echo "Results written to test-profile.log"
+	@$(PYTHON) -m pytest tests/ -W error::RuntimeWarning --tb=short -q --durations=0 2>&1 | tee test-profile.log
+	@echo ""
+	@echo "✓ Profile complete. See test-profile.log for all timings."
 	@echo "✓ Smoke tests complete."
 
 .PHONY: test-verbose

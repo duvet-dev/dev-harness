@@ -15,9 +15,11 @@ from pathlib import Path
 import pytest
 
 from harness.command.handlers import (
+    AgentListHandler,
     AnnotateChangelogHandler,
     AssessHandler,
     ChatHandler,
+    ConsultHandler,
     CreateWaveFromFindingHandler,
     CreateWavesFromAssessmentHandler,
     GenerateDocsHandler,
@@ -30,6 +32,7 @@ from harness.command.handlers import (
     SetBranchHandler,
     SetGovernanceHandler,
     FixEngagementHandler,
+    FleetListHandler,
     SummaryHandler,
     WaveStatusHandler,
     register_all_handlers,
@@ -58,6 +61,9 @@ class TestQuickReturnHandlers:
         ("fix_engagement", FixEngagementHandler(), {"data": {}}),
         ("refresh_agents", RefreshAgentsHandler(), {"data": {}}),
         ("annotate_changelog", AnnotateChangelogHandler(), {"data": {}}),
+        ("agent_list", AgentListHandler(), {"data": {}}),
+        ("fleet_list", FleetListHandler(), {"data": {}}),
+        ("consult", ConsultHandler(), {"data": {}}),
     ]
 
     @pytest.mark.parametrize(

@@ -6,7 +6,8 @@ The harness's agent system provides:
 - PluginRegistry (plugin_registry.py) — backend plugin discovery
 - ContextPacket (context.py) — structured context for agent runs
 - CycleRunner (cycle.py) — generic multi-agent iteration engine
-- Fleet (fleet.py) — logical groupings of agents with guidelines
+- AgentTeam (team/model.py) — logical groupings of agents with guidelines
+- TeamRegistry (team/registry.py) — manages AgentTeam definitions
 - Validator (validator.py) — output contract validation
 """
 
@@ -44,15 +45,8 @@ from harness.agents.cycle import (
     wave_cycle_definition,
 )
 from harness.agents.detectors import LanguageDetector, LanguagePatterns
-from harness.agents.fleet import (
-    ConsultationCapability,
-    Fleet,
-    FleetGuidelines,
-    GovernanceLevel,
-    InclusionRules,
-    builtin_fleets,
-)
-from harness.agents.fleet_registry import FleetRegistry
+from harness.team.model import AgentTeam
+from harness.team.registry import TeamRegistry
 
 __all__ = [
     "LanguageDetector",
@@ -60,7 +54,7 @@ __all__ = [
     "AGENTS",
     "AgentRole",
     "AgentSpec",
-    "ConsultationCapability",
+    "AgentTeam",
     "ConsultationOrchestrator",
     "ConsultationResult",
     "CycleConvergence",
@@ -69,13 +63,8 @@ __all__ = [
     "CycleRunnerDefinition",
     "CycleStep",
     "CycleStepResult",
-    "Fleet",
-    "FleetGuidelines",
-    "FleetRegistry",
-    "GovernanceLevel",
-    "InclusionRules",
     "SYNC_AGENT",
-    "builtin_fleets",
+    "TeamRegistry",
     "design_cycle_definition",
     "discovery_cycle_definition",
     "get_cycle_definition",

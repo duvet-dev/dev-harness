@@ -279,7 +279,7 @@ def _handle_phase_switch(target: str, state: dict[str, Any]) -> CommandResult:
     have custom phases like "architecture-design"), then falls back to
     the global PHASES for standard names like "design".
     """
-    from harness.session.loop import PHASES
+    from harness.session.helpers import PHASES
 
     if not target:
         return CommandResult(display_lines=["__show_phase_diagram__"])
@@ -329,7 +329,7 @@ def _handle_consult(query: str) -> CommandResult:
             " <question>"
         ])
 
-    from harness.session.loop import _parse_consult_flags
+    from harness.session.helpers import _parse_consult_flags
     parsed = _parse_consult_flags(query)
     if not parsed["question"]:
         return CommandResult(display_lines=[
@@ -388,7 +388,7 @@ def _handle_next_approve(cmd: str, state: dict[str, Any]) -> CommandResult:
 def _handle_changes(cmd: str, state: dict[str, Any]) -> CommandResult:
     """Handle /changes [reason] — request revisions from agent."""
     feedback_text = cmd[8:].strip() if len(cmd) > 8 else ""
-    from harness.session.loop import PHASES
+    from harness.session.helpers import PHASES
     current_name = state.get("phase_def", {}).get("name", "")
     current_idx = next(
         (i for i, p in enumerate(PHASES) if p["name"] == current_name),
@@ -410,7 +410,7 @@ def _handle_changes(cmd: str, state: dict[str, Any]) -> CommandResult:
 
 def _handle_navigate(target: str, state: dict[str, Any]) -> CommandResult:
     """Handle /navigate <phase> — jump to a phase with checkpoint."""
-    from harness.session.loop import PHASES
+    from harness.session.helpers import PHASES
     match = next((p for p in PHASES if p["name"] == target), None)
     if match is None:
         names = ", ".join(p["name"] for p in PHASES)
@@ -422,7 +422,7 @@ def _handle_navigate(target: str, state: dict[str, Any]) -> CommandResult:
     source = current_name
 
     # Check jump limits (pure logic)
-    from harness.session.loop import _check_phase_jump_limit
+    from harness.session.helpers import _check_phase_jump_limit
     jump_counts = state.get("jump_counts", {})
     if not _check_phase_jump_limit(jump_counts, source, target):
         return CommandResult(display_lines=[
@@ -449,7 +449,7 @@ def _handle_feedback(arg: str, state: dict[str, Any]) -> CommandResult:
             "Usage: /feedback <target_phase> <reason>"
         ])
 
-    from harness.session.loop import PHASES
+    from harness.session.helpers import PHASES
     match = next((p for p in PHASES if p["name"] == target), None)
     if match is None:
         names = ", ".join(p["name"] for p in PHASES)

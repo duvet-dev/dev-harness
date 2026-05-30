@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from harness.session.types import (
+from harness.session.helpers import (
     SessionType,
     _prompt_alternative,
     confirm_session_type,
@@ -131,7 +131,7 @@ class TestReadSessionType:
 
 class TestPromptAlternative:
     def test_selects_first_alternative(self):
-        from harness.session.types import _prompt_alternative, SessionType
+        from harness.session.helpers import _prompt_alternative, SessionType
         # Mock 'input' to return the first option
         with patch("builtins.input", return_value="1"):
             result = _prompt_alternative(SessionType.REFACTORING)
@@ -140,7 +140,7 @@ class TestPromptAlternative:
 
     def test_selects_second_alternative(self):
         """When REFACTORING is rejected, the second choice is BROWNFIELD."""
-        from harness.session.types import _prompt_alternative, SessionType
+        from harness.session.helpers import _prompt_alternative, SessionType
         with patch("builtins.input", return_value="2"):
             result = _prompt_alternative(SessionType.REFACTORING)
         assert result == SessionType.BROWNFIELD

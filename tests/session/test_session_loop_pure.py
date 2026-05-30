@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from harness.session.loop import (
+from harness.session.helpers import (
     _extract_file_blocks,
     _parse_consult_flags,
     _init_phase_jump_counts,
@@ -254,14 +254,14 @@ class TestBuildSystemPrompt:
         return phase
 
     def test_basic_prompt_with_phase(self):
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase()
         result = _build_system_prompt(phase)
         assert "You are a test agent." in result
         assert DOMAIN_LANGUAGE_PREAMBLE in result
 
     def test_with_engagement_context(self):
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase()
         result = _build_system_prompt(
             phase,
@@ -271,7 +271,7 @@ class TestBuildSystemPrompt:
         assert "src/main.py" in result
 
     def test_with_prior_artifacts(self):
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase()
         result = _build_system_prompt(
             phase,
@@ -281,7 +281,7 @@ class TestBuildSystemPrompt:
         assert "Component A" in result
 
     def test_with_conversation_history(self):
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase()
         result = _build_system_prompt(
             phase,
@@ -291,7 +291,7 @@ class TestBuildSystemPrompt:
         assert "architecture" in result
 
     def test_with_fleet_section(self):
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase(fleets=["architecture"])
         result = _build_system_prompt(
             phase,
@@ -301,7 +301,7 @@ class TestBuildSystemPrompt:
         assert "onion architecture" in result
 
     def test_with_patterns_section(self):
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase(fleets=["testing"])
         result = _build_system_prompt(
             phase,
@@ -312,7 +312,7 @@ class TestBuildSystemPrompt:
 
     def test_injection_order(self):
         """Verify the parts appear in the correct order."""
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase()
         result = _build_system_prompt(
             phase,
@@ -341,14 +341,14 @@ class TestBuildSystemPrompt:
 
     def test_empty_engagement_context_omitted(self):
         """Empty/injected context should not add the current-files section."""
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase()
         result = _build_system_prompt(phase, engagement_context="")
         assert "CURRENT ENGAGEMENT FILES" not in result
 
     def test_without_any_injected_data(self):
         """Without injecting anything, the function should not attempt IO."""
-        from harness.session.loop import _build_system_prompt
+        from harness.session.helpers import _build_system_prompt
         phase = self.make_phase()
         result = _build_system_prompt(phase)
         assert "You are a test agent." in result
@@ -365,18 +365,18 @@ class TestCheckAndHandlePhaseJump:
     """Tests for _check_and_handle_phase_jump() — pure orchestration."""
 
     def test_no_marker_returns_none(self):
-        from harness.session.loop import _check_and_handle_phase_jump
+        from harness.session.helpers import _check_and_handle_phase_jump
         result = _check_and_handle_phase_jump("no marker here", "build", {})
         assert result is None
 
     def test_jump_allowed(self):
-        from harness.session.loop import _check_and_handle_phase_jump
+        from harness.session.helpers import _check_and_handle_phase_jump
         result = _check_and_handle_phase_jump("PHASE_JUMP:requirements", "build", {})
         assert result == "requirements"
 
     def test_jump_exceeds_limit_returns_none(self):
         """The limit-exceeded branch was uncovered lines 1000-1006."""
-        from harness.session.loop import (
+        from harness.session.helpers import (
             _check_and_handle_phase_jump,
             MAX_PHASE_JUMPS_PER_PHASE,
         )
@@ -399,7 +399,7 @@ class TestFormatConsultResult:
 
     def test_format_error_result(self):
         """Error branch at line 871 needs a result with an error message."""
-        from harness.session.loop import _format_consult_result
+        from harness.session.helpers import _format_consult_result
         from harness.agents.consultation import ConsultationResult
         result = _format_consult_result(
             ConsultationResult(
@@ -422,14 +422,14 @@ class TestApplyFileBlocks:
 
     def test_path_escape_returns_error(self, tmp_path):
         """Path escape should produce an 'error:' status (lines 465-468)."""
-        from harness.session.loop import _apply_file_blocks
+        from harness.session.helpers import _apply_file_blocks
         # A path outside the root should be flagged
         text = "## File: ../../etc/passwd\nroot:x:0:0\n"
         results = _apply_file_blocks(tmp_path, text)
         assert any("error:" in status for _, status in results)
 
     def test_valid_path_creates_file(self, tmp_path):
-        from harness.session.loop import _apply_file_blocks
+        from harness.session.helpers import _apply_file_blocks
         text = "## File: src/output.py\nprint('hello')\n"
         results = _apply_file_blocks(tmp_path, text)
         assert len(results) >= 1
@@ -437,7 +437,7 @@ class TestApplyFileBlocks:
         assert (tmp_path / "src/output.py").exists()
 
     def test_overwrite_existing_file(self, tmp_path):
-        from harness.session.loop import _apply_file_blocks
+        from harness.session.helpers import _apply_file_blocks
         existing = tmp_path / "existing.py"
         existing.parent.mkdir(parents=True, exist_ok=True)
         existing.write_text("old content")

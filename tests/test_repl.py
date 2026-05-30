@@ -133,7 +133,7 @@ class TestHarnessREPL:
         """/get-well with active engagement should start a session."""
         from unittest.mock import AsyncMock
         mock_session = AsyncMock()
-        monkeypatch.setattr("harness.session.loop.session_loop", mock_session)
+        monkeypatch.setattr("harness.session.runners.session_loop", mock_session)
 
         mock_resolve.return_value = "test-eng"
         eng_dir = tmp_path / ".harness" / "engagements" / "test-eng"
@@ -169,7 +169,7 @@ class TestHarnessREPL:
         """/get-well architecture-design starts from a specific phase."""
         from unittest.mock import AsyncMock
         mock_session = AsyncMock()
-        monkeypatch.setattr("harness.session.loop.session_loop", mock_session)
+        monkeypatch.setattr("harness.session.runners.session_loop", mock_session)
 
         mock_resolve.return_value = "test-eng"
         repl = HarnessREPL(root=tmp_path)
@@ -194,7 +194,7 @@ class TestHarnessREPL:
         """/session --get-well dispatches to get-well session with correct args."""
         from unittest.mock import AsyncMock
         mock_session = AsyncMock()
-        monkeypatch.setattr("harness.session.loop.session_loop", mock_session)
+        monkeypatch.setattr("harness.session.runners.session_loop", mock_session)
 
         mock_resolve.return_value = "test-eng"
         repl = HarnessREPL(root=tmp_path)

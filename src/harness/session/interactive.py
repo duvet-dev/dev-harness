@@ -31,7 +31,7 @@ from harness.session.client import (
     SessionClient,
     resolve_provider,
 )
-from harness.session.loop import (
+from harness.session.helpers import (
     PHASES,
     _apply_file_blocks,
     _format_consult_result,
@@ -264,7 +264,7 @@ class InteractiveSession:
 
         # Help
         if result.set_in_session is not None:
-            from harness.session.loop import _print_help
+            from harness.session.helpers import _print_help
             if hasattr(_print_help, "_in_session"):
                 _print_help._in_session = result.set_in_session
             _print_help()
@@ -279,7 +279,7 @@ class InteractiveSession:
 
         # Capture artifact
         if result.capture_artifact:
-            from harness.session.loop import _write_phase_artifact
+            from harness.session.helpers import _write_phase_artifact
             path = _write_phase_artifact(
                 self.root, self.engagement_slug, self.phase,
                 result.capture_artifact,
@@ -288,7 +288,7 @@ class InteractiveSession:
 
         # Auto-apply file blocks
         if result.auto_apply:
-            from harness.session.loop import _apply_file_blocks, _report_apply_results
+            from harness.session.helpers import _apply_file_blocks, _report_apply_results
             apply_results = _apply_file_blocks(self.root, result.auto_apply)
             if apply_results:
                 click.echo()
@@ -316,7 +316,7 @@ class InteractiveSession:
 
     def _display_providers(self) -> None:
         """List available providers."""
-        from harness.session.loop import list_providers, format_providers_table
+        from harness.session.helpers import list_providers, format_providers_table
         provs = list_providers(self.root)
         if not provs:
             click.echo("No providers found. Check your .harness/providers.yaml.")
@@ -332,7 +332,7 @@ class InteractiveSession:
 
     def _switch_phase(self, new_phase: str) -> None:
         """Switch to a different phase preserving conversation history."""
-        from harness.session.loop import PHASES, _build_system_prompt, _format_conversation_for_context
+        from harness.session.helpers import PHASES, _build_system_prompt, _format_conversation_for_context
         match = next(
             (p for p in PHASES if p["name"] == new_phase), None
         )
@@ -363,7 +363,7 @@ class InteractiveSession:
 
     def _switch_provider(self, target: dict) -> None:
         """Switch to a different provider."""
-        from harness.session.loop import switch_provider, list_providers
+        from harness.session.helpers import switch_provider, list_providers
         new_prov = switch_provider(
             self.root,
             target["target_name"],

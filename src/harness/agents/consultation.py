@@ -14,7 +14,7 @@ Usage::
     from harness.agents.consultation import ConsultationOrchestrator
     from harness.agents.fleet_registry import FleetRegistry
 
-    registry = FleetRegistry(root)
+    registry = FleetRegistry(root)  # or TeamRegistry
     orch = ConsultationOrchestrator(registry)
 
     # Route a single question
@@ -34,8 +34,51 @@ Usage::
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Literal, Optional
+
+
+# ---------------------------------------------------------------------------
+# ConsultationCapability
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ConsultationCapability:
+    """A cross-fleet consultation that a fleet/team can answer.
+
+    Matching uses **structured phrase matching** (deterministic,
+    testable, no NLP infra). A question matches if any
+    ``match_phrases`` string appears as a substring of the
+    question text (case-insensitive).
+
+    Attributes:
+        name: Unique capability identifier.
+        match_phrases: List of exact phrases that trigger this
+            consultation. Match is case-insensitive substring.
+        description: Human-readable description.
+        mode: ``"advisory"`` or ``"blocking"``.
+        scope: When this consultation can fire.
+            ``"cross-phase"``, ``"wave-build"``, ``"phase:<name>"``,
+            ``"trigger:<phase>"``, ``"cycle:<runner-name>"``.
+        question: The default question template.
+    """
+    name: str
+    match_phrases: list[str] = field(default_factory=list)
+    description: str = ""
+    mode: Literal["advisory", "blocking"] = "advisory"
+    scope: str = "cross-phase"
+    question: str = ""
+
+    def matches(self, question: str) -> bool:
+        """Return True if this capability can answer the question.
+
+        Performs case-insensitive substring matching against all
+        ``match_phrases``.
+        """
+        q_lower = question.lower()
+        return any(phrase.lower() in q_lower for phrase in self.match_phrases)
+
 
 # ---------------------------------------------------------------------------
 # ConsultationResult

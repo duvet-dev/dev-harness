@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.agents.fleet import GovernanceLevel
+from harness.agents.governance import GovernanceLevel
 from harness.agents.governance import (
     get_project_governance,
     set_project_governance,

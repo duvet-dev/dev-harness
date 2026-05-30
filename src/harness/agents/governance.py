@@ -14,13 +14,34 @@ Wave 17 — Phase 4 (Governance Levels).
 
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
-from harness.agents.fleet import GovernanceLevel
 from harness.paths import get_config_path, get_engagement_dir
+
+
+class GovernanceLevel(str, Enum):
+    """Three-tier governance for agent activity depth.
+
+    Controls which agents are active and at what depth. Configurable at the
+    project level in ``.harness/config.yaml``, overridable at the engagement
+    level in ``.harness/engagements/<slug>/engagement.yaml``.
+
+    * ``exploration`` — POC / example / learning. Lead agent only. Sub-agents
+      inactive. Minimal guidelines.
+    * ``standard`` — Normal production work. Lead + relevant sub-agents
+      (matched by project type). Full team guidelines.
+    * ``strict`` — High governance (regulated, critical). Full team + all
+      applicable sub-agents + extra reviewers. Maximum guideline depth.
+    """
+
+    EXPLORATION = "exploration"
+    STANDARD = "standard"
+    STRICT = "strict"
+
 
 # ── Config helpers ────────────────────────────────────────────────────────
 
@@ -140,64 +161,71 @@ def set_engagement_governance(
 
 
 # ---------------------------------------------------------------------------
-# Active agent resolution
+# Active agent resolution (via TeamRegistry)
 # ---------------------------------------------------------------------------
 
 
 def get_active_agents_for_project(
     root: Path,
-    fleet_name: str,
+    team_name: str,
     project_type: str | None = None,
 ) -> list[str]:
-    """Return active agents for a fleet at the project governance level.
+    """Return active agents for a team at the project governance level.
 
     Convenience wrapper: reads governance from config, resolves active
-    agents from the fleet registry.
+    agents from the team registry.
+
+    Note: Governance-based agent filtering is not yet implemented in
+    AgentTeam. This returns all agents in the team. For governance-based
+    filtering, use the Fleet/Guidelines system (deprecated path).
 
     Args:
         root: Project root directory.
-        fleet_name: Name of the fleet.
-        project_type: Optional project type for filtering (e.g.
-            ``"ddd-backend"``).
+        team_name: Name of the team.
+        project_type: Optional project type (currently unused).
 
     Returns:
         List of active agent role strings.
     """
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
     level = get_project_governance(root)
-    registry = FleetRegistry(root)
-    fleet = registry.get_fleet(fleet_name)
-    if fleet is None:
+    registry = TeamRegistry(builtin=get_builtin_teams())
+    try:
+        team = registry.resolve(team_name)
+        return list(team.agents)
+    except Exception:
         return []
-    return fleet.get_active_agents(governance=level, project_type=project_type)
 
 
 def get_active_agents_for_engagement(
     root: Path,
-    fleet_name: str,
+    team_name: str,
     slug: str,
     project_type: str | None = None,
 ) -> list[str]:
-    """Return active agents for a fleet at the engagement governance level.
+    """Return active agents for a team at the engagement governance level.
 
     Args:
         root: Project root directory.
-        fleet_name: Name of the fleet.
+        team_name: Name of the team.
         slug: Engagement slug.
-        project_type: Optional project type for filtering.
+        project_type: Optional project type (currently unused).
 
     Returns:
         List of active agent role strings.
     """
-    from harness.agents.fleet_registry import FleetRegistry
+    from harness.team.registry import TeamRegistry
+    from harness.team.defaults import get_builtin_teams
 
     level = get_engagement_governance(root, slug)
-    registry = FleetRegistry(root)
-    fleet = registry.get_fleet(fleet_name)
-    if fleet is None:
+    registry = TeamRegistry(builtin=get_builtin_teams())
+    try:
+        team = registry.resolve(team_name)
+        return list(team.agents)
+    except Exception:
         return []
-    return fleet.get_active_agents(governance=level, project_type=project_type)
 
 
 # ---------------------------------------------------------------------------

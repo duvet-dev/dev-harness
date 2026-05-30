@@ -40,19 +40,19 @@ class TestAgentsExports:
         assert hasattr(agents, "wave_cycle_definition")
 
     def test_fleet_exports(self):
-        assert hasattr(agents, "ConsultationCapability")
-        assert hasattr(agents, "Fleet")
-        assert hasattr(agents, "FleetGuidelines")
-        assert hasattr(agents, "GovernanceLevel")
-        assert hasattr(agents, "InclusionRules")
-        assert hasattr(agents, "builtin_fleets")
+        """Legacy Fleet exports replaced by AgentTeam/TeamRegistry."""
+        # Fleet/FleetGuidelines/GovernanceLevel/InclusionRules/builtin_fleets
+        # removed — replaced by AgentTeam + TeamRegistry + GovernanceLevel in governance.py
+        assert hasattr(agents, "AgentTeam")
+        assert hasattr(agents, "TeamRegistry")
 
     def test_consultation_exports(self):
         assert hasattr(agents, "ConsultationOrchestrator")
         assert hasattr(agents, "ConsultationResult")
 
     def test_fleet_registry_exports(self):
-        assert hasattr(agents, "FleetRegistry")
+        """FleetRegistry removed — use TeamRegistry instead."""
+        assert hasattr(agents, "TeamRegistry")
 
     def test_detector_exports(self):
         assert hasattr(agents, "LanguageDetector")
@@ -67,8 +67,10 @@ class TestAgentsExports:
         assert d.name == "arch-loop"
 
     def test_builtin_fleets_exported(self):
-        fleets = agents.builtin_fleets()
-        assert len(fleets) == 7
+        """builtin_fleets() removed — use get_builtin_teams() from team.defaults."""
+        from harness.team.defaults import get_builtin_teams
+        teams = get_builtin_teams()
+        assert len(teams) == 7
 
     def test_all_names_match_dunder_all(self):
         """All names in __all__ are actually exported."""

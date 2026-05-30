@@ -119,7 +119,7 @@ class TestRouteSessionCommand:
     """Tests for route_session_command() — session-loop command dispatch."""
 
     def make_state(self, **overrides) -> dict:
-        from harness.session.loop import PHASES
+        from harness.session.helpers import PHASES
         state = {
             "root": "/tmp/test",
             "phase_def": {"name": "implementation", "title": "Implementation"},
@@ -213,7 +213,7 @@ class TestRouteSessionCommand:
         assert any("Unknown phase" in l for l in result.display_lines)
 
     def test_navigate_blocked_by_limit(self):
-        from harness.session.loop import MAX_PHASE_JUMPS_PER_PHASE
+        from harness.session.helpers import MAX_PHASE_JUMPS_PER_PHASE
         state = self.make_state(
             jump_counts={"implementation→design": MAX_PHASE_JUMPS_PER_PHASE}
         )

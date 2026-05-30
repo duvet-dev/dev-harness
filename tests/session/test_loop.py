@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from harness.session.loop import (
+from harness.session.helpers import (
     PHASES,
     _apply_file_blocks,
-    _build_get_well_phase_list,
+    build_get_well_phase_list,
     _check_for_phase_jump_from_content,
     _check_phase_jump_limit,
     _extract_file_blocks,
@@ -43,52 +43,52 @@ from harness.agents.consultation import ConsultationResult
 
 
 class TestBuildGetWellPhaseList:
-    """Tests for _build_get_well_phase_list()."""
+    """Tests for build_get_well_phase_list()."""
 
     def test_returns_seven_phases(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert len(phases) == 7
 
     def test_first_phase_is_assessment_triage(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[0]["name"] == "assessment-triage"
 
     def test_second_phase_is_remediation_requirements(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[1]["name"] == "remediation-requirements"
 
     def test_third_phase_is_architecture_design(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[2]["name"] == "architecture-design"
 
     def test_fourth_phase_is_planning(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[3]["name"] == "planning"
 
     def test_fifth_phase_is_implementation(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[4]["name"] == "implementation"
 
     def test_sixth_phase_is_testing(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[5]["name"] == "testing"
 
     def test_seventh_phase_is_review(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[6]["name"] == "review"
 
     def test_architecture_design_uses_critical_analyser(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         assert phases[2]["agent"] == "critical-analyser"
 
     def test_each_phase_has_required_keys(self):
         required = {"name", "title", "agent", "fleets", "artifact", "prompt"}
-        for i, p in enumerate(_build_get_well_phase_list()):
+        for i, p in enumerate(build_get_well_phase_list()):
             missing = required - set(p.keys())
             assert not missing, f"Phase {i} ({p.get('name', '?')}) missing keys: {missing}"
 
     def test_standard_phases_keep_original_prompts(self):
-        phases = _build_get_well_phase_list()
+        phases = build_get_well_phase_list()
         std_names = {"planning", "implementation", "testing", "review"}
         # The planning-through-review phases should reference the PHASES originals
         for p in phases:
@@ -414,7 +414,7 @@ class TestCheckPhaseJumpLimit:
 
     def test_blocks_after_max(self):
         counts = {"phase_a→phase_b": 3}
-        from harness.session.loop import MAX_PHASE_JUMPS_PER_PHASE
+        from harness.session.helpers import MAX_PHASE_JUMPS_PER_PHASE
         assert MAX_PHASE_JUMPS_PER_PHASE >= 0
         # This test validates the logic works
         assert True
@@ -490,7 +490,7 @@ class TestLoadEngagementContext:
     def test_calls_context_loader(self, tmp_path):
         eng_dir = tmp_path / ".harness" / "engagements" / "test-eng"
         eng_dir.mkdir(parents=True)
-        with patch("harness.session.loop.ContextLoader") as MockLoader:
+        with patch("harness.session.helpers.ContextLoader") as MockLoader:
             mock_loader = MagicMock()
             mock_loader.load_bundle.return_value = "context data"
             MockLoader.return_value = mock_loader

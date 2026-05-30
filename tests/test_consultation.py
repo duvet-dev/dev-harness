@@ -6,34 +6,49 @@ auto-consults, and available questions.
 
 from __future__ import annotations
 
-from pathlib import Path
+from dataclasses import dataclass, field
 
 import pytest
-import yaml
 
 from harness.agents.consultation import (
+    ConsultationCapability,
     ConsultationOrchestrator,
     ConsultationResult,
 )
-from harness.agents.fleet import (
-    ConsultationCapability,
-    Fleet,
-    FleetGuidelines,
-)
-from harness.agents.fleet_registry import FleetRegistry
+
+
+# ── Minimal Fleet-like adapter for tests ──────────────────────────────────
+
+
+@dataclass
+class _TestFleet:
+    """Minimal Fleet-like object for ConsultationOrchestrator tests."""
+    name: str = ""
+    consultations: list = field(default_factory=list)
+
+
+class _TestRegistry:
+    """Minimal registry adapter for test ConsultationOrchestrator."""
+
+    def __init__(self):
+        self._fleets: dict[str, _TestFleet] = {}
+
+    def add_fleet(self, name: str, consultations: list) -> None:
+        self._fleets[name] = _TestFleet(name=name, consultations=list(consultations))
+
+    def list_fleets(self) -> list[_TestFleet]:
+        return list(self._fleets.values())
+
+    def get_fleet(self, name: str) -> _TestFleet | None:
+        return self._fleets.get(name)
 
 
 @pytest.fixture
-def registry(tmp_path):
-    """Create registry with a custom test fleet."""
-    # FleetRegistry loads builtins, and we can add consultations to a
-    # builtin fleet in-memory for testing
-    reg = FleetRegistry(tmp_path)
-    reg.load()
+def registry():
+    """Create a test registry with consultation capabilities."""
+    reg = _TestRegistry()
 
-    # Add consultation capabilities to the architecture fleet
-    arch_fleet = reg.get_fleet("architecture")
-    arch_fleet.consultations = [
+    reg.add_fleet("architecture", [
         ConsultationCapability(
             name="arch-review",
             match_phrases=["architecture", "design"],
@@ -58,7 +73,19 @@ def registry(tmp_path):
             scope="phase:implementation",
             question="Phase question",
         ),
-    ]
+    ])
+
+    reg.add_fleet("coding", [
+        ConsultationCapability(
+            name="code-review-request",
+            match_phrases=["code review"],
+            description="Review code",
+            mode="advisory",
+            scope="wave-build",
+            question="Review the code.",
+        ),
+    ])
+
     return reg
 
 
@@ -199,17 +226,14 @@ class TestConsultationOrchestrator:
         assert results[1].status == "unmatched"
 
     def test_auto_consults_cross_phase(self, orch):
-        """Cross-phase capabilities fire for any phase."""
         results = orch.auto_consults("implementation")
         assert any(r.capability == "arch-review" for r in results)
 
     def test_auto_consults_trigger(self, orch):
-        """Trigger-scoped capabilities fire for matching phase."""
         results = orch.auto_consults("design")
         assert any(r.capability == "blocking-check" for r in results)
 
     def test_auto_consults_trigger_wrong_phase(self, orch):
-        """Trigger-scoped capabilities don't fire for wrong phase."""
         results = orch.auto_consults("implementation")
         assert not any(r.capability == "blocking-check" for r in results)
 
@@ -222,7 +246,6 @@ class TestConsultationOrchestrator:
         assert not any(r.capability == "phase-only" for r in results)
 
     def test_auto_consults_always_advisory(self, orch):
-        """Auto-consults are always advisory regardless of capability mode."""
         results = orch.auto_consults("design")
         for r in results:
             assert r.mode == "advisory"

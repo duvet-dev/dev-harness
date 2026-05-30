@@ -6,6 +6,8 @@ Provides:
 - ``chat_loop`` — interactive terminal prompt loop
 - ``session_loop`` — phase-by-phase orchestration flow
 - ``resolve_provider`` — reads .harness/providers.yaml and resolves ENV vars
+- ``helpers`` — shared constants and utility functions (was loop.py)
+- ``runners`` — chat_loop and session_loop (moved from loop.py)
 """
 
 from .client import (
@@ -16,9 +18,9 @@ from .client import (
     resolve_env_vars,
     resolve_provider,
 )
-from .loop import chat_loop, session_loop
+from .runners import chat_loop, session_loop
 from .guidance import SessionGuidanceInjector, get_guidance, should_enforce_boundary_tests
-from .types import SessionType, confirm_session_type, detect_session_type
+from .helpers import SessionType, confirm_session_type, detect_session_type
 
 __all__ = [
     "InteractiveClient",

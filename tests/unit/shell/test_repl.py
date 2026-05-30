@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from harness.shell.repl import HarnessREPL, _REPLCompleter, shell
+from harness.command.types import CommandResult
 
 
 class TestHarnessREPL:
@@ -128,12 +129,14 @@ class TestHarnessREPL:
         assert result is True
 
     @patch("harness.shell.repl.click.echo")
+    @patch("harness.shell.repl._dispatch_via_bus")
     @patch("harness.engagement.resolver.resolve_active_engagement")
-    def test_get_well_with_engagement(self, mock_resolve, mock_echo, tmp_path, monkeypatch):
+    def test_get_well_with_engagement(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/get-well with active engagement should start a session."""
         from unittest.mock import AsyncMock
         mock_session = AsyncMock()
         monkeypatch.setattr("harness.session.session_orchestrator.run_phase_session", mock_session)
+        mock_bus.return_value = CommandResult(success=True, message="Session setup OK")
 
         mock_resolve.return_value = "test-eng"
         eng_dir = tmp_path / ".harness" / "engagements" / "test-eng"
@@ -164,12 +167,14 @@ class TestHarnessREPL:
         assert kwargs.get("start_phase") == "assessment-triage"
 
     @patch("harness.shell.repl.click.echo")
+    @patch("harness.shell.repl._dispatch_via_bus")
     @patch("harness.engagement.resolver.resolve_active_engagement")
-    def test_get_well_with_custom_phase(self, mock_resolve, mock_echo, tmp_path, monkeypatch):
+    def test_get_well_with_custom_phase(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/get-well architecture-design starts from a specific phase."""
         from unittest.mock import AsyncMock
         mock_session = AsyncMock()
         monkeypatch.setattr("harness.session.session_orchestrator.run_phase_session", mock_session)
+        mock_bus.return_value = CommandResult(success=True, message="Session setup OK")
 
         mock_resolve.return_value = "test-eng"
         repl = HarnessREPL(root=tmp_path)
@@ -189,12 +194,14 @@ class TestHarnessREPL:
         assert result is True
 
     @patch("harness.shell.repl.click.echo")
+    @patch("harness.shell.repl._dispatch_via_bus")
     @patch("harness.engagement.resolver.resolve_active_engagement")
-    def test_session_get_well_dispatches(self, mock_resolve, mock_echo, tmp_path, monkeypatch):
+    def test_session_get_well_dispatches(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/session --get-well dispatches to get-well session with correct args."""
         from unittest.mock import AsyncMock
         mock_session = AsyncMock()
         monkeypatch.setattr("harness.session.session_orchestrator.run_phase_session", mock_session)
+        mock_bus.return_value = CommandResult(success=True, message="Session setup OK")
 
         mock_resolve.return_value = "test-eng"
         repl = HarnessREPL(root=tmp_path)

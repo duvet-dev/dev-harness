@@ -69,6 +69,7 @@ from harness.constitution.templates.template_registry import (
 from harness.paths import (
     get_engagement_dir,
     get_engagement_md,
+    get_engagement_yaml,
     get_engagements_dir,
     get_harness_dir,
     get_harness_state_path,
@@ -1756,7 +1757,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
             from harness.plan.plan_manager import PlanManager
 
             # Also store baseline reference and refactoring config in engagement.yaml
-            eng_yaml_path = eng_dir / "engagement.yaml"
+            eng_yaml_path = get_engagement_yaml(root, slug)
             import yaml as _yaml
             with open(eng_yaml_path) as f:
                 yaml_data = _yaml.safe_load(f) or {}
@@ -1842,7 +1843,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
             click.echo(f"  Created {waves_created} waves from assessment findings:")
             click.echo("    Run:  harness wave list")
             click.echo("    Run:  harness wave run <wave-id>")
-            click.echo(f"    See:  cat {eng_dir / 'engagement.yaml'}")
+            click.echo(f"    See:  cat {get_engagement_yaml(root, slug)}")
         click.echo("")
         click.echo("Tip: Start a design loop with `harness work <description>`")
 
@@ -2198,7 +2199,7 @@ def diff(slug):
         raise click.Abort()
 
     eng_dir = get_engagement_dir(root, slug)
-    eng_yaml_path = eng_dir / "engagement.yaml"
+    eng_yaml_path = get_engagement_yaml(root, slug)
 
     if not eng_yaml_path.is_file():
         click.echo(f"Engagement '{slug}' has no metadata file.", err=True)

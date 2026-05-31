@@ -285,9 +285,9 @@ def resolve_session_type_flag(
     # Try to read from engagement metadata
     if slug:
         try:
-            from harness.paths import get_engagement_dir
+            from harness.paths import get_engagement_yaml
             import yaml as _yaml
-            _p = get_engagement_dir(root, slug) / "engagement.yaml"
+            _p = get_engagement_yaml(root, slug)
             if _p.is_file():
                 with open(_p) as _f:
                     _yd = _yaml.safe_load(_f) or {}

@@ -24,6 +24,7 @@ from harness.domain.enums import HealthSeverity
 from harness.paths import (
     get_engagement_dir,
     get_engagement_plan_yaml,
+    get_engagement_yaml,
     get_fleets_path,
     get_harness_dir,
     get_providers_path,
@@ -275,7 +276,7 @@ def check_branch_match(root: Path) -> HealthCheck:
         slug = active.get("slug") if isinstance(active, dict) else str(active)
 
         # Read engagement.yaml to find the expected branch
-        eng_yaml_path = get_engagement_dir(root, slug) / "engagement.yaml"
+        eng_yaml_path = get_engagement_yaml(root, slug)
         if not eng_yaml_path.is_file():
             return _result(
                 "branch-match", "warn",
@@ -485,7 +486,7 @@ def check_manifest_link(root: Path) -> HealthCheck:
             return _result("manifest-link", "pass", "No active engagement — skipping manifest check.")
 
         slug = active.get("slug") if isinstance(active, dict) else str(active)
-        eng_yaml_path = get_engagement_dir(root, slug) / "engagement.yaml"
+        eng_yaml_path = get_engagement_yaml(root, slug)
 
         if not eng_yaml_path.is_file():
             return _result("manifest-link", "pass", "No engagement.yaml — skip.")
@@ -624,7 +625,7 @@ def fix_branch_match(root: Path) -> list[str]:
             return messages
 
         slug = active.get("slug") if isinstance(active, dict) else str(active)
-        eng_yaml_path = get_engagement_dir(root, slug) / "engagement.yaml"
+        eng_yaml_path = get_engagement_yaml(root, slug)
 
         if not eng_yaml_path.is_file():
             messages.append(f"Engagement '{slug}' has no engagement.yaml.")
@@ -734,7 +735,7 @@ def fix_missing_dir(root: Path) -> list[str]:
             eng_dir.mkdir(parents=True, exist_ok=True)
             messages.append(f"Created engagement directory: {eng_dir}")
 
-        eng_yaml = eng_dir / "engagement.yaml"
+        eng_yaml = get_engagement_yaml(root, slug)
         if not eng_yaml.is_file():
             import yaml
             with open(eng_yaml, "w") as f:
@@ -831,7 +832,7 @@ def fix_engagement(root: Path, slug: str) -> list[str]:
     import yaml
     from harness.scm.git import GitRepo
 
-    eng_yaml = eng_dir / "engagement.yaml"
+    eng_yaml = get_engagement_yaml(root, slug)
     if not eng_yaml.is_file():
         repo = GitRepo(root)
         with open(eng_yaml, "w") as f:

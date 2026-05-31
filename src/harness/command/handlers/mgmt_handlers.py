@@ -86,14 +86,13 @@ class SetBranchTypedHandler(TypedHandler[SetBranchCommand, SetBranchResult]):
 
     def handle(self, command: SetBranchCommand) -> SetBranchResult:
         try:
-            from harness.paths import get_engagement_dir
+            from harness.paths import get_engagement_yaml
 
             root = Path.cwd()
             slug = command.slug
             branch = command.branch
 
-            eng_dir = get_engagement_dir(root, slug)
-            eng_yaml_path = eng_dir / "engagement.yaml"
+            eng_yaml_path = get_engagement_yaml(root, slug)
 
             if not eng_yaml_path.is_file():
                 return SetBranchResult(

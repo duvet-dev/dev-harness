@@ -20,7 +20,7 @@ from typing import Optional
 
 import yaml
 
-from harness.paths import get_config_path, get_engagement_dir
+from harness.paths import get_config_path, get_engagement_dir, get_engagement_yaml
 
 
 class GovernanceLevel(str, Enum):
@@ -129,7 +129,7 @@ def get_engagement_governance(
     else:
         project_level = default
 
-    eng_config_path = get_engagement_dir(root, slug) / "engagement.yaml"
+    eng_config_path = get_engagement_yaml(root, slug)
     eng_config = _load_yaml(eng_config_path)
     gov = eng_config.get("governance", {})
     if isinstance(gov, str):
@@ -147,7 +147,7 @@ def set_engagement_governance(
 
     Preserves other existing engagement config keys.
     """
-    path = get_engagement_dir(root, slug) / "engagement.yaml"
+    path = get_engagement_yaml(root, slug)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     config = _load_yaml(path)

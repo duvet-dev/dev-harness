@@ -36,7 +36,7 @@ class CreateWavesFromAssessmentTypedHandler(
     def handle(self, command: CreateWavesFromAssessmentCommand) -> CreateWavesFromAssessmentResult:
         try:
             from harness.plan.plan_manager import PlanManager
-            from harness.paths import get_engagements_dir, get_engagement_dir
+            from harness.paths import get_engagements_dir, get_engagement_dir, get_engagement_yaml
 
             root = Path.cwd()
             slug = command.slug
@@ -127,7 +127,7 @@ class CreateWavesFromAssessmentTypedHandler(
                 manifests[0].write_text(json.dumps(manifest, indent=2))
 
             if refactoring and created > 0:
-                eng_yaml_path = get_engagement_dir(root, slug) / "engagement.yaml"
+                eng_yaml_path = get_engagement_yaml(root, slug)
                 if eng_yaml_path.is_file():
                     import yaml as _yaml
                     with open(eng_yaml_path) as f:

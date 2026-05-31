@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from harness.scm.git_types import GitOperationError
 
@@ -27,21 +28,36 @@ class GitCommandRunner:
         args: list[str],
         cwd: Path,
         timeout: int = _GIT_TIMEOUT,
+        env: dict[str, str] | None = None,
+        ensure_cwd: bool = False,
     ) -> str:
         """Run ``git <args>`` in *cwd* and return stripped stdout.
+
+        Args:
+            args: Git subcommand arguments (without leading "git").
+            cwd: Working directory for the command.
+            timeout: Maximum time in seconds.
+            env: Optional environment variables to pass to the subprocess.
+            ensure_cwd: If True, create *cwd* (and parents) before running.
 
         Raises:
             GitOperationError: If the git command exits non-zero or times out.
         """
         cmd = ["git"] + args
+        run_kwargs: dict[str, Any] = {
+            "capture_output": True,
+            "text": True,
+            "cwd": str(cwd),
+            "timeout": timeout,
+        }
+        if env is not None:
+            run_kwargs["env"] = env
+
+        if ensure_cwd:
+            cwd.mkdir(parents=True, exist_ok=True)
+
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=str(cwd),
-                timeout=timeout,
-            )
+            result = subprocess.run(cmd, **run_kwargs)
         except subprocess.TimeoutExpired:
             raise GitOperationError(
                 cmd=" ".join(cmd),

@@ -38,6 +38,30 @@ class NotAGitRepoError(GitOperationError):
         )
 
 
+class GitInitError(GitOperationError):
+    """git init failed"""
+
+
+class GitAddError(GitOperationError):
+    """git add failed"""
+
+
+class GitCommitError(GitOperationError):
+    """git commit failed"""
+
+
+class GitCheckoutError(GitOperationError):
+    """git checkout failed"""
+
+
+class GitRevParseError(GitOperationError):
+    """git rev-parse failed"""
+
+
+class GitLsFilesError(GitOperationError):
+    """git ls-files failed"""
+
+
 # ---------------------------------------------------------------------------
 # Typed result dataclasses
 # ---------------------------------------------------------------------------
@@ -70,7 +94,13 @@ class LogEntry:
 
 __all__ = [
     "DiffResult",
+    "GitAddError",
+    "GitCheckoutError",
+    "GitCommitError",
+    "GitInitError",
+    "GitLsFilesError",
     "GitOperationError",
+    "GitRevParseError",
     "LogEntry",
     "NotAGitRepoError",
     "StatusResult",

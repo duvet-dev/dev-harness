@@ -6,7 +6,6 @@ common git-related issues.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Any, Optional, Protocol
 
@@ -166,7 +165,7 @@ class GitHealthChecker:
         try:
             current_branch = self._git.branch()
 
-            current_head = self._get_head_sha(root)
+            current_head = self._git.head_sha()
 
             if self._freshness is None:
                 messages.append("No freshness store configured — cannot fix git state.")
@@ -184,19 +183,7 @@ class GitHealthChecker:
 
         return messages
 
-    # ── Private helpers ─────────────────────────────────────────────────
 
-    @staticmethod
-    def _get_head_sha(root: Path) -> str:
-        """Get the current HEAD SHA via git command."""
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=root, capture_output=True, text=True, timeout=10,
-            )
-            return result.stdout.strip() if result.returncode == 0 else "unknown"
-        except Exception:
-            return "unknown"
 
 
 __all__ = [

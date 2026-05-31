@@ -72,18 +72,18 @@ class TestFinishEngagementTypedHandler:
         with patch("harness.state.freshness.load_freshness",
                    return_value=MagicMock(stale=False)):
             with patch("harness.state.freshness.save_freshness"):
-                with patch("harness.cli.helpers.get_head_sha",
-                           return_value="abc123def456"):
-                    with patch("harness.scm.git.GitRepo") as mr:
-                        mr.return_value.branch.return_value = "main"
-                        with patch("subprocess.run") as msubp:
-                            msubp.return_value = MagicMock(returncode=0)
-                            cmd = FinishEngagementCommand(
-                                slug="my-eng",
-                                root=str(with_snapshot),
-                                re_assess=False,
-                            )
-                            result = finish_handler.handle(cmd)
+                with patch("harness.scm.git.GitRepo") as mr:
+                    mock_instance = MagicMock()
+                    mock_instance.branch.return_value = "main"
+                    mock_instance.head_sha.return_value = "abc123def456"
+                    mock_instance.commit.return_value = "abc123def456"
+                    mr.return_value = mock_instance
+                    cmd = FinishEngagementCommand(
+                        slug="my-eng",
+                        root=str(with_snapshot),
+                        re_assess=False,
+                    )
+                    result = finish_handler.handle(cmd)
 
         assert result.success, f"Expected success, got: {result.error}"
         assert "Engagement finished" in result.message
@@ -113,18 +113,18 @@ class TestFinishEngagementTypedHandler:
         with patch("harness.state.freshness.load_freshness",
                    return_value=None):
             with patch("harness.state.freshness.save_freshness"):
-                with patch("harness.cli.helpers.get_head_sha",
-                           return_value="abc"):
-                    with patch("harness.scm.git.GitRepo") as mr:
-                        mr.return_value.branch.return_value = "main"
-                        with patch("subprocess.run") as msubp:
-                            msubp.return_value = MagicMock(returncode=0)
-                            cmd = FinishEngagementCommand(
-                                slug="my-eng",
-                                root=str(with_snapshot),
-                                re_assess=False,
-                            )
-                            result = finish_handler.handle(cmd)
+                with patch("harness.scm.git.GitRepo") as mr:
+                    mock_instance = MagicMock()
+                    mock_instance.branch.return_value = "main"
+                    mock_instance.head_sha.return_value = "abc123"
+                    mock_instance.commit.return_value = "abc123"
+                    mr.return_value = mock_instance
+                    cmd = FinishEngagementCommand(
+                        slug="my-eng",
+                        root=str(with_snapshot),
+                        re_assess=False,
+                    )
+                    result = finish_handler.handle(cmd)
 
         assert result.success, f"Expected success, got: {result.error}"
 
@@ -133,54 +133,39 @@ class TestFinishEngagementTypedHandler:
         with patch("harness.state.freshness.load_freshness",
                    return_value=MagicMock(stale=False)):
             with patch("harness.scm.git.GitRepo") as mr:
-                mr.return_value.branch.return_value = "main"
-                with patch("harness.cli.helpers.get_head_sha",
-                           return_value="abc"):
-                    with patch("subprocess.run") as msubp:
-                        msubp.return_value = MagicMock(
-                            returncode=1, stderr="mock git error"
-                        )
-                        cmd = FinishEngagementCommand(
-                            slug="my-eng",
-                            root=str(with_snapshot),
-                            re_assess=False,
-                        )
-                        result = finish_handler.handle(cmd)
+                mock_instance = MagicMock()
+                mock_instance.branch.return_value = "main"
+                mock_instance.add.side_effect = Exception("mock add error")
+                mr.return_value = mock_instance
+                cmd = FinishEngagementCommand(
+                    slug="my-eng",
+                    root=str(with_snapshot),
+                    re_assess=False,
+                )
+                result = finish_handler.handle(cmd)
 
         assert result.success is False
         assert "Git add failed" in result.message
 
     def test_commit_aborted(self, finish_handler, with_snapshot):
-        """If commit returns non-zero, handler returns error."""
-        from unittest.mock import call
+        """If commit fails, handler returns error."""
         with patch("harness.state.freshness.load_freshness",
                    return_value=MagicMock(stale=False)):
             with patch("harness.state.freshness.save_freshness"):
-                with patch("harness.cli.helpers.get_head_sha",
-                           return_value="abc"):
-                    with patch("harness.scm.git.GitRepo") as mr:
-                        mr.return_value.branch.return_value = "main"
-                        # Git add succeeds, but git commit fails
-                        def _side_effect(*a, **kw):
-                            runs = []
-                            for item in a:
-                                if isinstance(item, list):
-                                    runs.append(item)
-                            if not runs:
-                                runs = kw.get('args', kw.get('cmd', []))
-                                if isinstance(runs, list):
-                                    runs = [runs]
-                            if any("add" in (r if isinstance(r, str) else "") for r in (runs[0] if runs else [])):
-                                return MagicMock(returncode=0)
-                            return MagicMock(returncode=1)
-                        with patch("subprocess.run") as msubp:
-                            msubp.side_effect = _side_effect
-                            cmd = FinishEngagementCommand(
-                                slug="my-eng",
-                                root=str(with_snapshot),
-                                re_assess=False,
-                            )
-                            result = finish_handler.handle(cmd)
+                with patch("harness.scm.git.GitRepo") as mr:
+                    mock_instance = MagicMock()
+                    mock_instance.branch.return_value = "main"
+                    mock_instance.head_sha.return_value = "abc"
+                    mock_instance.commit.side_effect = Exception(
+                        "commit aborted"
+                    )
+                    mr.return_value = mock_instance
+                    cmd = FinishEngagementCommand(
+                        slug="my-eng",
+                        root=str(with_snapshot),
+                        re_assess=False,
+                    )
+                    result = finish_handler.handle(cmd)
 
         assert result.success is False
         assert "Commit aborted" in result.message
@@ -190,23 +175,23 @@ class TestFinishEngagementTypedHandler:
         with patch("harness.state.freshness.load_freshness",
                    return_value=MagicMock(stale=False)):
             with patch("harness.state.freshness.save_freshness"):
-                with patch("harness.cli.helpers.get_head_sha",
-                           return_value="abc123"):
-                    with patch("harness.scm.git.GitRepo") as mr:
-                        mr.return_value.branch.return_value = "main"
-                        with patch("subprocess.run") as msubp:
-                            msubp.return_value = MagicMock(returncode=0)
-                            with patch(
-                                "harness.analysis.observer.analyse",
-                                return_value={"status": "error",
-                                              "message": "mock error"},
-                            ):
-                                cmd = FinishEngagementCommand(
-                                    slug="my-eng",
-                                    root=str(with_snapshot),
-                                    re_assess=True,
-                                )
-                                result = finish_handler.handle(cmd)
+                with patch("harness.scm.git.GitRepo") as mr:
+                    mock_instance = MagicMock()
+                    mock_instance.branch.return_value = "main"
+                    mock_instance.head_sha.return_value = "abc123"
+                    mock_instance.commit.return_value = "abc123"
+                    mr.return_value = mock_instance
+                    with patch(
+                        "harness.analysis.observer.analyse",
+                        return_value={"status": "error",
+                                      "message": "mock error"},
+                    ):
+                        cmd = FinishEngagementCommand(
+                            slug="my-eng",
+                            root=str(with_snapshot),
+                            re_assess=True,
+                        )
+                        result = finish_handler.handle(cmd)
 
         assert result.success, f"Expected success, got: {result.error}"
 

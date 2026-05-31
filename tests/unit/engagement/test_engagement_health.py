@@ -295,38 +295,69 @@ class TestEngagementHealthCheckExceptions:
         assert report.all_ok is False
         assert any(w.type == "corrupt_state" for w in report.warnings)
 
-    def test_git_branch_subprocess_error(self, checker: EngagementHealthCheck):
-        """_get_git_branch except handler when subprocess.run raises."""
+    def test_get_git_returns_none_when_not_repo(self, checker: EngagementHealthCheck):
+        """_get_git returns None when GitRepo construction fails."""
         with patch(
-            "subprocess.run",
-            side_effect=FileNotFoundError("git not found"),
+            "harness.domain.engagement.health.GitRepo",
+            side_effect=Exception("not a git repo"),
         ):
-            branch = checker._get_git_branch()
-        assert branch is None
+            git = checker._get_git()
+        assert git is None
 
-    def test_git_status_subprocess_error(self, checker: EngagementHealthCheck):
-        """_get_git_status_summary except handler when subprocess.run raises."""
+    def test_get_git_caches_instance(
+        self, checker: EngagementHealthCheck, tmp_path: Path
+    ):
+        """_get_git caches the GitRepo instance after first call."""
+        checker._root = tmp_path
         with patch(
-            "subprocess.run",
-            side_effect=FileNotFoundError("git not found"),
+            "harness.domain.engagement.health.GitRepo",
+            side_effect=Exception("not a git repo"),
         ):
-            status = checker._get_git_status_summary()
-        assert status == {"untracked": 0, "unstaged": 0}
+            git1 = checker._get_git()
+            git2 = checker._get_git()
+        assert git1 is None
+        assert git2 is None
 
-    def test_branch_exists_subprocess_error(
+    def test_branch_alignment_handles_git_error(
         self, checker: EngagementHealthCheck, repo: EngagementRepository
     ):
-        """_check_branch_exists except handler when subprocess.run raises."""
-        eng = Engagement(slug="branch-err", target_branch="main")
+        """_check_branch_alignment returns no_git_repo when GitRepo.branch() fails."""
+        eng = Engagement(slug="test", target_branch="main")
         repo.save(eng)
-        with patch(
-            "subprocess.run",
-            side_effect=FileNotFoundError("git not found"),
-        ):
-            report = checker.check("branch-err")
-        # Exception swallowed, no branch_missing warning
+
+        # Create a mock GitRepo that raises on branch()
+        from unittest.mock import MagicMock
+        from harness.scm.git_types import GitOperationError
+
+        mock_git = MagicMock()
+        mock_git.branch.side_effect = GitOperationError(
+            cmd="branch --show-current", exit_code=128, stderr="not a git repo"
+        )
+        checker._git = mock_git
+
+        report = checker.check("test")
+        no_git_warnings = [w for w in report.warnings if w.type == "no_git_repo"]
+        assert len(no_git_warnings) >= 1
+
+    def test_branch_exists_handles_git_error(
+        self, checker: EngagementHealthCheck, repo: EngagementRepository
+    ):
+        """_check_branch_exists catches GitOperationError when rev_parse fails."""
+        eng = Engagement(slug="branch-err", target_branch="nonexistent-branch")
+        repo.save(eng)
+
+        from unittest.mock import MagicMock
+        from harness.scm.git_types import GitOperationError
+
+        mock_git = MagicMock()
+        mock_git.rev_parse.side_effect = GitOperationError(
+            cmd="rev-parse", exit_code=128, stderr="unknown revision"
+        )
+        checker._git = mock_git
+
+        report = checker.check("branch-err")
         missing_warnings = [w for w in report.warnings if w.type == "branch_missing"]
-        assert len(missing_warnings) == 0
+        assert len(missing_warnings) >= 1
 
 
 class TestEngagementHealthCheckNoGitRepo:
@@ -335,28 +366,63 @@ class TestEngagementHealthCheckNoGitRepo:
     def test_branch_alignment_no_git_repo_warning(
         self, checker: EngagementHealthCheck, repo: EngagementRepository
     ):
-        """When git branch can't be determined, no_git_repo warning fires."""
+        """When git can't be accessed, no_git_repo warning fires."""
         eng = Engagement(slug="test", target_branch="main")
         repo.save(eng)
-        with patch(
-            "subprocess.run",
-            side_effect=FileNotFoundError("git not found"),
-        ):
-            report = checker.check("test")
+
+        from unittest.mock import MagicMock
+        mock_git = MagicMock()
+        mock_git.branch.side_effect = Exception("not a git repo")
+        checker._git = mock_git
+
+        report = checker.check("test")
         no_git_warnings = [w for w in report.warnings if w.type == "no_git_repo"]
         assert len(no_git_warnings) >= 1
 
-    def test_clean_dirty_repo_returns_empty(self, checker: EngagementHealthCheck):
-        """_check_dirty_repo returns [] when working tree is clean."""
+    def test_dirty_repo_returns_empty_when_no_git(
+        self, checker: EngagementHealthCheck, tmp_path: Path
+    ):
+        """_check_dirty_repo returns [] when GitRepo is unavailable."""
+        checker._root = tmp_path / "not-a-repo"
+        checker._git = None
         eng = Engagement(slug="clean-eng", target_branch="main")
-        with patch.object(
-            checker, "_get_git_status_summary",
-            return_value={"untracked": 0, "unstaged": 0},
-        ):
-            warnings = checker._check_dirty_repo(eng, "clean-eng")
+        warnings = checker._check_dirty_repo(eng, "clean-eng")
         assert len(warnings) == 0
+
+    def test_dirty_repo_works_with_mock(
+        self, checker: EngagementHealthCheck, repo: EngagementRepository
+    ):
+        """_check_dirty_repo returns dirty_repo warning when changes exist."""
+        from unittest.mock import MagicMock
+        from harness.scm.git_types import DiffResult
+
+        mock_git = MagicMock()
+        mock_git.ls_files.return_value = ["untracked.txt"]
+        mock_git.diff.return_value = DiffResult(
+            files_changed=["modified.txt"], insertions=1, deletions=0
+        )
+        checker._git = mock_git
+
+        eng = Engagement(slug="dirty-eng", target_branch="main")
+        warnings = checker._check_dirty_repo(eng, "dirty-eng")
         dirty_warnings = [w for w in warnings if w.type == "dirty_repo"]
-        assert len(dirty_warnings) == 0
+        assert len(dirty_warnings) >= 1
+
+    def test_dirty_repo_empty_with_mock_clean(
+        self, checker: EngagementHealthCheck
+    ):
+        """_check_dirty_repo returns [] when mock git shows clean."""
+        from unittest.mock import MagicMock
+        from harness.scm.git_types import DiffResult
+
+        mock_git = MagicMock()
+        mock_git.ls_files.return_value = []
+        mock_git.diff.return_value = DiffResult()
+        checker._git = mock_git
+
+        eng = Engagement(slug="clean-eng", target_branch="main")
+        warnings = checker._check_dirty_repo(eng, "clean-eng")
+        assert len(warnings) == 0
 
 
 class TestEngagementHealthCheckStateEdgeCases:

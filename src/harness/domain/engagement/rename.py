@@ -287,15 +287,8 @@ def rename_engagement(
                     f"Renamed git branch '{current_branch}' → '{new_slug}'"
                 )
             elif branch_strategy == BranchStrategy.NEW:
-                import subprocess
                 # Create new branch at current HEAD and switch to it
-                subprocess.run(
-                    ["git", "checkout", "-b", new_slug],
-                    cwd=str(root),
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
+                repo.checkout(new_slug, create=True)
                 result.changes_made.append(
                     f"Created and switched to new branch '{new_slug}'"
                 )

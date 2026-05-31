@@ -12,6 +12,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from harness.domain.engagement.model import Engagement, EngagementStatus, HealthWarning
 from harness.domain.engagement.repository import EngagementRepository
@@ -21,6 +22,8 @@ from harness.errors import (
     EngagementDirtyStateError,
     EngagementNotFoundError,
 )
+from harness.scm.git import GitRepo
+from harness.scm.git_types import GitOperationError
 
 
 @dataclass
@@ -55,6 +58,7 @@ class EngagementHealthCheck:
         self,
         root: Path | None = None,
         repository: EngagementRepository | None = None,
+        git_repo: GitRepo | None = None,
     ) -> None:
         """Initialise the health checker.
 
@@ -62,9 +66,11 @@ class EngagementHealthCheck:
             root: Project root directory. Auto-discovered if None.
             repository: An EngagementRepository instance. Created from
                 root if not provided.
+            git_repo: A GitRepo instance. Created from root if not provided.
         """
         self._root = root or Path.cwd()
         self._repository = repository or EngagementRepository(self._root)
+        self._git = git_repo
 
     @property
     def repository(self) -> EngagementRepository:
@@ -133,64 +139,14 @@ class EngagementHealthCheck:
         report.all_ok = len(report.warnings) == 0
         return report
 
-    def _get_git_branch(self) -> str | None:
-        """Get the current git branch name.
-
-        Returns:
-            Current branch name, or None if not in a git repo.
-        """
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except (subprocess.SubprocessError, FileNotFoundError):
-            pass
-        return None
-
-    def _get_git_status_summary(self) -> dict[str, int]:
-        """Get summary of git working tree status.
-
-        Returns:
-            Dict with 'untracked' and 'unstaged' counts.
-        """
-        summary: dict[str, int] = {"untracked": 0, "unstaged": 0}
-        try:
-            import subprocess
-            # Untracked files
-            result = subprocess.run(
-                ["git", "ls-files", "--others", "--exclude-standard"],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                summary["untracked"] = len(
-                    [l for l in result.stdout.split("\n") if l.strip()]
-                )
-
-            # Modified but unstaged
-            result = subprocess.run(
-                ["git", "diff", "--name-only"],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                summary["unstaged"] = len(
-                    [l for l in result.stdout.split("\n") if l.strip()]
-                )
-        except (subprocess.SubprocessError, FileNotFoundError):
-            pass
-        return summary
+    def _get_git(self) -> GitRepo:
+        """Lazy-create and return a GitRepo instance."""
+        if self._git is None:
+            try:
+                self._git = GitRepo(self._root)
+            except Exception:
+                self._git = None
+        return self._git
 
     def _check_branch_alignment(
         self, engagement: Engagement, slug: str
@@ -207,8 +163,18 @@ class EngagementHealthCheck:
         if not engagement.target_branch:
             return []
 
-        current_branch = self._get_git_branch()
-        if current_branch is None:
+        git = self._get_git()
+        if git is None:
+            return [
+                HealthWarning(
+                    type="no_git_repo",
+                    message=f"Cannot check branch alignment for '{slug}': not a git repository",
+                )
+            ]
+
+        try:
+            current_branch = git.branch()
+        except Exception:
             return [
                 HealthWarning(
                     type="no_git_repo",
@@ -243,8 +209,16 @@ class EngagementHealthCheck:
             List of HealthWarning (empty if clean).
         """
         _ = engagement  # engagement not directly needed for this check
-        status = self._get_git_status_summary()
-        total = status["untracked"] + status["unstaged"]
+        git = self._get_git()
+        if git is None:
+            return []
+
+        try:
+            untracked = git.ls_files(others=True, exclude_standard=True)
+            diff = git.diff("HEAD")
+            total = len(untracked) + len(diff.files_changed)
+        except GitOperationError:
+            return []
 
         if total > 0:
             return [
@@ -252,8 +226,8 @@ class EngagementHealthCheck:
                     type="dirty_repo",
                     message=(
                         f"Working tree has {total} uncommitted change(s) "
-                        f"({status['untracked']} untracked, "
-                        f"{status['unstaged']} unstaged)"
+                        f"({len(untracked)} untracked, "
+                        f"{len(diff.files_changed)} unstaged)"
                     ),
                 )
             ]
@@ -275,41 +249,27 @@ class EngagementHealthCheck:
         if not engagement.target_branch:
             return []
 
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["git", "rev-parse", "--verify", engagement.target_branch],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                # Try with refs/heads/ prefix
-                result2 = subprocess.run(
-                    [
-                        "git", "rev-parse", "--verify",
-                        f"refs/heads/{engagement.target_branch}",
-                    ],
-                    cwd=self._root,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if result2.returncode != 0:
-                    return [
-                        HealthWarning(
-                            type="branch_missing",
-                            message=(
-                                f"Target branch '{engagement.target_branch}' "
-                                f"does not exist for engagement '{slug}'"
-                            ),
-                        )
-                    ]
-        except (subprocess.SubprocessError, FileNotFoundError):
-            pass
+        git = self._get_git()
+        if git is None:
+            return []
 
-        return []
+        try:
+            git.rev_parse(f"refs/heads/{engagement.target_branch}")
+            return []
+        except GitOperationError:
+            try:
+                git.rev_parse(engagement.target_branch)
+                return []
+            except GitOperationError:
+                return [
+                    HealthWarning(
+                        type="branch_missing",
+                        message=(
+                            f"Target branch '{engagement.target_branch}' "
+                            f"does not exist for engagement '{slug}'"
+                        ),
+                    )
+                ]
 
     def _check_state_consistency(
         self, engagement: Engagement, slug: str

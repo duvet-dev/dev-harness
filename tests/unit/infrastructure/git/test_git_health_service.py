@@ -201,24 +201,3 @@ class TestFixGitState:
         mock_freshness_store.load.side_effect = RuntimeError("load error")
         messages = checker.fix_git_state(tmp_path)
         assert any("failed" in m.lower() for m in messages)
-
-
-# ── _get_head_sha ───────────────────────────────────────────────────────────
-
-
-class TestGetHeadSha:
-    """Verify HEAD SHA retrieval."""
-
-    def test_returns_unknown_on_failure(self, tmp_path):
-        # tmp_path is not a git repo, so rev-parse will fail
-        sha = GitHealthChecker._get_head_sha(tmp_path)
-        assert sha == "unknown"
-
-    def test_returns_unknown_on_exception(self, monkeypatch):
-        import subprocess
-        original_run = subprocess.run
-        def failing_run(*args, **kwargs):
-            raise RuntimeError("subprocess error")
-        monkeypatch.setattr(subprocess, "run", failing_run)
-        sha = GitHealthChecker._get_head_sha(Path("/tmp"))
-        assert sha == "unknown"

@@ -49,7 +49,6 @@ from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand,
 from harness.cli.helpers import (
     bold,
     find_project_root,
-    get_head_sha,
     init_git,
     initial_commit,
     load_project_snapshot,
@@ -1723,16 +1722,13 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
 
         # Create branch eng/<slug> from current HEAD
         branch_name = f"eng/{slug}"
-        result = subprocess.run(
-            ["git", "checkout", "-b", branch_name],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
+        try:
+            from harness.scm.git import GitRepo
+            repo = GitRepo(root)
+            repo.checkout(branch_name, create=True)
+        except Exception as exc:
             click.echo(
-                f"Error creating branch: {result.stderr.strip()}",
+                f"Error creating branch: {exc}",
                 err=True,
             )
             raise click.Abort()

@@ -35,7 +35,7 @@ class FinishEngagementTypedHandler(TypedHandler[FinishEngagementCommand, FinishE
                 save_freshness,
             )
             from harness.scm.git import GitRepo
-            from harness.cli.helpers import get_head_sha, load_project_snapshot
+            from harness.cli.helpers import load_project_snapshot
             from harness.paths import get_harness_state_path, get_engagement_dir
             from harness.state.snapshot import SnapshotWriter
 
@@ -52,18 +52,17 @@ class FinishEngagementTypedHandler(TypedHandler[FinishEngagementCommand, FinishE
                 )
 
             # Stage all
-            stage_result = subprocess.run(
-                ["git", "add", "-A"], cwd=root, capture_output=True, text=True
-            )
-            if stage_result.returncode != 0:
+            try:
+                repo.add()
+            except Exception as exc:
                 return FinishEngagementResult(
                     success=False,
-                    error=stage_result.stderr.strip(),
+                    error=str(exc),
                     message="Git add failed.",
                 )
 
             # Write freshness before commit
-            current_head = get_head_sha(root)
+            current_head = repo.head_sha()
             new_record = FreshnessRecord(
                 branch=current_branch,
                 head_sha=current_head,
@@ -72,16 +71,15 @@ class FinishEngagementTypedHandler(TypedHandler[FinishEngagementCommand, FinishE
             ).mark_fresh(current_head)
             save_freshness(new_record, root)
 
-            # Commit (opens editor)
-            commit_result = subprocess.run(["git", "commit"], cwd=root)
-            if commit_result.returncode != 0:
+            # Commit (opens editor when message is empty)
+            try:
+                head_after = repo.commit()
+            except Exception as exc:
                 return FinishEngagementResult(
                     success=False,
-                    error="Commit aborted or failed.",
+                    error=str(exc),
                     message="Commit aborted or failed.",
                 )
-
-            head_after = get_head_sha(root)
 
             # Update snapshot status
             snapshot_path = get_harness_state_path(root)

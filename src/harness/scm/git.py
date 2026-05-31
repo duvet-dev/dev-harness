@@ -18,7 +18,13 @@ from typing import Optional
 from harness.infrastructure.git.git_command import GitCommandRunner
 from harness.scm.git_types import (
     DiffResult,
+    GitAddError,
+    GitCheckoutError,
+    GitCommitError,
+    GitInitError,
+    GitLsFilesError,
     GitOperationError,
+    GitRevParseError,
     LogEntry,
     NotAGitRepoError,
     StatusResult,
@@ -310,3 +316,189 @@ class GitRepo:
         args = ["branch", "-m", old_name, new_name]
         self._runner.run(args, cwd=self._root)
         return None
+
+    # ── init ----------------------------------------------------------------
+
+    def init(self, path: Path) -> None:
+        """Run ``git init <path>``.
+
+        Args:
+            path: Directory to initialise.
+
+        Raises:
+            GitInitError: If the init command fails.
+        """
+        try:
+            self._runner.run(
+                ["init", str(path)],
+                cwd=path.parent,
+                ensure_cwd=True,
+            )
+        except GitOperationError as exc:
+            raise GitInitError(
+                cmd=f"init {path}",
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── add / stage ---------------------------------------------------------
+
+    def add(self, paths: Optional[list[str]] = None) -> None:
+        """Stage files with ``git add``.
+
+        Args:
+            paths: Specific paths to stage, or None for all (``-A``).
+
+        Raises:
+            GitAddError: If the add command fails.
+        """
+        try:
+            args = ["add"]
+            if paths is not None:
+                args.extend(paths)
+            else:
+                args.append("-A")
+            self._runner.run(args, cwd=self._root)
+        except GitOperationError as exc:
+            raise GitAddError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── commit --------------------------------------------------------------
+
+    def commit(self, message: str = "") -> str:
+        """Create a commit and return the commit SHA.
+
+        Args:
+            message: Commit message. When empty, the commit opens the
+                configured git editor (no ``-m`` flag).
+
+        Returns:
+            The SHA of the new commit.
+
+        Raises:
+            GitCommitError: If the commit fails.
+        """
+        try:
+            args = ["commit"]
+            if message:
+                args.extend(["-m", message])
+            self._runner.run(args, cwd=self._root)
+        except GitOperationError as exc:
+            raise GitCommitError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+        return self.head_sha()
+
+    # ── checkout ------------------------------------------------------------
+
+    def checkout(self, branch: str, create: bool = False) -> None:
+        """Switch to a branch, optionally creating it.
+
+        Args:
+            branch: Branch name.
+            create: If True, create the branch first (``git checkout -b``).
+
+        Raises:
+            GitCheckoutError: If the checkout fails.
+        """
+        try:
+            args = ["checkout"]
+            if create:
+                args.extend(["-b", branch])
+            else:
+                args.append(branch)
+            self._runner.run(args, cwd=self._root)
+        except GitOperationError as exc:
+            raise GitCheckoutError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── rev-parse -----------------------------------------------------------
+
+    def rev_parse(self, ref: str) -> str:
+        """Resolve a git ref to a full SHA.
+
+        Args:
+            ref: Git reference (branch, tag, HEAD, etc.).
+
+        Returns:
+            The full SHA of the resolved ref.
+
+        Raises:
+            GitRevParseError: If the ref cannot be resolved.
+        """
+        try:
+            stdout = self._runner.run(
+                ["rev-parse", ref], cwd=self._root
+            )
+            return stdout.strip()
+        except GitOperationError as exc:
+            raise GitRevParseError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    def head_sha(self) -> str:
+        """Return the full SHA of HEAD.
+
+        Raises:
+            GitRevParseError: If HEAD cannot be resolved.
+        """
+        return self.rev_parse("HEAD")
+
+    # ── ls-files ------------------------------------------------------------
+
+    def ls_files(
+        self,
+        others: bool = False,
+        exclude_standard: bool = True,
+    ) -> list[str]:
+        """List files tracked by the index (or untracked with ``--others``).
+
+        Args:
+            others: If True, list untracked files instead of tracked.
+            exclude_standard: If True with ``--others``, apply standard
+                exclusions (``.gitignore``, etc.).
+
+        Returns:
+            List of file paths relative to repo root.
+
+        Raises:
+            GitLsFilesError: If the ls-files command fails.
+        """
+        try:
+            args = ["ls-files"]
+            if others:
+                args.append("--others")
+            if exclude_standard:
+                args.append("--exclude-standard")
+            stdout = self._runner.run(args, cwd=self._root)
+            return [f for f in stdout.splitlines() if f.strip()]
+        except GitOperationError as exc:
+            raise GitLsFilesError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── is_git_repo ---------------------------------------------------------
+
+    def is_git_repo(self) -> bool:
+        """Check if the working directory is inside a git repository.
+
+        Returns:
+            True if ``git rev-parse --git-dir`` succeeds.
+        """
+        try:
+            self._runner.run(["rev-parse", "--git-dir"], cwd=self._root)
+            return True
+        except GitOperationError:
+            return False

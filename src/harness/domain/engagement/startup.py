@@ -23,6 +23,8 @@ from typing import Any
 from harness.domain.engagement.health import EngagementHealthCheck, HealthReport
 from harness.domain.engagement.model import Engagement, EngagementStatus, HealthWarning
 from harness.domain.engagement.repository import EngagementRepository
+from harness.scm.git import GitRepo
+from harness.scm.git_types import GitOperationError, GitCheckoutError
 from harness.errors import (
     EngagementNotFoundError,
     EngagementBranchMissingError,
@@ -91,6 +93,7 @@ class StartupResumeFlow:
         repository: EngagementRepository | None = None,
         health_check: EngagementHealthCheck | None = None,
         workflow_orchestrator: WorkflowOrchestrator | None = None,
+        git_repo: GitRepo | None = None,
     ) -> None:
         """Initialise the StartupResumeFlow.
 
@@ -102,6 +105,7 @@ class StartupResumeFlow:
                 Created from repository if not provided.
             workflow_orchestrator: A WorkflowOrchestrator instance.
                 Created with default workflows if not provided.
+            git_repo: A GitRepo instance. Created from root if not provided.
         """
         self._root = root or find_project_root() or Path.cwd()
         self._repository = repository or EngagementRepository(self._root)
@@ -112,6 +116,7 @@ class StartupResumeFlow:
         self._workflow_orchestrator = (
             workflow_orchestrator or self._create_default_orchestrator()
         )
+        self._git = git_repo
 
     # ── Public API ───────────────────────────────────────────────────
 
@@ -631,6 +636,15 @@ class StartupResumeFlow:
 
         return orchestrator
 
+    def _get_git(self) -> GitRepo | None:
+        """Lazy-create and return a GitRepo instance."""
+        if self._git is None:
+            try:
+                self._git = GitRepo(self._root)
+            except Exception:
+                self._git = None
+        return self._git
+
     def _create_branch(self, branch_name: str) -> HealthWarning | None:
         """Create a git branch for the engagement.
 
@@ -643,54 +657,27 @@ class StartupResumeFlow:
         Returns:
             HealthWarning if branch creation failed, or None on success.
         """
+        git = self._get_git()
+        if git is None:
+            return HealthWarning(
+                type="no_git_repo",
+                message=(
+                    f"Cannot create branch '{branch_name}': "
+                    f"not a git repository"
+                ),
+            )
+
         try:
             # Check if branch already exists
-            result = subprocess.run(
-                ["git", "rev-parse", "--verify", f"refs/heads/{branch_name}"],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0:
+            try:
+                git.rev_parse(f"refs/heads/{branch_name}")
                 # Branch already exists — not an error
                 return None
-
-            # Check if we're in a git repo
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode != 0:
-                return HealthWarning(
-                    type="no_git_repo",
-                    message=(
-                        f"Cannot create branch '{branch_name}': "
-                        f"not a git repository"
-                    ),
-                )
+            except GitOperationError:
+                pass
 
             # Create the branch from current HEAD
-            result = subprocess.run(
-                ["git", "checkout", "-b", branch_name],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode != 0:
-                return HealthWarning(
-                    type="branch_create_failed",
-                    message=(
-                        f"Failed to create branch '{branch_name}': "
-                        f"{result.stderr.strip()}"
-                    ),
-                )
+            git.checkout(branch_name, create=True)
 
             logger.info(
                 "StartupResumeFlow — branch created",
@@ -698,7 +685,7 @@ class StartupResumeFlow:
             )
             return None
 
-        except subprocess.SubprocessError as exc:
+        except Exception as exc:
             return HealthWarning(
                 type="branch_create_error",
                 message=f"Error creating branch '{branch_name}': {exc}",
@@ -786,66 +773,41 @@ class StartupResumeFlow:
         if not engagement.target_branch:
             return None
 
+        git = self._get_git()
+        if git is None:
+            return None  # Not a git repo — can't check
+
         try:
-            # Get current branch
-            result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=self._root,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
+            current_branch = git.branch()
+        except GitOperationError:
+            return None  # Not a git repo
 
-            if result.returncode != 0:
-                return None  # Not a git repo — can't check
-
-            current_branch = result.stdout.strip()
-
-            if current_branch != engagement.target_branch:
-                # Try to switch to the engagement's branch
-                switch_result = subprocess.run(
-                    ["git", "checkout", engagement.target_branch],
-                    cwd=self._root,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-
-                if switch_result.returncode != 0:
-                    # Check if branch exists
-                    check_result = subprocess.run(
-                        [
-                            "git", "rev-parse", "--verify",
-                            f"refs/heads/{engagement.target_branch}",
-                        ],
-                        cwd=self._root,
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
+        if current_branch != engagement.target_branch:
+            # Try to switch to the engagement's branch
+            try:
+                git.checkout(engagement.target_branch)
+            except GitCheckoutError:
+                # Check if branch exists
+                try:
+                    git.rev_parse(f"refs/heads/{engagement.target_branch}")
+                    # Branch exists but checkout failed (dirty repo)
+                    return HealthWarning(
+                        type="branch_switch_failed",
+                        message=(
+                            f"Cannot switch to target branch "
+                            f"'{engagement.target_branch}' — "
+                            f"working tree has uncommitted changes"
+                        ),
                     )
-
-                    if check_result.returncode == 0:
-                        # Branch exists but checkout failed (dirty repo)
-                        return HealthWarning(
-                            type="branch_switch_failed",
-                            message=(
-                                f"Cannot switch to target branch "
-                                f"'{engagement.target_branch}' — "
-                                f"working tree has uncommitted changes"
-                            ),
-                        )
-                    else:
-                        return HealthWarning(
-                            type="branch_missing",
-                            message=(
-                                f"Target branch '{engagement.target_branch}' "
-                                f"does not exist — create it with "
-                                f"git checkout -b {engagement.target_branch}"
-                            ),
-                        )
-
-        except subprocess.SubprocessError:
-            pass
+                except GitOperationError:
+                    return HealthWarning(
+                        type="branch_missing",
+                        message=(
+                            f"Target branch '{engagement.target_branch}' "
+                            f"does not exist — create it with "
+                            f"git checkout -b {engagement.target_branch}"
+                        ),
+                    )
 
         return None
 

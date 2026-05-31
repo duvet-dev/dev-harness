@@ -174,51 +174,23 @@ WORKFLOWS_EPILOG = """
 def init_git(path: Path) -> bool:
     """Run ``git init`` in *path*. Returns ``True`` on success."""
     try:
-        result = subprocess.run(
-            ["git", "init"],
-            cwd=path,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.returncode == 0
-    except FileNotFoundError:
-        return False
-    except subprocess.TimeoutExpired:
-        import click
-        click.echo("  Warning: git init timed out")
+        from harness.infrastructure.git.git_command import GitCommandRunner
+        runner = GitCommandRunner()
+        runner.run(["init", str(path)], cwd=path.parent, ensure_cwd=True)
+        return True
+    except Exception:
         return False
 
 
 def initial_commit(path: Path) -> None:
     """Make an initial commit in *path* after scaffolding."""
     try:
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=path,
-            capture_output=True,
-            timeout=10,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Initial harness scaffold"],
-            cwd=path,
-            capture_output=True,
-            timeout=10,
-        )
+        from harness.scm.git import GitRepo
+        repo = GitRepo(path)
+        repo.add()
+        repo.commit("Initial harness scaffold")
     except Exception:
         pass
-
-
-def get_head_sha(repo_root: Path) -> str:
-    """Return the full SHA of HEAD."""
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    return result.stdout.strip()
 
 
 # ── Scaffold Helpers ────────────────────────────────────────────────────
@@ -424,7 +396,7 @@ def reconcile_before_summary(root: Path) -> None:
                 engagement_id=freshness.branch,
             )
             if report.merge_detected or report.external_changes > 0:
-                current_head = get_head_sha(root)
+                current_head = repo.head_sha()
                 new_record = freshness.mark_fresh(current_head)
                 save_freshness(new_record, root)
     except Exception:
@@ -434,7 +406,6 @@ def reconcile_before_summary(root: Path) -> None:
 __all__ = [
     "bold",
     "find_project_root",
-    "get_head_sha",
     "init_git",
     "initial_commit",
     "load_project_snapshot",

@@ -11,6 +11,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from harness.analysis.base import ScanResult
+from harness.scm.git_types import DiffResult
 from harness.analysis.fast import (
     scan_structure,
     scan_git_diff,
@@ -120,35 +121,17 @@ class TestScanGitDiff:
         result = scan_git_diff(tmp_path)
         assert result.scan_name == "git-diff"
         assert len(result.findings) >= 1
-        assert result.summary == "Not a git repository" or "Git not available" in result.summary
+        assert "Not a git repository" in result.summary
 
-    @patch("subprocess.run")
-    def test_git_available_success(self, mock_run, tmp_path):
+    @patch("harness.analysis.fast.GitRepo")
+    def test_git_available_success(self, mock_git_repo, tmp_path):
         """Returns diff metrics when git is available."""
-        # Mock rev-parse to succeed
-        mock_rev_parse = MagicMock()
-        mock_rev_parse.returncode = 0
-        mock_rev_parse.stdout = ".git\n"
-
-        # Mock diff --stat
-        mock_diff = MagicMock()
-        mock_diff.returncode = 0
-        mock_diff.stdout = " src/main.py | 10 +++++++++-\n 1 file changed, 9 insertions(+), 1 deletion(-)\n"
-
-        # Mock branch --show-current
-        mock_branch = MagicMock()
-        mock_branch.returncode = 0
-        mock_branch.stdout = "main\n"
-
-        # Mock diff --name-only
-        mock_name_only = MagicMock()
-        mock_name_only.returncode = 0
-        mock_name_only.stdout = "src/main.py\n"
-
-        mock_run.side_effect = [mock_rev_parse, mock_diff, mock_branch, mock_name_only]
-
-        # Create .git dir to make it look like a repo
-        (tmp_path / ".git").mkdir()
+        mock_instance = MagicMock()
+        mock_instance.diff.return_value = DiffResult(
+            files_changed=["src/main.py"], insertions=9, deletions=1
+        )
+        mock_instance.branch.return_value = "main"
+        mock_git_repo.return_value = mock_instance
 
         result = scan_git_diff(tmp_path)
         assert result.scan_name == "git-diff"
@@ -158,61 +141,39 @@ class TestScanGitDiff:
         assert result.metrics.get("branch") == "main"
         assert "main" in result.summary
 
-    @patch("subprocess.run")
-    def test_git_not_a_repo_via_rev_parse(self, mock_run, tmp_path):
-        """Returns info finding when rev-parse fails."""
-        mock_run.return_value.returncode = 1
+    @patch("harness.analysis.fast.GitRepo")
+    def test_git_not_a_repo_via_rev_parse(self, mock_git_repo, tmp_path):
+        """Returns info finding when GitRepo construction fails."""
+        mock_git_repo.side_effect = Exception("not a git repo")
         result = scan_git_diff(tmp_path)
         assert "Not a git repository" in result.summary
 
-    @patch("subprocess.run")
-    def test_git_command_not_found(self, mock_run, tmp_path):
+    @patch("harness.analysis.fast.GitRepo")
+    def test_git_command_not_found(self, mock_git_repo, tmp_path):
         """Returns info finding when git is not installed."""
-        mock_run.side_effect = FileNotFoundError("git not found")
+        mock_git_repo.side_effect = Exception("git not found")
         result = scan_git_diff(tmp_path)
-        assert "Git not available" in result.summary or "Git unavailable" in result.summary
+        assert "Git unavailable" in result.summary or "Not a git repository" in result.summary
 
-    @patch("subprocess.run")
-    def test_git_diff_timeout(self, mock_run, tmp_path):
-        """Returns warning finding when git diff times out."""
-        # First call (rev-parse) succeeds
-        mock_rev_parse = MagicMock()
-        mock_rev_parse.returncode = 0
-        mock_rev_parse.stdout = ".git\n"
-        # Second call (diff --stat) times out
-        from subprocess import TimeoutExpired
-        mock_run.side_effect = [
-            mock_rev_parse,
-            TimeoutExpired(cmd="git diff --stat HEAD~1", timeout=10),
-        ]
-        (tmp_path / ".git").mkdir()
-        result = scan_git_diff(tmp_path)
-        assert result.summary == "Git diff timed out"
+    @patch("harness.analysis.fast.GitRepo")
+    def test_git_diff_timeout(self, mock_git_repo, tmp_path):
+        """Returns warning finding when git diff fails."""
+        mock_instance = MagicMock()
+        mock_instance.diff.side_effect = Exception("diff failed")
+        mock_git_repo.return_value = mock_instance
 
-    @patch("subprocess.run")
-    def test_git_diff_name_only_timeout(self, mock_run, tmp_path):
-        """Handles timeout from git diff --name-only (lines 225-227)."""
-        from subprocess import TimeoutExpired
-        mock_rev_parse = MagicMock()
-        mock_rev_parse.returncode = 0
-        mock_rev_parse.stdout = ".git\n"
-        mock_diff = MagicMock()
-        mock_diff.returncode = 0
-        mock_diff.stdout = " src/main.py | 10 +++++++++-\n 1 file changed\n"
-        mock_branch = MagicMock()
-        mock_branch.returncode = 0
-        mock_branch.stdout = "main\n"
-        # Fourth call (--name-only) times out
-        mock_run.side_effect = [
-            mock_rev_parse,
-            mock_diff,
-            mock_branch,
-            TimeoutExpired(cmd="git diff --name-only HEAD~1", timeout=5),
-        ]
-        (tmp_path / ".git").mkdir()
         result = scan_git_diff(tmp_path)
-        assert result.metrics.get("changed_count") == 0
-        assert "0 files changed" in result.summary
+        assert "Git diff failed" in result.summary
+
+    @patch("harness.analysis.fast.GitRepo")
+    def test_git_diff_name_only_timeout(self, mock_git_repo, tmp_path):
+        """Handles diff failure with fallback."""
+        mock_instance = MagicMock()
+        mock_instance.diff.side_effect = Exception("diff failed")
+        mock_git_repo.return_value = mock_instance
+
+        result = scan_git_diff(tmp_path)
+        assert "Git diff failed" in result.summary
 
 
 class TestProduceSummary:

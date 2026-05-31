@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from harness.analysis.base import Finding, ScanResult
+from harness.scm.git import GitRepo
 
 # Common source file extensions by language
 LANGUAGE_MAP: dict[str, list[str]] = {
@@ -138,95 +139,55 @@ def scan_git_diff(path: str | Path, since: str | None = None) -> ScanResult:
     Returns:
         ScanResult with diff metrics and any findings.
     """
-    import subprocess
-
     root = Path(path)
     findings: list[Finding] = []
     metrics: dict[str, Any] = {}
 
     # Check it's a git repo
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
-            capture_output=True, text=True, cwd=root, timeout=10,
-        )
-        if result.returncode != 0:
-            return ScanResult(
-                scan_name="git-diff",
-                findings=[Finding(
-                    severity="info",
-                    category="structure",
-                    message="Not a git repository — diff unavailable",
-                    file=str(path),
-                )],
-                summary="Not a git repository",
-            )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        repo = GitRepo(root)
+    except Exception:
         return ScanResult(
             scan_name="git-diff",
             findings=[Finding(
                 severity="info",
                 category="structure",
-                message="Git not available — diff unavailable",
+                message="Not a git repository — diff unavailable",
                 file=str(path),
             )],
-            summary="Git unavailable",
+            summary="Not a git repository",
         )
 
     # Get diff stats
     diff_base = since or "HEAD~1"
     try:
-        result = subprocess.run(
-            ["git", "diff", "--stat", diff_base],
-            capture_output=True, text=True, cwd=root, timeout=10,
+        diff_result = repo.diff(diff_base)
+        metrics["diff_output"] = (
+            f"{len(diff_result.files_changed)} files changed, "
+            f"+{diff_result.insertions}/-{diff_result.deletions}"
         )
-        metrics["diff_output"] = result.stdout.strip()
-
-        # Parse insertions/deletions
-        ins = del_count = 0
-        for line in result.stdout.splitlines():
-            if "insertion" in line:
-                parts = line.split()
-                for i, p in enumerate(parts):
-                    if "insertion" in p and i > 0:
-                        ins += int(parts[i - 1])
-                    if "deletion" in p and i > 0:
-                        del_count += int(parts[i - 1])
-        metrics["insertions"] = ins
-        metrics["deletions"] = del_count
+        metrics["insertions"] = diff_result.insertions
+        metrics["deletions"] = diff_result.deletions
+        metrics["changed_files"] = diff_result.files_changed
+        metrics["changed_count"] = len(diff_result.files_changed)
 
         # Get current branch
-        branch_result = subprocess.run(
-            ["git", "branch", "--show-current"],
-            capture_output=True, text=True, cwd=root, timeout=5,
-        )
-        metrics["branch"] = branch_result.stdout.strip()
+        metrics["branch"] = repo.branch()
 
-    except subprocess.TimeoutExpired:
+    except Exception:
         return ScanResult(
             scan_name="git-diff",
             findings=[Finding(
                 severity="warning",
                 category="structure",
-                message="Git diff timed out (>10s)",
+                message="Git diff failed",
             )],
-            summary="Git diff timed out",
+            summary="Git diff failed",
         )
-
-    # Count changed files
-    try:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", diff_base],
-            capture_output=True, text=True, cwd=root, timeout=5,
-        )
-        changed_files = [f for f in result.stdout.splitlines() if f.strip()]
-        metrics["changed_files"] = changed_files
-        metrics["changed_count"] = len(changed_files)
-    except subprocess.TimeoutExpired:
-        metrics["changed_count"] = 0
-        changed_files = []
 
     branch = metrics.get("branch", "unknown")
+    ins = metrics.get("insertions", 0)
+    del_count = metrics.get("deletions", 0)
     summary = (
         f"Branch '{branch}': {metrics.get('changed_count', 0)} files changed, "
         f"+{ins}/-{del_count} lines"

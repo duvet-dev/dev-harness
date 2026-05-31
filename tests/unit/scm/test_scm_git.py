@@ -11,6 +11,12 @@ import pytest
 from harness.scm.git import (
     GitRepo,
     GitOperationError,
+    GitInitError,
+    GitAddError,
+    GitCommitError,
+    GitCheckoutError,
+    GitRevParseError,
+    GitLsFilesError,
     NotAGitRepoError,
     DiffResult,
     StatusResult,
@@ -500,3 +506,432 @@ class TestGitRepoProtocol:
         assert repo.root == Path("/fake")
         assert repo.branch() == "main"
         assert repo.merge_detected("x") is False
+
+
+# ── Typed Error Class Tests ─────────────────────────────────────────────────
+
+
+class TestGitTypedErrors:
+    """Verify typed error hierarchy."""
+
+    @pytest.mark.parametrize(
+        "error_cls",
+        [GitInitError, GitAddError, GitCommitError, GitCheckoutError, GitRevParseError, GitLsFilesError],
+    )
+    def test_is_subclass_of_git_operation_error(self, error_cls):
+        assert issubclass(error_cls, GitOperationError)
+
+    def test_git_init_error_raises_from_operation(self):
+        with pytest.raises(GitOperationError):
+            try:
+                raise GitInitError(cmd="init /tmp/fake", exit_code=128, stderr="permission denied")
+            except GitInitError:
+                raise
+
+    def test_git_add_error_raises_from_operation(self):
+        with pytest.raises(GitOperationError):
+            try:
+                raise GitAddError(cmd="add -A", exit_code=128, stderr="error")
+            except GitAddError:
+                raise
+
+    def test_git_commit_error_raises_from_operation(self):
+        with pytest.raises(GitOperationError):
+            try:
+                raise GitCommitError(cmd="commit -m x", exit_code=1, stderr="nothing to commit")
+            except GitCommitError:
+                raise
+
+    def test_git_checkout_error_raises_from_operation(self):
+        with pytest.raises(GitOperationError):
+            try:
+                raise GitCheckoutError(cmd="checkout missing", exit_code=1, stderr="not a valid ref")
+            except GitCheckoutError:
+                raise
+
+    def test_git_rev_parse_error_raises_from_operation(self):
+        with pytest.raises(GitOperationError):
+            try:
+                raise GitRevParseError(cmd="rev-parse INVALID", exit_code=128, stderr="unknown revision")
+            except GitRevParseError:
+                raise
+
+    def test_git_ls_files_error_raises_from_operation(self):
+        with pytest.raises(GitOperationError):
+            try:
+                raise GitLsFilesError(cmd="ls-files --bad", exit_code=128, stderr="unknown option")
+            except GitLsFilesError:
+                raise
+
+
+# ── GitRepo.init ────────────────────────────────────────────────────────────
+
+
+class TestGitRepoInitMethod:
+    """Tests for GitRepo.init()."""
+
+    def test_init_creates_git_repo(self, tmp_path: Path):
+        target = tmp_path / "new_project"
+        repo = GitRepo.__new__(GitRepo)
+        repo._runner = None  # Need fresh runner for real init
+        from harness.infrastructure.git.git_command import GitCommandRunner
+        repo._runner = GitCommandRunner()
+        repo._root = target.resolve()  # Set after init
+
+        # init creates the repo, then we construct a real GitRepo to validate
+        GitRepo.init(repo, target)
+        assert (target / ".git").is_dir()
+
+    def test_init_twice_is_idempotent(self, tmp_path: Path):
+        target = tmp_path / "idempotent"
+        from harness.infrastructure.git.git_command import GitCommandRunner
+        runner = GitCommandRunner()
+        # First init
+        runner.run(["init", str(target)], cwd=target.parent, ensure_cwd=True)
+        # Second init - should not raise
+        runner.run(["init", str(target)], cwd=target.parent)
+        assert (target / ".git").is_dir()
+
+    def test_init_raises_git_init_error_on_failure(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = GitOperationError(
+            cmd="init /invalid/x", exit_code=128, stderr="permission denied"
+        )
+        repo = GitRepo.__new__(GitRepo)
+        repo._runner = runner
+        repo._root = tmp_path
+
+        with pytest.raises(GitInitError):
+            repo.init(tmp_path / "x")
+
+
+# ── GitRepo.add ─────────────────────────────────────────────────────────────
+
+
+class TestGitRepoAdd:
+    """Tests for GitRepo.add()."""
+
+    def test_add_all_stages_untracked(self, git_repo: Path):
+        (git_repo / "new_file.txt").write_text("new")
+        repo = GitRepo(git_repo)
+        repo.add()
+        status = repo.status()
+        assert "new_file.txt" in status.staged
+
+    def test_add_specific_path(self, git_repo: Path):
+        (git_repo / "specific.txt").write_text("specific")
+        (git_repo / "other.txt").write_text("other")
+        repo = GitRepo(git_repo)
+        repo.add(["specific.txt"])
+        status = repo.status()
+        assert "specific.txt" in status.staged
+        assert "other.txt" not in status.staged
+
+    def test_add_raises_git_add_error_on_failure(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",  # GitRepo.__init__ succeeds
+            GitOperationError(cmd="add", exit_code=128, stderr="error"),
+        ]
+        repo_dir = tmp_path / "repoadd"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        with pytest.raises(GitAddError):
+            repo.add()
+
+
+# ── GitRepo.commit ──────────────────────────────────────────────────────────
+
+
+class TestGitRepoCommit:
+    """Tests for GitRepo.commit()."""
+
+    def test_commit_with_message_returns_sha(self, git_repo: Path):
+        (git_repo / "to_commit.txt").write_text("content")
+        repo = GitRepo(git_repo)
+        repo.add()
+        sha = repo.commit("test commit")
+        assert len(sha) == 40
+        assert sha.isalnum()
+
+    def test_commit_message_appears_in_log(self, git_repo: Path):
+        (git_repo / "msg_test.txt").write_text("content")
+        repo = GitRepo(git_repo)
+        repo.add()
+        repo.commit("custom message here")
+        entries = repo.log(max_count=10)
+        # The latest log entry should have our message
+        # (first entry is most recent with oneline format)
+        # Actually log returns multiple fields via _parse_log_entries
+        messages = [e.message for e in entries]
+        assert any("custom message here" in m for m in messages)
+
+    def test_commit_raises_git_commit_error_on_failure(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",  # init
+            GitOperationError(cmd="commit", exit_code=1, stderr="nothing to commit"),
+        ]
+        repo_dir = tmp_path / "repocommit"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        with pytest.raises(GitCommitError):
+            repo.commit("message")
+
+
+# ── GitRepo.checkout ────────────────────────────────────────────────────────
+
+
+class TestGitRepoCheckout:
+    """Tests for GitRepo.checkout()."""
+
+    def test_checkout_existing_branch(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        original = repo.branch()
+        # Create another branch to switch to
+        subprocess.run(
+            ["git", "branch", "other"],
+            cwd=str(git_repo), capture_output=True,
+        )
+        repo.checkout("other")
+        assert repo.branch() == "other"
+        # Restore
+        repo.checkout(original)
+
+    def test_checkout_create_new_branch(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        repo.checkout("new-feature", create=True)
+        assert repo.branch() == "new-feature"
+
+    def test_checkout_with_empty_string_create(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        # Creating a branch with an empty name should fail
+        with pytest.raises(GitCheckoutError):
+            repo.checkout("", create=True)
+
+    def test_checkout_raises_git_checkout_error_on_failure(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",
+            GitOperationError(cmd="checkout missing", exit_code=1, stderr="pathspec did not match"),
+        ]
+        repo_dir = tmp_path / "repocheckout"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        with pytest.raises(GitCheckoutError):
+            repo.checkout("nonexistent")
+
+
+# ── GitRepo.rev_parse ───────────────────────────────────────────────────────
+
+
+class TestGitRepoRevParse:
+    """Tests for GitRepo.rev_parse() and head_sha()."""
+
+    def test_rev_parse_head(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        sha = repo.rev_parse("HEAD")
+        assert len(sha) == 40
+        assert sha.isalnum()
+
+    def test_rev_parse_master(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        branch = repo.branch()
+        sha = repo.rev_parse(branch)
+        assert len(sha) == 40
+
+    def test_rev_parse_raises_on_invalid_ref(self, tmp_path):
+        from unittest.mock import MagicMock, Mock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",
+            GitOperationError(cmd="rev-parse INVALID", exit_code=128, stderr="unknown revision"),
+        ]
+        repo_dir = tmp_path / "reforevparse"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        with pytest.raises(GitRevParseError):
+            repo.rev_parse("INVALID")
+
+    def test_head_sha_returns_40_char(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        sha = repo.head_sha()
+        assert len(sha) == 40
+        assert sha.isalnum()
+
+    def test_head_sha_raises_on_non_repo(self, tmp_path: Path):
+        with pytest.raises(NotAGitRepoError):
+            GitRepo(tmp_path / "nonexistent")
+
+
+# ── GitRepo.ls_files ────────────────────────────────────────────────────────
+
+
+class TestGitRepoLsFiles:
+    """Tests for GitRepo.ls_files()."""
+
+    def test_ls_files_returns_tracked(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        files = repo.ls_files()
+        assert "README.md" in files
+
+    def test_ls_files_others(self, git_repo: Path):
+        (git_repo / "untracked.txt").write_text("untracked")
+        repo = GitRepo(git_repo)
+        files = repo.ls_files(others=True, exclude_standard=True)
+        assert "untracked.txt" in files
+        assert "README.md" not in files
+
+    def test_ls_files_others_without_exclude(self, git_repo: Path):
+        (git_repo / "untracked2.txt").write_text("untracked")
+        repo = GitRepo(git_repo)
+        files = repo.ls_files(others=True, exclude_standard=False)
+        assert "untracked2.txt" in files
+
+    def test_ls_files_raises_on_failure(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",
+            GitOperationError(cmd="ls-files", exit_code=128, stderr="error"),
+        ]
+        repo_dir = tmp_path / "repolsfiles"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        with pytest.raises(GitLsFilesError):
+            repo.ls_files()
+
+
+# ── GitRepo.is_git_repo ─────────────────────────────────────────────────────
+
+
+class TestGitRepoIsGitRepo:
+    """Tests for GitRepo.is_git_repo()."""
+
+    def test_is_git_repo_true(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        assert repo.is_git_repo() is True
+
+    def test_is_git_repo_false_on_non_repo(self, tmp_path: Path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        # We can't construct GitRepo with a non-repo path (it raises),
+        # so we test via mock
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            GitOperationError(cmd="rev-parse --git-dir", exit_code=128, stderr="not a git repo"),
+        ]
+        repo = GitRepo.__new__(GitRepo)
+        repo._runner = runner
+        repo._root = tmp_path
+
+        assert repo.is_git_repo() is False
+
+    def test_is_git_repo_true_with_mock(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.return_value = ".git\n"
+        repo = GitRepo.__new__(GitRepo)
+        repo._runner = runner
+        repo._root = tmp_path
+
+        assert repo.is_git_repo() is True
+
+
+# ── GitRepo new methods with mock runner (failure paths) ────────────────────
+
+
+class TestGitRepoNewMethodsMockRunner:
+    """Additional failure-path tests for new GitRepo methods."""
+
+    def test_add_with_empty_paths_list(self, tmp_path):
+        """Adding with an empty list should stage nothing (graceful)."""
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [".git\n", ""]
+        repo_dir = tmp_path / "repoemptyadd"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        # Should not raise
+        repo.add(paths=[])
+
+    def test_init_with_ensure_cwd(self, tmp_path):
+        """init should create parent directories."""
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.return_value = "Initialized empty Git repository\n"
+        repo = GitRepo.__new__(GitRepo)
+        repo._runner = runner
+        repo._root = tmp_path
+
+        target = tmp_path / "sub" / "deep" / "repo"
+        repo.init(target)
+        runner.run.assert_called_once()
+
+    def test_commit_empty_message_no_m_flag(self, tmp_path):
+        """Commit with empty message should run without -m flag."""
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",  # init
+            "",          # commit (no -m flag)
+            "abc123def456abc123def456abc123def456abc123\n",  # head_sha
+        ]
+        repo_dir = tmp_path / "repoemptycommit"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        sha = repo.commit("")
+        assert sha == "abc123def456abc123def456abc123def456abc123"
+        # Verify commit was called without -m flag
+        # The commit call is the 2nd call (index 1)
+        commit_call = runner.run.call_args_list[1]
+        assert "-m" not in commit_call.args[0]
+
+    def test_checkout_special_chars_branch(self, tmp_path):
+        """Branch name with special characters."""
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",
+            GitOperationError(cmd="checkout branch/with/slashes", exit_code=128, stderr="invalid"),
+        ]
+        repo_dir = tmp_path / "repospecial"
+        repo_dir.mkdir()
+        repo = GitRepo(repo_dir, runner=runner)
+
+        with pytest.raises(GitCheckoutError):
+            repo.checkout("branch/with/slashes", create=True)

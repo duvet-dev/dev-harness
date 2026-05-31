@@ -192,15 +192,13 @@ class TestRenameEngagement:
 
     def test_branch_strategy_new(self, tmp_path):
         create_engagement_dir(tmp_path, "old-eng")
-        with patch("harness.scm.git.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
-            with patch("harness.scm.git.GitRepo") as MockGitRepo:
-                mock_repo = MagicMock()
-                mock_repo.branch.return_value = "main"
-                MockGitRepo.return_value = mock_repo
-                result = rename_engagement("old-eng", "new-eng", tmp_path, branch_strategy=BranchStrategy.NEW)
-                assert result.success is True
-                mock_run.assert_called_once()
+        with patch("harness.scm.git.GitRepo") as MockGitRepo:
+            mock_repo = MagicMock()
+            mock_repo.branch.return_value = "main"
+            MockGitRepo.return_value = mock_repo
+            result = rename_engagement("old-eng", "new-eng", tmp_path, branch_strategy=BranchStrategy.NEW)
+            assert result.success is True
+            mock_repo.checkout.assert_called_once_with("new-eng", create=True)
 
     def test_branch_operation_warning_on_failure(self, tmp_path):
         create_engagement_dir(tmp_path, "old-eng")

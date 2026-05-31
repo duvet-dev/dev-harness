@@ -60,7 +60,7 @@ class PhaseName:
 # ── Session / Engagement enums ─────────────────────────────────────
 
 
-from enum import Enum  # noqa: E402 — import after PhaseName class
+from enum import Enum
 
 
 class SessionType(str, Enum):

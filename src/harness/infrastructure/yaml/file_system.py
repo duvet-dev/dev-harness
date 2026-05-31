@@ -89,4 +89,4 @@ class RealFileSystem:
         return list(path.glob(pattern))
 
     def open(self, path: Path, mode: str = "r") -> TextIO | BinaryIO:
-        return open(path, mode)  # noqa: SIM115
+        return open(path, mode)

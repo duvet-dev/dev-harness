@@ -697,18 +697,12 @@ def registry_summary() -> dict[str, Any]:
     }
 
 
-def get_default_critic_loop_config() -> CriticLoopConfig:
-    """Return the default critic loop configuration.
+def get_default_critic_loop_config() -> ConvergenceConfig:
+    """Return the default convergence configuration for critic loops.
 
-    The default uses:
-    - ``architect`` as the design-writer
-    - ``critical-analyser`` as the reviewer
-    - 5 max iterations
-    - ``design/`` for architect output
-    - ``reviews/`` for critic output
-
-    Callers may override any field on the returned config before
-    passing it to ``AgentRunner.run_critic_loop()``.
+    Uses ConvergenceConfig (unified config replacing old CriticLoopConfig).
+    Default delegates to architect (writer) and critical-analyser (reviewer)
+    with 5 max iterations.
     """
     return ConvergenceConfig(
         strategy="gate_judgment",

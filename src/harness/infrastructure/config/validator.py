@@ -8,22 +8,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Optional, Protocol
+from typing import Any, Optional
 
 from harness.domain.health import HealthCheck, _result
+from harness.domain.interfaces.repositories import EnvProvider, YamlReader
 from harness.paths import get_providers_path
-
-
-class YamlReader(Protocol):
-    """Interface for reading and parsing YAML files."""
-
-    def read(self, path: Path) -> Any: ...
-
-
-class EnvProvider(Protocol):
-    """Interface for resolving environment variables."""
-
-    def get(self, name: str) -> Optional[str]: ...
 
 
 class ConfigValidator:
@@ -129,6 +118,4 @@ class ConfigValidator:
 
 __all__ = [
     "ConfigValidator",
-    "YamlReader",
-    "EnvProvider",
 ]

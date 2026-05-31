@@ -7,12 +7,16 @@ interfaces are owned by the domain layer, not the infrastructure layer.
 
 from harness.domain.interfaces.repositories import (
     EngagementRepository,
+    EnvProvider,
     PlanRepository,
     SnapshotRepository,
+    YamlReader,
 )
 
 __all__ = [
     "EngagementRepository",
+    "EnvProvider",
     "PlanRepository",
     "SnapshotRepository",
+    "YamlReader",
 ]

@@ -7,22 +7,17 @@ plan consistency, manifest links, and fixing engagement metadata.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Optional
 
 import yaml
 
 from harness.domain.health import HealthCheck, _result
+from harness.domain.interfaces.repositories import YamlReader
 from harness.paths import (
     get_engagement_dir,
     get_engagement_plan_yaml,
     get_engagement_yaml,
 )
-
-
-class YamlReader(Protocol):
-    """Interface for reading YAML files."""
-
-    def read(self, path: Path) -> Any: ...
 
 
 class EngagementHealthChecker:

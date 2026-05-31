@@ -7,7 +7,7 @@ allowing the domain layer to remain agnostic of the storage technology.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Any, Optional, Protocol
 
 from harness.domain.identifiers import EngagementId, Slug, WaveId
 
@@ -70,3 +70,15 @@ class SnapshotRepository(Protocol):
         has_stale_summary: bool = False,
     ) -> None:
         """Write or update a phase checkpoint snapshot."""
+
+
+class YamlReader(Protocol):
+    """Interface for reading and parsing YAML files."""
+
+    def read(self, path: Path) -> Any: ...
+
+
+class EnvProvider(Protocol):
+    """Interface for reading environment variables."""
+
+    def get(self, name: str) -> Optional[str]: ...

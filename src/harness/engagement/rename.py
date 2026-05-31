@@ -21,7 +21,6 @@ from __future__ import annotations
 import shutil
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -43,10 +42,7 @@ from harness.paths import (
 # ── Branch strategy ────────────────────────────────────────────────────────
 
 
-class BranchStrategy(Enum):
-    KEEP = "keep"
-    RENAME = "rename"
-    NEW = "new"
+from harness.domain.enums import BranchStrategy
 
 
 # ── Result ─────────────────────────────────────────────────────────────────

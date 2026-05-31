@@ -101,6 +101,7 @@ class BranchStrategy(str, Enum):
     KEEP = "keep"
     RENAME = "rename"
     DELETE = "delete"
+    NEW = "new"
 
 
 # ── Backend execution enums ────────────────────────────────────────

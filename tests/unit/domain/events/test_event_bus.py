@@ -33,7 +33,7 @@ def bus() -> EventBus:
 # ── Event base class ────────────────────────────────────────────────────────
 
 
-class SampleEventBase:
+class TestEventBase:
     def test_event_equality_by_type(self):
         """Events are compared by type, not by __eq__."""
         e1 = SampleEvent(name="a")
@@ -55,12 +55,12 @@ class SampleEventBase:
 # ── EventBus: subscribe / publish / unsubscribe ─────────────────────────────
 
 
-class SampleEventBusSubscribe:
+class TestEventBusSubscribe:
     def test_subscribe_and_publish(self, bus: EventBus):
         """A subscriber receives events published to the bus."""
         received: list[Event] = []
 
-        bus.subscribe(SampleEvent, received.append)
+        bus.register(SampleEvent, received.append)
         bus.publish(SampleEvent(name="hello", value=1))
 
         assert len(received) == 1
@@ -71,8 +71,8 @@ class SampleEventBusSubscribe:
         test_events: list[SampleEvent] = []
         other_events: list[OtherEvent] = []
 
-        bus.subscribe(SampleEvent, test_events.append)
-        bus.subscribe(OtherEvent, other_events.append)
+        bus.register(SampleEvent, test_events.append)
+        bus.register(OtherEvent, other_events.append)
 
         bus.publish(SampleEvent(name="only-test"))
         bus.publish(OtherEvent(label="only-other"))
@@ -87,8 +87,8 @@ class SampleEventBusSubscribe:
         received_a: list[SampleEvent] = []
         received_b: list[SampleEvent] = []
 
-        bus.subscribe(SampleEvent, received_a.append)
-        bus.subscribe(SampleEvent, received_b.append)
+        bus.register(SampleEvent, received_a.append)
+        bus.register(SampleEvent, received_b.append)
 
         bus.publish(SampleEvent(name="both"))
 
@@ -99,28 +99,28 @@ class SampleEventBusSubscribe:
         """Publishing with no subscribers does nothing."""
         bus.publish(SampleEvent(name="ghost"))  # no error
 
-    def test_unsubscribe(self, bus: EventBus):
-        """Unsubscribing removes the handler."""
+    def test_unregister(self, bus: EventBus):
+        """Unregistering removes the handler."""
         received: list[SampleEvent] = []
 
         handler = received.append
-        bus.subscribe(SampleEvent, handler)
-        bus.unsubscribe(SampleEvent, handler)
+        bus.register(SampleEvent, handler)
+        bus.unregister(SampleEvent, handler)
         bus.publish(SampleEvent(name="gone"))
 
         assert len(received) == 0
 
-    def test_unsubscribe_nonexistent_handler(self, bus: EventBus):
-        """Unsubscribing a handler that was never added is a no-op."""
+    def test_unregister_nonexistent_handler(self, bus: EventBus):
+        """Unregistering a handler that was never added is a no-op."""
         def handler(event: Event) -> None:
             pass
-        bus.unsubscribe(SampleEvent, handler)  # no error
+        bus.unregister(SampleEvent, handler)  # no error
 
     def test_publish_multiple_events(self, bus: EventBus):
         """Multiple publishes all reach subscribers."""
         received: list[SampleEvent] = []
 
-        bus.subscribe(SampleEvent, received.append)
+        bus.register(SampleEvent, received.append)
 
         for i in range(5):
             bus.publish(SampleEvent(name=f"e{i}", value=i))
@@ -132,7 +132,7 @@ class SampleEventBusSubscribe:
         """The handler receives the actual event object."""
         events: list[SampleEvent] = []
 
-        bus.subscribe(SampleEvent, lambda e: events.append(e))
+        bus.register(SampleEvent, lambda e: events.append(e))
         original = SampleEvent(name="orig", value=99)
         bus.publish(original)
 
@@ -142,29 +142,29 @@ class SampleEventBusSubscribe:
 # ── Edge cases ──────────────────────────────────────────────────────────────
 
 
-class SampleEventBusEdgeCases:
-    def test_subscribe_same_handler_twice(self, bus: EventBus):
-        """Subscribing the same handler twice results in double delivery."""
+class TestEventBusEdgeCases:
+    def test_register_same_handler_twice(self, bus: EventBus):
+        """Registering the same handler twice results in double delivery."""
         received: list[SampleEvent] = []
         handler = received.append
 
-        bus.subscribe(SampleEvent, handler)
-        bus.subscribe(SampleEvent, handler)
+        bus.register(SampleEvent, handler)
+        bus.register(SampleEvent, handler)
         bus.publish(SampleEvent(name="double"))
 
         assert len(received) == 2  # called twice
 
-    def test_unsubscribe_removes_only_one_copy(self, bus: EventBus):
-        """Unsubscribing removes one copy of a duplicate handler."""
+    def test_unregister_removes_all_copies(self, bus: EventBus):
+        """Unregistering removes all copies of a duplicate handler."""
         received: list[SampleEvent] = []
         handler = received.append
 
-        bus.subscribe(SampleEvent, handler)
-        bus.subscribe(SampleEvent, handler)
-        bus.unsubscribe(SampleEvent, handler)
+        bus.register(SampleEvent, handler)
+        bus.register(SampleEvent, handler)
+        bus.unregister(SampleEvent, handler)
         bus.publish(SampleEvent(name="one"))
 
-        assert len(received) == 1  # only one copy remaining
+        assert len(received) == 0  # all copies removed
 
     def test_handler_raises_error(self, bus: EventBus):
         """A handler that raises doesn't prevent other handlers from running."""
@@ -173,11 +173,42 @@ class SampleEventBusEdgeCases:
         def failing_handler(event: Event) -> None:
             raise RuntimeError("Handler failed")
 
-        bus.subscribe(SampleEvent, failing_handler)
-        bus.subscribe(SampleEvent, received.append)
+        bus.register(SampleEvent, failing_handler)
+        bus.register(SampleEvent, received.append)
 
         with pytest.raises(RuntimeError):
             bus.publish(SampleEvent(name="fail"))
         # The second handler should NOT have been called because the
         # first handler's exception propagates immediately.
         # (This is the current design — synchronous, no error isolation.)
+
+    def test_clear_removes_all_handlers(self, bus: EventBus):
+        """Clear removes all registered handlers."""
+        received: list[SampleEvent] = []
+        bus.register(SampleEvent, received.append)
+        bus.clear()
+        bus.publish(SampleEvent(name="after_clear"))
+        assert len(received) == 0
+
+    def test_has_handlers_true_when_registered(self, bus: EventBus):
+        """has_handlers returns True when handlers are registered."""
+        bus.register(SampleEvent, lambda e: None)
+        assert bus.has_handlers(SampleEvent) is True
+
+    def test_has_handlers_false_when_none(self, bus: EventBus):
+        """has_handlers returns False when no handlers registered."""
+        assert bus.has_handlers(SampleEvent) is False
+
+    def test_has_handlers_after_clear(self, bus: EventBus):
+        """has_handlers returns False after clear()."""
+        bus.register(SampleEvent, lambda e: None)
+        bus.clear()
+        assert bus.has_handlers(SampleEvent) is False
+
+    def test_has_handlers_unregistered_type(self, bus: EventBus):
+        """has_handlers returns False for a type that was never registered."""
+        assert bus.has_handlers(OtherEvent) is False
+
+    def test_is_empty_init(self, bus: EventBus):
+        """New EventBus has no handlers."""
+        assert bus._handlers == {}

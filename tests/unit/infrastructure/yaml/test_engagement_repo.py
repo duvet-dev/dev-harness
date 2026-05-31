@@ -108,3 +108,8 @@ class TestUpdateStatus:
     def test_update_status_with_enum(self, repo, mock_impl):
         repo.update_status(Slug("eng"), EngagementStatus.ACTIVE)
         mock_impl.update_status.assert_called_once_with("eng", EngagementStatus.ACTIVE)
+
+    def test_update_status_with_other_type(self, repo, mock_impl):
+        """When status is neither str nor EngagementStatus, passes through."""
+        repo.update_status(Slug("eng"), 42)
+        mock_impl.update_status.assert_called_once_with("eng", 42)

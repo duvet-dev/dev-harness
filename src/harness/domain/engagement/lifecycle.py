@@ -24,7 +24,7 @@ from harness.paths import (
 # These are kept for backward compatibility only.
 # All new code should use the path resolver functions from harness.paths.
 
-from harness.paths import (  # noqa: F401
+from harness.paths import (
     ENGAGEMENTS_DIR,
     ACTIVE_ENGAGEMENTS_FILE,
     ENGAGEMENT_MD,

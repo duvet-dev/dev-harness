@@ -25,7 +25,7 @@ from harness.paths import (
 )
 
 # These constants are re-exported from harness.paths
-from harness.paths import (  # noqa: F401
+from harness.paths import (
     ENGAGEMENTS_DIR,
     ACTIVE_ENGAGEMENTS_FILE,
     ENGAGEMENT_MD,

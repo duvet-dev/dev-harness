@@ -10,11 +10,14 @@ from harness.infrastructure.pydantic.constraint_section import ConstraintSection
 class TestConstraintSection:
     def test_defaults(self):
         cs = ConstraintSection()
+        assert cs.backend == ""
         assert cs.model == ""
+        assert cs.agent_role == ""
         assert cs.temperature is None
         assert cs.max_tokens is None
         assert cs.available_tools == []
         assert cs.budget == {}
+        assert cs.fallbacks == []
 
     def test_typed_fields(self):
         cs = ConstraintSection(
@@ -26,9 +29,10 @@ class TestConstraintSection:
         assert cs.temperature == 0.7
         assert cs.max_tokens == 4096
 
-    def test_extra_fields_allowed(self):
-        cs = ConstraintSection(model="test", unknown_field="value")
-        assert cs.model_extra == {"unknown_field": "value"}
+    def test_typed_backend_and_agent_role(self):
+        cs = ConstraintSection(backend="api", agent_role="critical-analyser")
+        assert cs.backend == "api"
+        assert cs.agent_role == "critical-analyser"
 
     def test_get_method(self):
         cs = ConstraintSection(model="gpt-4", temperature=0.5)
@@ -37,9 +41,9 @@ class TestConstraintSection:
         assert cs.get("nonexistent") is None
         assert cs.get("nonexistent", "default") == "default"
 
-    def test_get_returns_extra_field(self):
-        cs = ConstraintSection(extra_key="extra_value")
-        assert cs.get("extra_key") == "extra_value"
+    def test_get_returns_backend_field(self):
+        cs = ConstraintSection(backend="api")
+        assert cs.get("backend") == "api"
 
     def test_getitem_for_typed_field(self):
         cs = ConstraintSection(model="claude-3")

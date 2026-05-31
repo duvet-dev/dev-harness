@@ -23,7 +23,17 @@ from harness.agents.context import ContextPacket
 from harness.agents.repo_tool import RepoTool
 from harness.config.provider_registry import load_providers
 from harness.infrastructure.plugins.registry import PluginRegistry
+from harness.infrastructure.pydantic import ConstraintSection
 from harness.paths import get_providers_path
+
+
+def _cs(obj: Any) -> ConstraintSection:
+    """Normalise a constraint_section value to a ConstraintSection."""
+    if isinstance(obj, ConstraintSection):
+        return obj
+    if isinstance(obj, dict):
+        return ConstraintSection(**obj)
+    return ConstraintSection()
 
 logger = logging.getLogger(__name__)
 
@@ -77,15 +87,16 @@ class AgentService:
             BackendResult with artifacts, metrics, and status.
         """
         start_time = time.monotonic()
+        cs = _cs(packet.constraint_section)
 
         resolved_name = (
             backend_name
-            or packet.constraint_section.get("backend")
+            or cs.backend
             or self._default_backend
         )
 
         project_dir = self._resolve_project_dir(packet)
-        model_key = packet.constraint_section.get("model", "")
+        model_key = cs.model
 
         providers = load_providers(project_dir) if project_dir else None
         resolved_config = providers.get_resolved(resolved_name) if providers else None
@@ -204,7 +215,7 @@ class AgentService:
         self, backend_name: str, model_key: str, packet: ContextPacket
     ) -> list[dict[str, str]]:
         fallbacks: list[dict[str, str]] = []
-        packet_fallbacks = packet.constraint_section.get("fallbacks")
+        packet_fallbacks = _cs(packet.constraint_section).fallbacks
         if isinstance(packet_fallbacks, list):
             for fb in packet_fallbacks:
                 if isinstance(fb, dict) and fb.get("backend"):
@@ -219,7 +230,7 @@ class AgentService:
     ) -> AbstractBackend:
         name = (
             backend_name
-            or packet.constraint_section.get("backend")
+            or _cs(packet.constraint_section).backend
             or self._default_backend
         )
         try:
@@ -249,7 +260,7 @@ class AgentService:
                 repo_root = parent
                 break
 
-        agent_role_str = packet.constraint_section.get("agent_role", "")
+        agent_role_str = _cs(packet.constraint_section).agent_role
         if not agent_role_str:
             return
 

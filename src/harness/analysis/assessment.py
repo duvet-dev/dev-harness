@@ -22,6 +22,7 @@ from harness.agents.backends.base import BackendResult
 from harness.agents.context import ContextPacket, OutputContract
 from harness.application.services.agent_service import AgentService
 from harness.infrastructure.plugins.registry import PluginRegistry
+from harness.infrastructure.pydantic import ConstraintSection
 from harness.analysis.agents import AnalysisAgent, AnalysisAgentRegistry
 
 logger = logging.getLogger(__name__)
@@ -320,13 +321,11 @@ async def assess(
 
             # Inline run_simple logic
             from pathlib import Path as _Path
-            constraint_section: dict[str, str] = {
-                "backend": "api",
-            }
+            constraint_section = ConstraintSection(backend="api")
             if agent.model:
-                constraint_section["model"] = agent.model
+                constraint_section.model = agent.model
             if agent.agent_role:
-                constraint_section["agent_role"] = agent.agent_role
+                constraint_section.agent_role = agent.agent_role
 
             packet = ContextPacket(
                 engagement_id="_assessment",
@@ -504,7 +503,7 @@ async def _run_critical_review(
         architecture_rules=[],
         target_directory=root,
         output_contract=OutputContract(),
-        constraint_section={"backend": "api", "model": "deepseek-v4-pro", "agent_role": "critical-analyser"},
+        constraint_section=ConstraintSection(backend="api", model="deepseek-v4-pro", agent_role="critical-analyser"),
     )
     result: BackendResult = await service.run(packet, backend_name="api")
 
@@ -592,7 +591,7 @@ async def _run_refactoring_analysis(
         architecture_rules=[],
         target_directory=root,
         output_contract=OutputContract(),
-        constraint_section={"backend": "api", "model": "deepseek-v4-pro", "agent_role": "critical-analyser"},
+        constraint_section=ConstraintSection(backend="api", model="deepseek-v4-pro", agent_role="critical-analyser"),
     )
     result: BackendResult = await service.run(packet, backend_name="api")
 
@@ -693,7 +692,7 @@ async def _synthesize_report(
         architecture_rules=[],
         target_directory=None,
         output_contract=OutputContract(),
-        constraint_section={"backend": "api", "model": "deepseek-v4-pro"},
+        constraint_section=ConstraintSection(backend="api", model="deepseek-v4-pro"),
     )
     result: BackendResult = await service.run(packet, backend_name="api")
 

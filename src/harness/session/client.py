@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 import yaml
 
+from harness.infrastructure.pydantic import ConstraintSection
 from harness.paths import get_engagement_dir, get_providers_path
 
 # ── Data types ─────────────────────────────────────────────────────────────
@@ -501,11 +502,11 @@ class SessionClient:
             architecture_rules=[],
             target_directory=self.root,
             output_contract=OutputContract(),
-            constraint_section={
-                "agent_role": agent_role,
-                "temperature": 0.7,
-                "max_tokens": 16384,
-            },
+            constraint_section=ConstraintSection(
+                agent_role=agent_role,
+                temperature=0.7,
+                max_tokens=16384,
+            ),
         )
 
         # Create service and backend

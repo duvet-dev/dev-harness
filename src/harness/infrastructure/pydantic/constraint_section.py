@@ -16,16 +16,21 @@ class ConstraintSection(BaseModel):
 
     This model replaces the raw ``dict[str, Any]`` for constraint
     sections throughout the codebase. It provides typed access to
-    common constraint fields while allowing provider-specific extras.
+    all constraint fields including ``backend``, ``model``, ``agent_role``,
+    ``temperature``, ``max_tokens``, ``available_tools``, and ``budget``.
 
-    Extra fields are preserved via the ``extras`` mechanism to support
-    custom constraint keys used by specific backends.
+    The ``get()`` and ``__getitem__`` methods remain for backward
+    compatibility with dict-style access patterns.
     """
 
-    model_config = {"extra": "allow"}  # Allow provider-specific extras
+    backend: str = ""
+    """Backend/API name override (e.g. 'api', 'cli')."""
 
     model: str = ""
     """Model override (e.g. 'deepseek-v4-pro', 'gpt-4o')."""
+
+    agent_role: str = ""
+    """Agent role override."""
 
     temperature: Optional[float] = None
     """Sampling temperature override (0.0–2.0)."""
@@ -39,15 +44,16 @@ class ConstraintSection(BaseModel):
     budget: dict[str, Any] = Field(default_factory=dict)
     """Budget constraints for execution."""
 
+    fallbacks: list[Any] = Field(default_factory=list)
+    """Fallback backend configurations."""
+
     def get(self, key: str, default: Any = None) -> Any:
         """Support dict-style .get() for backwards compatibility."""
         if hasattr(self, key):
             val = getattr(self, key)
             if val is not None:
                 return val
-        # Check extras via model_extra
-        extras = self.model_extra or {}
-        return extras.get(key, default)
+        return default
 
     def __getitem__(self, key: str) -> Any:
         """Support dict-style access for backwards compatibility."""

@@ -27,13 +27,13 @@ from typing import Optional
 import yaml
 
 from harness.domain.engagement.lifecycle import (
-    ENGAGEMENT_MD,
-    ENGAGEMENT_YAML_FILE,
-    PLAN_YAML,
     _parse_engagement_md,
     update_active_engagement_mapping,
 )
 from harness.paths import (
+    ENGAGEMENT_MD,
+    ENGAGEMENT_YAML_FILE,
+    PLAN_YAML,
     get_active_engagements_path,
     get_engagement_dir,
     get_engagements_dir,

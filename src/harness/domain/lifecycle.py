@@ -13,6 +13,8 @@ from typing import Optional
 import yaml
 
 from harness.paths import (
+    ENGAGEMENT_MD,
+    ENGAGEMENT_YAML_FILE,
     get_active_engagements_path,
     get_engagement_dir,
     get_engagement_md,
@@ -22,13 +24,16 @@ from harness.paths import (
     get_engagement_yaml,
 )
 
-ENGAGEMENTS_DIR = ".harness/engagements"
-ACTIVE_ENGAGEMENTS_FILE = ".harness/active-engagements.yaml"
-ENGAGEMENT_MD = "engagement.md"
-ENGAGEMENT_YAML_FILE = "engagement.yaml"
-PLAN_MD = "plan.md"
-PLAN_YAML = "plan.yaml"
-WAVES_DIR = "waves"
+# These constants are re-exported from harness.paths
+from harness.paths import (  # noqa: F401
+    ENGAGEMENTS_DIR,
+    ACTIVE_ENGAGEMENTS_FILE,
+    ENGAGEMENT_MD,
+    ENGAGEMENT_YAML_FILE,
+    PLAN_MD,
+    PLAN_YAML,
+    WAVES_DIR,
+)
 
 
 def create_engagement_dir(root: Path, slug: str) -> Path:
@@ -75,8 +80,8 @@ def write_engagement_metadata(
         + "---\n"
         + f"\n# {name}\n\n"
     )
-    (engagement_dir / "engagement.md").write_text(content)
-    eng_yaml_path = engagement_dir / "engagement.yaml"
+    (engagement_dir / ENGAGEMENT_MD).write_text(content)
+    eng_yaml_path = engagement_dir / ENGAGEMENT_YAML_FILE
     if eng_yaml_path.is_file():
         with open(eng_yaml_path) as f:
             yaml_data = yaml.safe_load(f) or {}

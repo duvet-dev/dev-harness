@@ -20,17 +20,19 @@ from harness.paths import (
     get_engagement_yaml,
 )
 
-# ── Constants ──────────────────────────────────────────────────────────────
-# These are kept for backward compatibility but deprecated.
+# ── Deprecated constants — re-exported from harness.paths ──────────────────
+# These are kept for backward compatibility only.
 # All new code should use the path resolver functions from harness.paths.
 
-ENGAGEMENTS_DIR = ".harness/engagements"   # deprecated — use get_engagements_dir()
-ACTIVE_ENGAGEMENTS_FILE = ".harness/active-engagements.yaml"  # deprecated
-ENGAGEMENT_MD = "engagement.md"
-ENGAGEMENT_YAML_FILE = "engagement.yaml"
-PLAN_MD = "plan.md"
-PLAN_YAML = "plan.yaml"
-WAVES_DIR = "waves"
+from harness.paths import (  # noqa: F401
+    ENGAGEMENTS_DIR,
+    ACTIVE_ENGAGEMENTS_FILE,
+    ENGAGEMENT_MD,
+    ENGAGEMENT_YAML_FILE,
+    PLAN_MD,
+    PLAN_YAML,
+    WAVES_DIR,
+)
 
 
 # ── Directory / metadata creation ─────────────────────────────────────────
@@ -114,10 +116,10 @@ def write_engagement_metadata(
         + "---\n"
         + f"\n# {name}\n\n"
     )
-    (engagement_dir / "engagement.md").write_text(content)
+    (engagement_dir / ENGAGEMENT_MD).write_text(content)
 
     # Also write/update structured engagement.yaml
-    eng_yaml_path = engagement_dir / "engagement.yaml"
+    eng_yaml_path = engagement_dir / ENGAGEMENT_YAML_FILE
     if eng_yaml_path.is_file():
         with open(eng_yaml_path) as f:
             yaml_data = yaml.safe_load(f) or {}

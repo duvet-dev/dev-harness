@@ -14,7 +14,7 @@ import yaml
 from harness.paths import get_active_engagements_path
 
 ENG_BRANCH_PATTERN = re.compile(r"^eng/(?P<slug>[a-z0-9-]+)$")
-# ACTIVE_ENGAGEMENTS_FILE kept for backward compatibility
+# Backward compatibility alias
 ACTIVE_ENGAGEMENTS_FILE = ".harness/active-engagements.yaml"
 
 

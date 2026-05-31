@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from harness.plan.plan_manager import PlanManager, PLAN_YAML
+from harness.paths import PLAN_YAML, get_engagement_plan_md, get_engagement_plan_yaml
+from harness.plan.plan_manager import PlanManager
 from harness.plan.wave_model import Plan, Wave, WaveState, WaveType
 
 
@@ -71,7 +72,7 @@ class TestPlanManager:
         plan.add_wave(wave)
         manager.save(plan)
 
-        md_path = manager._plan_dir / "plan.md"
+        md_path = get_engagement_plan_md(manager._root, manager._slug)
         content = md_path.read_text()
         assert "Tasks" in content
         assert "Implement feature" in content
@@ -92,7 +93,7 @@ class TestPlanManager:
         plan.add_wave(wave)
         manager.save(plan)
 
-        md_path = manager._plan_dir / "plan.md"
+        md_path = get_engagement_plan_md(manager._root, manager._slug)
         content = md_path.read_text()
         assert "Bug found" in content
 
@@ -101,10 +102,10 @@ class TestPlanManager:
             priorities={"security": 0.9},
             constraints={"lang": "python"},
         )
-        manager._plan_dir.mkdir(parents=True, exist_ok=True)
+        get_engagement_plan_yaml(manager._root, manager._slug).parent.mkdir(parents=True, exist_ok=True)
         manager.sync_to_md(plan=plan)
 
-        md_path = manager._plan_dir / "plan.md"
+        md_path = get_engagement_plan_md(manager._root, manager._slug)
         content = md_path.read_text()
         assert "security" in content
         assert "python" in content
@@ -236,7 +237,7 @@ class TestPlanManager:
     def test_sync_to_md_without_argument(self, manager):
         """sync_to_md called without plan argument loads from disk."""
         manager.add_wave("Test")
-        md_path = manager._plan_dir / "plan.md"
+        md_path = get_engagement_plan_md(manager._root, manager._slug)
         content = md_path.read_text()
         assert "Test" in content
 

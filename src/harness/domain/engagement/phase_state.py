@@ -16,7 +16,7 @@ from typing import Optional
 
 import yaml
 
-from harness.domain.engagement.lifecycle import ENGAGEMENTS_DIR
+from harness.paths import get_engagement_phases_path
 
 
 class PhaseState(str, Enum):
@@ -118,12 +118,7 @@ class PhaseStateManager:
     @property
     def state_path(self) -> Path:
         """Path to the phases.yaml file for this engagement."""
-        return (
-            self._root
-            / ENGAGEMENTS_DIR
-            / self._slug
-            / "phases.yaml"
-        )
+        return get_engagement_phases_path(self._root, self._slug)
 
     # ── Public API ──────────────────────────────────────────────────────────
 

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from harness.domain.engagement.lifecycle import ENGAGEMENTS_DIR
+from harness.paths import get_engagement_checkpoints_dir
 
 CHECKPOINT_EXPIRY_HOURS = 24
 
@@ -101,7 +101,7 @@ class CheckpointManager:
     def __init__(self, root: Path, slug: str) -> None:
         self._root = root
         self._slug = slug
-        self._base_dir = root / ENGAGEMENTS_DIR / slug / "checkpoints"
+        self._base_dir = get_engagement_checkpoints_dir(root, slug)
 
     # ── Path helpers ────────────────────────────────────────────────────────
 

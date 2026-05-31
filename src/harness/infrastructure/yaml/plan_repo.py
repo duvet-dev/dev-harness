@@ -12,7 +12,6 @@ from typing import Optional
 import yaml
 
 from harness.domain.identifiers import WaveId
-from harness.domain.engagement.lifecycle import ENGAGEMENTS_DIR
 from harness.plan.wave_model import Wave, Plan
 from harness.paths import get_engagement_plan_yaml
 

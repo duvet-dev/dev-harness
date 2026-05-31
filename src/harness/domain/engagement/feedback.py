@@ -16,7 +16,7 @@ import yaml
 
 from harness.domain.enums import FeedbackStatus
 
-from harness.domain.engagement.lifecycle import ENGAGEMENTS_DIR
+from harness.paths import get_engagement_feedback_dir
 
 # ── Feedback directories ───────────────────────────────────────────────────
 
@@ -152,7 +152,7 @@ class FeedbackManager:
     def __init__(self, root: Path, slug: str) -> None:
         self._root = root
         self._slug = slug
-        self._base_dir = root / ENGAGEMENTS_DIR / slug / "feedback"
+        self._base_dir = get_engagement_feedback_dir(root, slug)
 
     # ── Path helpers ────────────────────────────────────────────────────────
 

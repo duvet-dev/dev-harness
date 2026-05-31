@@ -9,11 +9,9 @@ from typing import Optional
 
 import yaml
 
-from harness.paths import get_engagement_dir
+from harness.paths import get_engagement_plan_md, get_engagement_plan_yaml
 
 from .wave_model import Plan, Wave, WaveProvenance, WaveState, WaveType
-
-PLAN_YAML = "plan.yaml"
 
 
 class PlanManager:
@@ -30,8 +28,7 @@ class PlanManager:
     def __init__(self, root: Path, engagement_slug: str) -> None:
         self._root = root
         self._slug = engagement_slug
-        self._plan_dir = get_engagement_dir(root, engagement_slug)
-        self._yaml_path = self._plan_dir / PLAN_YAML
+        self._yaml_path = get_engagement_plan_yaml(self._root, self._slug)
 
     def load(self) -> Plan:
         """Load the plan from ``plan.yaml``.
@@ -47,7 +44,7 @@ class PlanManager:
 
     def save(self, plan: Plan) -> None:
         """Persist the plan to ``plan.yaml`` and sync to ``plan.md``."""
-        self._plan_dir.mkdir(parents=True, exist_ok=True)
+        self._yaml_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self._yaml_path, "w") as f:
             yaml.dump(
                 plan.to_dict(),
@@ -113,7 +110,7 @@ class PlanManager:
                 lines.append(f"- **{key}:** {val}")
             lines.append("")
 
-        md_path = self._plan_dir / "plan.md"
+        md_path = get_engagement_plan_md(self._root, self._slug)
         md_path.write_text("\n".join(lines))
 
     # ── Convenience wave operations ──────────────────────────────────────

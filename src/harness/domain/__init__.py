@@ -19,6 +19,14 @@ from harness.domain.enums import (
     StepStatus,
     StepType,
 )
+from harness.domain.identifiers import (
+    BackendName,
+    EngagementId,
+    PhaseId,
+    Slug,
+    TaskId,
+    WaveId,
+)
 
 __all__ = [
     "AbortMode",
@@ -34,4 +42,11 @@ __all__ = [
     "SnapshotStatus",
     "StepStatus",
     "StepType",
+    # Identifiers
+    "BackendName",
+    "EngagementId",
+    "PhaseId",
+    "Slug",
+    "TaskId",
+    "WaveId",
 ]

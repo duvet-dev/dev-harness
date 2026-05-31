@@ -12,6 +12,7 @@ from datetime import datetime
 from enum import Enum
 
 from harness.domain.enums import SessionType
+from harness.domain.identifiers import Slug
 
 
 class EngagementStatus(str, Enum):
@@ -62,7 +63,7 @@ class Engagement:
         warnings: List of non-fatal health warnings.
     """
 
-    slug: str
+    slug: Slug
     workflow_name: str = "standard"
     session_type: SessionType = SessionType.GREENFIELD
     current_phase: str | None = None

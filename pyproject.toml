@@ -26,6 +26,8 @@ dependencies = [
     "httpx>=0.24",
     "click>=8.0",
     "temporalio>=1.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
 ]
 
 [project.optional-dependencies]

@@ -14,6 +14,8 @@ from typing import Optional
 
 import yaml
 
+from harness.domain.enums import FeedbackStatus
+
 from harness.engagement.lifecycle import ENGAGEMENTS_DIR
 
 # ── Feedback directories ───────────────────────────────────────────────────
@@ -41,7 +43,7 @@ class FeedbackPacket:
     timestamp: str = ""
     title: str = ""
     body: str = ""
-    status: str = "open"
+    status: FeedbackStatus = FeedbackStatus.OPEN
     iteration: int = 1
     max_iterations: int = 5
     checkpoint_id: str = ""
@@ -66,7 +68,7 @@ class FeedbackPacket:
             "iteration": self.iteration,
             "max_iterations": self.max_iterations,
             "checkpoint_id": self.checkpoint_id,
-            "status": self.status,
+            "status": self.status.value,
         }
 
     def to_file_content(self) -> str:
@@ -130,7 +132,7 @@ class FeedbackPacket:
             timestamp=frontmatter.get("timestamp", ""),
             title=title,
             body=body,
-            status=frontmatter.get("status", "open"),
+            status=FeedbackStatus(frontmatter.get("status", "open")),
             iteration=frontmatter.get("iteration", 1),
             max_iterations=frontmatter.get("max_iterations", 5),
             checkpoint_id=frontmatter.get("checkpoint_id", ""),

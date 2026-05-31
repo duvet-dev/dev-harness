@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+from harness.domain.enums import SessionType
+
 
 class EngagementStatus(str, Enum):
     """Lifecycle status of an engagement.
@@ -62,7 +64,7 @@ class Engagement:
 
     slug: str
     workflow_name: str = "standard"
-    session_type: str = "greenfield"
+    session_type: SessionType = SessionType.GREENFIELD
     current_phase: str | None = None
     status: EngagementStatus = EngagementStatus.CREATED
     created_at: datetime = field(default_factory=datetime.now)

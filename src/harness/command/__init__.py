@@ -15,11 +15,10 @@ from harness.command.types import (
     TypedHandler,
     TypedResult,
 )
-from harness.command.values import (
+from harness.domain.enums import (
     AbortMode,
     AutoMode,
     BranchStrategy,
-    EngStatus,
     PhaseName,
     ReviewDecision,
     SessionType,
@@ -39,7 +38,6 @@ __all__ = [
     "PhaseName",
     "SessionType",
     "AutoMode",
-    "EngStatus",
     "ReviewDecision",
     "AbortMode",
     "BranchStrategy",

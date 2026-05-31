@@ -1,20 +1,26 @@
-"""Tests for command value objects.
+"""Tests for domain enum types.
 
-Covers PhaseName validation and enum types.
+Covers PhaseName validation and all domain enums.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from harness.command.values import (
+from harness.domain.enums import (
     AbortMode,
     AutoMode,
+    BackendStatus,
     BranchStrategy,
-    EngStatus,
+    FeedbackStatus,
+    HealthSeverity,
     PhaseName,
     ReviewDecision,
+    Severity,
     SessionType,
+    SnapshotStatus,
+    StepStatus,
+    StepType,
 )
 
 
@@ -47,8 +53,8 @@ class TestPhaseName:
         assert PhaseName("design").__eq__("design") is NotImplemented
 
 
-class TestEnums:
-    """Tests for command enum types."""
+class TestSessionEnums:
+    """Tests for session-related enums."""
 
     def test_session_type_values(self):
         assert SessionType.GREENFIELD.value == "greenfield"
@@ -60,12 +66,6 @@ class TestEnums:
         assert AutoMode.AUTO.value == "auto"
         assert AutoMode.MANUAL.value == "manual"
         assert AutoMode.SUPERVISED.value == "supervised"
-
-    def test_eng_status_values(self):
-        assert EngStatus.CREATED.value == "created"
-        assert EngStatus.IN_PROGRESS.value == "in_progress"
-        assert EngStatus.COMPLETED.value == "completed"
-        assert EngStatus.ABORTED.value == "aborted"
 
     def test_review_decision_values(self):
         assert ReviewDecision.APPROVED.value == "approved"
@@ -80,3 +80,55 @@ class TestEnums:
         assert BranchStrategy.KEEP.value == "keep"
         assert BranchStrategy.RENAME.value == "rename"
         assert BranchStrategy.DELETE.value == "delete"
+
+
+class TestBackendEnums:
+    """Tests for backend execution enums."""
+
+    def test_backend_status_values(self):
+        assert BackendStatus.SUCCESS.value == "success"
+        assert BackendStatus.FAILURE.value == "failure"
+        assert BackendStatus.TIMEOUT.value == "timeout"
+        assert BackendStatus.SKIPPED.value == "skipped"
+        assert BackendStatus.PARTIAL.value == "partial"
+
+    def test_step_status_values(self):
+        assert StepStatus.SUCCESS.value == "success"
+        assert StepStatus.FAILURE.value == "failure"
+        assert StepStatus.SKIPPED.value == "skipped"
+
+    def test_step_type_values(self):
+        assert StepType.PRODUCE.value == "produce"
+        assert StepType.CRITIQUE.value == "critique"
+        assert StepType.GATE.value == "gate"
+        assert StepType.CONSULT.value == "consult"
+
+
+class TestFeedbackEnums:
+    """Tests for feedback-related enums."""
+
+    def test_feedback_status_values(self):
+        assert FeedbackStatus.OPEN.value == "open"
+        assert FeedbackStatus.RESOLVED.value == "resolved"
+        assert FeedbackStatus.SUPERSEDED.value == "superseded"
+
+
+class TestAnalysisEnums:
+    """Tests for analysis-related enums."""
+
+    def test_severity_values(self):
+        assert Severity.INFO.value == "info"
+        assert Severity.WARNING.value == "warning"
+        assert Severity.ERROR.value == "error"
+
+    def test_snapshot_status_values(self):
+        assert SnapshotStatus.PLANNING.value == "planning"
+        assert SnapshotStatus.IN_PROGRESS.value == "in_progress"
+        assert SnapshotStatus.COMPLETE.value == "complete"
+        assert SnapshotStatus.BLOCKED.value == "blocked"
+
+    def test_health_severity_values(self):
+        assert HealthSeverity.CRITICAL.value == "CRITICAL"
+        assert HealthSeverity.BRANCH.value == "BRANCH"
+        assert HealthSeverity.WARN.value == "WARN"
+        assert HealthSeverity.INFO.value == "INFO"

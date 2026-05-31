@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from harness.domain.enums import Severity
+
 VALID_SEVERITIES = ("info", "warning", "error")
 VALID_CATEGORIES = (
     "structure",
@@ -39,8 +41,8 @@ VALID_CATEGORIES = (
 class Finding:
     """A single observation from analysis."""
 
-    severity: str = "info"
-    """One of: info, warning, error."""
+    severity: Severity = Severity.INFO
+    """Severity level."""
 
     category: str = "structure"
     """Analysis category this finding belongs to."""

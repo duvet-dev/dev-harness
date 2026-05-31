@@ -10,6 +10,8 @@ from typing import List, Optional
 
 import yaml
 
+from harness.domain.enums import SnapshotStatus
+
 
 @dataclass
 class EngagementSnapshot:
@@ -17,9 +19,9 @@ class EngagementSnapshot:
 
     id: str
     description: str
-    status: str  # planning|in_progress|complete|blocked
-    gate_mode: str  # wild|auto|full
-    phase: str
+    status: SnapshotStatus = SnapshotStatus.PLANNING  # planning|in_progress|complete|blocked
+    gate_mode: str = "auto"  # wild|auto|full
+    phase: str = ""
     retry_count: int = 0
     has_stale_summary: bool = False
 

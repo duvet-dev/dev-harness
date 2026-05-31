@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from harness.artifact.types import ArtifactType
+from harness.domain.enums import StepStatus, StepType
 from harness.errors import StepMutualExclusionError
 
 
@@ -99,9 +100,9 @@ class StepResult:
         retries: Number of retries attempted before success/failure.
     """
 
-    step_type: str = ""
+    step_type: StepType = StepType.PRODUCE
     step_role: str = ""
-    status: str = "success"
+    status: StepStatus = StepStatus.SUCCESS
     artifacts: dict[str, str] = field(default_factory=dict)
     error: str | None = None
     iteration: int = 0

@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from harness.domain.enums import HealthSeverity
+
 
 _CHECK_DESCRIPTIONS: dict[str, str] = {
     "harness-dir": "``.harness/`` directory exists with required structure",
@@ -55,7 +57,7 @@ class HealthCheck:
     description: str
     status: Status
     message: str
-    severity: str = "WARN"
+    severity: HealthSeverity = HealthSeverity.WARN
     fix: str | None = None
 
 
@@ -102,7 +104,7 @@ def _result(
     name: str,
     status: Status,
     message: str,
-    severity: str = "WARN",
+    severity: HealthSeverity = HealthSeverity.WARN,
     fix: str | None = None,
 ) -> HealthCheck:
     return HealthCheck(

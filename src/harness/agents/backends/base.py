@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from harness.agents.context import ContextPacket
+from harness.domain.enums import BackendStatus
 
 
 @dataclass
@@ -81,8 +82,8 @@ class BackendResult:
     All backends return this from their run() method.
     """
 
-    status: str = "failure"
-    """One of: 'success', 'failure', 'timeout', 'skipped'."""
+    status: BackendStatus = BackendStatus.FAILURE
+    """Execution status."""
 
     output_dir: str = ""
     """Agent output directory (where produced artifacts live)."""
@@ -99,8 +100,8 @@ class BackendResult:
     def merge(self, other: BackendResult) -> BackendResult:
         """Merge another BackendResult into this one."""
         if other.status == "failure" and self.status == "success":
-            self.status = "partial"  # mixed results
-        elif other.status != "success":
+            self.status = BackendStatus.PARTIAL  # mixed results
+        elif other.status != BackendStatus.SUCCESS:
             self.status = other.status
         self.artifacts.update(other.artifacts)
         self.errors.extend(other.errors)

@@ -1,17 +1,25 @@
-"""Tests for ``harness.health`` — configuration validation system."""
+"""Tests for ``harness.health`` — thin wrapper delegation."""
 
 from pathlib import Path
+from unittest.mock import patch
+
+from unittest.mock import MagicMock
+
+import pytest
+
 from harness.health import (
     HealthCheck,
     HealthReport,
     format_health_report,
+    run_health_checks,
+    run_fixes,
 )
 
 
-class TestHealthCheck:
-    """Verify HealthCheck dataclass behaviour."""
+class TestReExports:
+    """Verify HealthCheck and HealthReport are re-exported from domain."""
 
-    def test_default_severity(self):
+    def test_health_check_constructable(self):
         hc = HealthCheck(
             name="test",
             description="A test check",
@@ -21,7 +29,7 @@ class TestHealthCheck:
         assert hc.severity == "WARN"
         assert hc.fix is None
 
-    def test_full_initialization(self):
+    def test_health_check_full_init(self):
         hc = HealthCheck(
             name="test",
             description="A test check",
@@ -35,48 +43,20 @@ class TestHealthCheck:
         assert hc.severity == "CRITICAL"
         assert hc.fix == "harness init"
 
-
-class TestHealthReport:
-    """Verify HealthReport aggregation and counts."""
-
-    def test_all_pass(self):
-        report = HealthReport(checks=[
-            HealthCheck(name="a", description="", status="pass", message="ok"),
-            HealthCheck(name="b", description="", status="pass", message="ok"),
-        ])
-        assert report.status == "pass"
-        assert report.pass_count() == 2
-        assert report.warn_count() == 0
-        assert report.fail_count() == 0
-
-    def test_mixed_status(self):
+    def test_health_report_aggregation(self):
         report = HealthReport(checks=[
             HealthCheck(name="a", description="", status="pass", message="ok"),
             HealthCheck(name="b", description="", status="warn", message="warning"),
             HealthCheck(name="c", description="", status="fail", message="failed"),
         ])
-        assert report.status == "fail"  # any fail = fail
+        assert report.status == "fail"
         assert report.pass_count() == 1
         assert report.warn_count() == 1
         assert report.fail_count() == 1
 
-    def test_warn_only(self):
-        report = HealthReport(checks=[
-            HealthCheck(name="a", description="", status="pass", message="ok"),
-            HealthCheck(name="b", description="", status="warn", message="warning"),
-        ])
-        assert report.status == "warn"  # no fail, some warn = warn
-
-    def test_summary_all_pass(self):
-        report = HealthReport(checks=[
-            HealthCheck(name="a", description="", status="pass", message="ok"),
-        ])
-        report.summary = "All checks passed"
-        assert report.summary == "All checks passed"
-
 
 class TestFormatHealthReport:
-    """Verify health report output formatting."""
+    """Verify format_health_report wrapper delegates correctly."""
 
     def test_output_contains_status(self):
         report = HealthReport(checks=[
@@ -102,11 +82,9 @@ class TestFormatHealthReport:
         ])
         report.summary = "1 passed"
 
-        # Without verbose — INFO should be hidden
         quiet = format_health_report(report, verbose=False)
         assert "Info detail" not in quiet
 
-        # With verbose — INFO should appear
         verbose = format_health_report(report, verbose=True)
         assert "Info detail" in verbose
 
@@ -122,3 +100,35 @@ class TestFormatHealthReport:
         output = format_health_report(report)
         assert "Fix:" in output
         assert "harness init" in output
+
+
+class TestRunHealthChecks:
+    """Verify run_health_checks wrapper delegates."""
+
+    def test_returns_health_report(self, tmp_path, monkeypatch):
+        mock_service = MagicMock()
+        mock_report = MagicMock(spec=HealthReport)
+        mock_report.checks = []
+        mock_service.run_all_checks.return_value = mock_report
+        monkeypatch.setattr(
+            "harness.health._build_service",
+            lambda _: mock_service,
+        )
+        report = run_health_checks(tmp_path)
+        assert isinstance(report, HealthReport) or hasattr(report, "checks")
+        mock_service.run_all_checks.assert_called_once_with(tmp_path)
+
+
+class TestRunFixes:
+    """Verify run_fixes wrapper delegates."""
+
+    def test_returns_list(self, tmp_path, monkeypatch):
+        mock_service = MagicMock()
+        mock_service.run_fixes.return_value = ["Attempting auto-fixes...", ""]
+        monkeypatch.setattr(
+            "harness.health._build_service",
+            lambda _: mock_service,
+        )
+        messages = run_fixes(tmp_path)
+        assert isinstance(messages, list)
+        assert len(messages) > 0

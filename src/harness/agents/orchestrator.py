@@ -21,6 +21,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from collections import defaultdict
+from harness.tools.web_search import WebSearchTool
 
 from harness.agents.agent_registry import (
     CriticLoopConfig,
@@ -454,7 +456,6 @@ class AgentOrchestrator:
         the agent can browse files during analysis (requires *agent_role*
         with read-only tool permissions).
         """
-        from harness.agents.context import ContextPacket
 
         constraint_section: dict[str, str] = {
             "backend": backend_name or self._config.default_backend,
@@ -646,7 +647,6 @@ class AgentOrchestrator:
         so it can be called independently when only web search is
         needed.
         """
-        from harness.tools.web_search import WebSearchTool
 
         web_tool = WebSearchTool()
         invocation.tool_registry["web_search"] = web_tool
@@ -677,7 +677,6 @@ def _build_iterations_from_cycle(
     This function is no longer used by run_critic_loop() (which now
     raises an error). It is preserved for any external callers.
     """
-    from collections import defaultdict
 
     iteration_map: dict[int, dict[str, Any]] = defaultdict(
         lambda: {"arch_arts": {}, "critic_arts": {}}

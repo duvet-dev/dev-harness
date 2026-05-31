@@ -3,7 +3,7 @@
 The harness's agent system provides:
 - AgentRegistry (agent_registry.py) — catalogue of agent roles and SOPs
 - AgentOrchestrator (orchestrator.py) — backend-agnostic LLM agent execution
-- PluginRegistry (plugin_registry.py) — backend plugin discovery
+- PluginRegistry — moving to infrastructure/plugins/registry.py
 - ContextPacket (context.py) — structured context for agent runs
 - AgentTeam (team/model.py) — logical groupings of agents with guidelines
 - TeamRegistry (team/registry.py) — manages AgentTeam definitions

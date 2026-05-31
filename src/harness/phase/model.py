@@ -19,13 +19,18 @@ from harness.errors import StepMutualExclusionError
 class ConvergenceConfig:
     """Configuration for convergence-aware loop iteration.
 
+    Unified configuration that replaces both the old CriticLoopConfig
+    and the original ConvergenceConfig.
+
+    Convergence strategies:
+        - "gate_judgment": Gate agent's output signals convergence.
+        - "all_gates": All gate steps produce non-empty output.
+        - "test_suite": External test suite passes.
+        - "stable": Produce output unchanged between iterations.
+        - "external_approval": External callback confirms convergence.
+
     Attributes:
         strategy: Which convergence strategy to use.
-            - "gate_judgment": Gate agent's output signals convergence.
-            - "all_gates": All gate steps produce non-empty output.
-            - "test_suite": External test suite passes.
-            - "stable": Produce output unchanged between iterations.
-            - "external_approval": External callback confirms convergence.
         max_iterations: Hard cap on iterations before timeout.
         on_timeout: Behaviour on max iterations.
             - "best_effort": Return best artifacts with "timeout" status.
@@ -37,6 +42,10 @@ class ConvergenceConfig:
             for gate_judgment.
         test_output_path: For test_suite — path to write captured test
             output for persistent storage across context rebuilds.
+        architect_role: Role of the architect agent (critic loop).
+        critic_role: Role of the critic agent (critic loop).
+        architect_output_subdir: Subdirectory for architect output.
+        critic_output_subdir: Subdirectory for critic output.
     """
 
     strategy: str = "gate_judgment"
@@ -46,6 +55,10 @@ class ConvergenceConfig:
     test_command: str = ""
     convergence_keywords: list[str] | None = None
     test_output_path: str = ".harness/test_output/latest.txt"
+    architect_role: str = "architect"
+    critic_role: str = "critical-analyser"
+    architect_output_subdir: str = "design/"
+    critic_output_subdir: str = "reviews/"
 
 
 @dataclass

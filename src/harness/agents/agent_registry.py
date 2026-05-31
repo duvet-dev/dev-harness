@@ -86,47 +86,14 @@ class CriticLoopState(str, Enum):
     ERROR = "error"
 
 
-@dataclass
-class CriticLoopConfig:
-    """Configuration for the design-critic multi-agent loop.
+from harness.phase.model import ConvergenceConfig
 
-    Defines which agents participate, how convergence is detected,
-    and safety limits.  The loop orchestrates:
 
-        architect (writes design) → critic (reviews) → architect (revises) → ...
-
-    Convergence occurs when the critic signals no new issues, or when
-    the maximum iteration count is reached.
-
-    See Wave 15 — Phase 4 (Design-Critic Loop).
-    """
-
-    architect_role: str = "architect"
-    """Role of the agent that writes/revises design documents."""
-
-    critic_role: str = "critical-analyser"
-    """Role of the agent that reviews designs and writes critique reports."""
-
-    max_iterations: int = 5
-    """Maximum number of architect→critic cycles before forced stop."""
-
-    convergence_keywords: list[str] = field(default_factory=lambda: [
-        "no issues found",
-        "no new issues",
-        "design approved",
-        "converged",
-        "convergence",
-    ])
-    """Case-insensitive keywords that signal convergence when present in
-    the critic's output artifacts."""
-
-    architect_output_subdir: str = "design/"
-    """Subdirectory under the engagement directory where the architect
-    writes design documents."""
-
-    critic_output_subdir: str = "reviews/"
-    """Subdirectory under the engagement directory where the critic
-    writes review reports."""
+# CriticLoopConfig — Unified via ConvergenceConfig in phase/model.py
+# All CriticLoopConfig fields have been merged into ConvergenceConfig.
+# This alias exists for backward compatibility and will be removed
+# in a future refactoring wave.
+CriticLoopConfig = ConvergenceConfig
 
 
 @dataclass
@@ -750,4 +717,18 @@ def get_default_critic_loop_config() -> CriticLoopConfig:
     Callers may override any field on the returned config before
     passing it to ``AgentRunner.run_critic_loop()``.
     """
-    return CriticLoopConfig()
+    return ConvergenceConfig(
+        strategy="gate_judgment",
+        max_iterations=5,
+        convergence_keywords=[
+            "no issues found",
+            "no new issues",
+            "design approved",
+            "converged",
+            "convergence",
+        ],
+        architect_role="architect",
+        critic_role="critical-analyser",
+        architect_output_subdir="design/",
+        critic_output_subdir="reviews/",
+    )

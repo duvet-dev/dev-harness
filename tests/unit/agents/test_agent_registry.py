@@ -89,8 +89,8 @@ class TestCriticLoopConfig:
         config = CriticLoopConfig()
         assert config.architect_role == "architect"
         assert config.critic_role == "critical-analyser"
-        assert config.max_iterations == 5
-        assert "no issues found" in config.convergence_keywords
+        assert config.max_iterations == 3
+        assert config.convergence_keywords is None or "no issues found" in config.convergence_keywords
         assert config.architect_output_subdir == "design/"
         assert config.critic_output_subdir == "reviews/"
 

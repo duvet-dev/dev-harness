@@ -79,6 +79,20 @@ class TestParseNumstat:
         assert ins == 0
         assert dels == 0
 
+    def test_whitespace_only_lines_skipped(self):
+        stdout = "\n\n5\t3\tsrc/main.py\n\n"
+        files, ins, dels = _parse_numstat(stdout)
+        assert files == ["src/main.py"]
+        assert ins == 5
+        assert dels == 3
+
+    def test_malformed_line_skipped(self):
+        stdout = "incomplete\n5\t3\tsrc/main.py\n"
+        files, ins, dels = _parse_numstat(stdout)
+        assert files == ["src/main.py"]
+        assert ins == 5
+        assert dels == 3
+
 
 class TestParseStatusPorcelain:
     def test_empty(self):
@@ -110,6 +124,16 @@ class TestParseStatusPorcelain:
         assert "modified.py" in staged
         assert "modified.py" in unstaged
 
+    def test_whitespace_only_lines_skipped(self):
+        stdout = "\n\n?? new_file.py\n\n"
+        staged, unstaged, untracked = _parse_status_porcelain(stdout)
+        assert untracked == ["new_file.py"]
+
+    def test_short_line_skipped(self):
+        stdout = "X\n?? new_file.py\n"
+        staged, unstaged, untracked = _parse_status_porcelain(stdout)
+        assert untracked == ["new_file.py"]
+
 
 class TestParseLogEntries:
     def test_empty(self):
@@ -132,6 +156,18 @@ class TestParseLogEntries:
         )
         entries = _parse_log_entries(stdout)
         assert len(entries) == 2
+
+    def test_whitespace_only_lines_skipped(self):
+        stdout = "\n\nabc123|Test|2024-01-15|Message\n\n"
+        entries = _parse_log_entries(stdout)
+        assert len(entries) == 1
+        assert entries[0].commit_hash == "abc123"
+
+    def test_malformed_line_skipped(self):
+        stdout = "too|few\nabc123|Test|2024-01-15|Message\n"
+        entries = _parse_log_entries(stdout)
+        assert len(entries) == 1
+        assert entries[0].commit_hash == "abc123"
 
 
 # ── GitRepo ────────────────────────────────────────────────────────────────
@@ -282,6 +318,7 @@ class TestGitRepoMergeDetection:
 
     def test_new_commits_on_branch(self, git_repo: Path):
         repo = GitRepo(git_repo)
+        original_branch = repo.branch()
         # Create a feature branch with a new commit
         subprocess.run(
             ["git", "checkout", "-b", "feature"],
@@ -295,11 +332,15 @@ class TestGitRepoMergeDetection:
             ["git", "commit", "-m", "feature"],
             cwd=str(git_repo), capture_output=True,
         )
-        # Switch back to main and check
+        # Switch back to main/master
         subprocess.run(
-            ["git", "checkout", "main" if repo.branch() == "feature" else "master"],
+            ["git", "checkout", original_branch],
             cwd=str(git_repo), capture_output=True,
         )
+        # Now merge_detected("feature") should return True
+        # because feature has commits not in original_branch
+        assert repo.merge_detected("feature") is True
+        assert repo.merge_detected(original_branch) is False
 
 
 class TestGitRepoInterfaceChanges:
@@ -319,3 +360,143 @@ class TestGitRepoRenameBranch:
         repo = GitRepo(git_repo)
         with pytest.raises(GitOperationError):
             repo.rename_branch("nonexistent", "new-name")
+
+    def test_rename_branch_returns_none(self, git_repo: Path):
+        repo = GitRepo(git_repo)
+        result = repo.rename_branch(repo.branch(), "temp-branch")
+        assert result is None
+        # Clean up
+        repo.rename_branch("temp-branch", repo.branch())
+
+
+# ── GitRepo with mock runner ────────────────────────────────────────────────
+
+
+class TestGitRepoMockRunner:
+    """Tests for GitRepo with a mocked GitCommandRunner."""
+
+    def test_status_with_ahead_behind(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        # Sequence of calls: rev-parse --git-dir, status --porcelain, branch --show-current,
+        # rev-list --count upstream..HEAD, rev-list --count HEAD..upstream
+        runner.run.side_effect = [
+            ".git\n",  # rev-parse --git-dir
+            "\n",       # status --porcelain (clean)
+            "main\n",   # branch --show-current
+            "3\n",      # rev-list --count upstream..HEAD (ahead=3)
+            "2\n",      # rev-list --count HEAD..upstream (behind=2)
+        ]
+
+        # Create a mock temp dir that looks like a directory
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+
+        repo = GitRepo(repo_dir, runner=runner)
+        status = repo.status()
+        assert status.ahead == 3
+        assert status.behind == 2
+
+    def test_status_with_ahead_success_behind_failure(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",    # rev-parse --git-dir
+            "\n",         # status --porcelain
+            "main\n",     # branch --show-current
+            "5\n",        # ahead succeeds
+            GitOperationError(cmd="rev-list", exit_code=128, stderr="no upstream"),  # behind fails
+        ]
+
+        repo_dir = tmp_path / "repo2"
+        repo_dir.mkdir()
+
+        repo = GitRepo(repo_dir, runner=runner)
+        status = repo.status()
+        assert status.ahead == 5
+        assert status.behind == 0
+
+    def test_diff_with_ref_b(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",
+            "5\t3\tsrc/main.py\n2\t0\tREADME.md\n",
+        ]
+
+        repo_dir = tmp_path / "repo3"
+        repo_dir.mkdir()
+
+        repo = GitRepo(repo_dir, runner=runner)
+        diff = repo.diff("abc123", "def456")
+        assert "src/main.py" in diff.files_changed
+        assert diff.insertions == 7
+        assert diff.deletions == 3
+
+    def test_merge_detected_raises_git_operation_error(self, tmp_path):
+        from unittest.mock import MagicMock
+        from harness.infrastructure.git.git_command import GitCommandRunner
+
+        runner = MagicMock(spec=GitCommandRunner)
+        runner.run.side_effect = [
+            ".git\n",
+            "main\n",  # branch()
+            GitOperationError(cmd="merge-base", exit_code=1, stderr="not ancestor"),
+        ]
+
+        repo_dir = tmp_path / "repo4"
+        repo_dir.mkdir()
+
+        repo = GitRepo(repo_dir, runner=runner)
+        assert repo.merge_detected("feature") is True
+
+
+# ── Domain protocol test ────────────────────────────────────────────────────
+
+
+class TestGitRepoProtocol:
+    """Verify the GitRepo protocol can be satisfied by the real GitRepo."""
+
+    def test_root_property(self):
+        """The GitRepo protocol's root property should be satisfiable."""
+        from harness.domain.interfaces.git import GitRepo as GitRepoProtocol
+        from pathlib import Path
+
+        class FakeRepo:
+            @property
+            def root(self) -> Path:
+                return Path("/fake")
+
+            def branch(self) -> str:
+                return "main"
+
+            def status(self) -> StatusResult:
+                return StatusResult()
+
+            def diff(self, ref_a="HEAD", ref_b=None) -> DiffResult:
+                return DiffResult()
+
+            def log(self, since=None, max_count=50) -> list[LogEntry]:
+                return []
+
+            def merge_detected(self, watched_branch: str) -> bool:
+                return False
+
+            def find_interface_changes(self, interface_path: str, since: str) -> list[LogEntry]:
+                return []
+
+            def rename_branch(self, old_name: str, new_name: str) -> None:
+                return None
+
+        fake = FakeRepo()
+        # Verify structural compatibility with the protocol
+        repo: GitRepoProtocol = fake
+        assert repo.root == Path("/fake")
+        assert repo.branch() == "main"
+        assert repo.merge_detected("x") is False

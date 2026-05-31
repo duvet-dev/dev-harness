@@ -13,14 +13,8 @@ from typing import Any, Optional, Protocol
 import yaml
 
 from harness.domain.health import HealthCheck, _result
+from harness.domain.interfaces.git import GitRepo as GitRepoProtocol
 from harness.paths import get_engagement_yaml
-
-
-class GitRepoProtocol(Protocol):
-    """Minimal git repository interface needed by GitHealthChecker."""
-
-    def branch(self) -> str: ...
-    def status(self) -> Any: ...
 
 
 class EngagementStoreProtocol(Protocol):

@@ -523,7 +523,8 @@ def _report_apply_results(results: list[tuple[str, str]], root: Path) -> None:
 
 def _phase_output_dir(root: Path, slug: str, phase_name: str) -> Path:
     """Get or create the output directory for a phase's artifacts."""
-    d = root / ".harness" / "engagements" / slug / phase_name
+    from harness.paths import get_engagement_dir
+    d = get_engagement_dir(root, slug) / phase_name
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -949,7 +950,8 @@ def _load_engagement_context(
     root: Path, engagement_slug: str, tier: int = 2
 ) -> str:
     """Load the engagement context bundle for agent awareness."""
-    engagement_root = root / ".harness" / "engagements" / engagement_slug
+    from harness.paths import get_engagement_dir
+    engagement_root = get_engagement_dir(root, engagement_slug)
     if not engagement_root.is_dir():
         return ""
     try:

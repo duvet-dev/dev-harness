@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from harness.paths import get_boundaries_path
 from harness.refactor.boundary_tests import verify_boundary_test_integrity
 from harness.refactor.debt import DebtDetector, DebtReport
 
@@ -162,7 +163,7 @@ class VerificationRunner:
         """Check all registered boundary tests for integrity."""
         checks: list[BoundaryTestCheck] = []
 
-        boundaries_yaml = self._root / ".harness" / "boundaries.yaml"
+        boundaries_yaml = get_boundaries_path(self._root)
         if not boundaries_yaml.is_file():
             return checks
 

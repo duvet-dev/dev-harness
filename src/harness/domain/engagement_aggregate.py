@@ -24,20 +24,7 @@ from harness.domain.events.engagement_events import (
 )
 from harness.domain.events.event_bus import EventBus
 from harness.domain.identifiers import Slug
-
-
-class EngagementStatus(str):
-    """Lifecycle status of an engagement.
-
-    CREATED -> ACTIVE -> COMPLETED (or -> PAUSED -> ACTIVE -> COMPLETED)
-    or -> ABORTED at any point.
-    """
-
-    CREATED = "created"
-    ACTIVE = "active"
-    PAUSED = "paused"
-    ABORTED = "aborted"
-    COMPLETED = "completed"
+from harness.domain.engagement.model import Engagement, EngagementStatus
 
 
 @dataclass
@@ -61,7 +48,7 @@ class Engagement:
     workflow_name: str = "standard"
     session_type: SessionType = SessionType.GREENFIELD
     current_phase: str | None = None
-    status: str = EngagementStatus.CREATED
+    status: EngagementStatus = EngagementStatus.CREATED
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_active: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     target_branch: str = ""

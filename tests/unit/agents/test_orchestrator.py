@@ -19,7 +19,7 @@ from harness.agents.backends.base import BackendResult, Invocation
 from harness.agents.context import ContextPacket, OutputContract
 from harness.agents.orchestrator import (
     AgentOrchestrator,
-    CriticLoopConfig,
+    ConvergenceConfig,
     CriticLoopError,
     CriticLoopResult,
     CriticLoopState,
@@ -245,7 +245,7 @@ class TestAgentOrchestratorCheckCriticConvergence:
             status="success",
             artifacts={"review": "The design looks good. APPROVED."},
         )
-        config = CriticLoopConfig(convergence_keywords=["approved"])
+        config = ConvergenceConfig(convergence_keywords=["approved"])
         assert o._check_critic_convergence(result, config) is True
 
     def test_no_convergence_on_missing_keyword(self):
@@ -254,7 +254,7 @@ class TestAgentOrchestratorCheckCriticConvergence:
             status="success",
             artifacts={"review": "Some issues remain."},
         )
-        config = CriticLoopConfig(convergence_keywords=["approved"])
+        config = ConvergenceConfig(convergence_keywords=["approved"])
         assert o._check_critic_convergence(result, config) is False
 
 

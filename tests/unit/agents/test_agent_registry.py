@@ -10,7 +10,7 @@ import pytest
 from harness.agents.agent_registry import (
     AGENTS,
     AgentSpec,
-    CriticLoopConfig,
+    ConvergenceConfig,
     CriticLoopIteration,
     CriticLoopState,
     ToolPermissions,
@@ -82,11 +82,11 @@ class TestAgentSpec:
         assert spec.tool_permissions.write is False
 
 
-class TestCriticLoopConfig:
-    """Tests for CriticLoopConfig."""
+class TestConvergenceConfig:
+    """Tests for ConvergenceConfig."""
 
     def test_default_config(self):
-        config = CriticLoopConfig()
+        config = ConvergenceConfig()
         assert config.architect_role == "architect"
         assert config.critic_role == "critical-analyser"
         assert config.max_iterations == 3
@@ -95,7 +95,7 @@ class TestCriticLoopConfig:
         assert config.critic_output_subdir == "reviews/"
 
     def test_custom_config(self):
-        config = CriticLoopConfig(
+        config = ConvergenceConfig(
             architect_role="coding-agent",
             critic_role="testing-agent",
             max_iterations=3,
@@ -182,12 +182,12 @@ class TestHasAwarenessRole:
         assert has_awareness_role("coordinator") is False
 
 
-class TestGetDefaultCriticLoopConfig:
+class TestGetDefaultConvergenceConfig:
     """Tests for get_default_critic_loop_config()."""
 
     def test_returns_default_config(self):
         config = get_default_critic_loop_config()
-        assert isinstance(config, CriticLoopConfig)
+        assert isinstance(config, ConvergenceConfig)
         assert config.architect_role == "architect"
         assert config.max_iterations == 5
 

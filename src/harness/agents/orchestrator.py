@@ -25,7 +25,7 @@ from collections import defaultdict
 from harness.tools.web_search import WebSearchTool
 
 from harness.agents.agent_registry import (
-    CriticLoopConfig,
+    ConvergenceConfig,
     CriticLoopIteration,
     CriticLoopState,
     get_agent,
@@ -490,7 +490,7 @@ class AgentOrchestrator:
         spec_content: str,
         architecture_rules: list[str] | None = None,
         engagement_dir: Path | None = None,
-        config: CriticLoopConfig | None = None,
+        config: ConvergenceConfig | None = None,
         backend_name: str | None = None,
     ) -> CriticLoopResult:
         """Run a complete design-critic multi-agent loop.
@@ -513,12 +513,12 @@ class AgentOrchestrator:
     def _check_critic_convergence(
         self,
         critic_result: BackendResult,
-        config: CriticLoopConfig,
+        config: ConvergenceConfig,
     ) -> bool:
         """Check whether the critic signalled convergence.
 
         Tests all artifact text (case-insensitive) against the
-        :attr:`CriticLoopConfig.convergence_keywords` list.  If any
+        :attr:`ConvergenceConfig.convergence_keywords` list.  If any
         keyword is found in any artifact, the loop is considered
         converged.
 

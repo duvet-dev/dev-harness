@@ -87,8 +87,6 @@ class CriticLoopState(str, Enum):
 
 
 from harness.phase.model import ConvergenceConfig
-# CriticLoopConfig has been merged into ConvergenceConfig in phase/model.py
-CriticLoopConfig = ConvergenceConfig  # legacy alias, will be removed
 
 
 @dataclass

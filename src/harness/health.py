@@ -21,6 +21,13 @@ from pathlib import Path
 from typing import Literal
 
 from harness.domain.enums import HealthSeverity
+from harness.paths import (
+    get_engagement_dir,
+    get_engagement_plan_yaml,
+    get_fleets_path,
+    get_harness_dir,
+    get_providers_path,
+)
 
 
 _CHECK_DESCRIPTIONS: dict[str, str] = {
@@ -122,7 +129,7 @@ def _result(
 
 def check_harness_dir(root: Path) -> HealthCheck:
     """Verify the ``.harness/`` directory exists with core structure."""
-    harness_dir = root / ".harness"
+    harness_dir = get_harness_dir(root)
     if not harness_dir.is_dir():
         return _result(
             "harness-dir", "fail",
@@ -153,7 +160,7 @@ def check_harness_dir(root: Path) -> HealthCheck:
 
 def check_providers_yaml(root: Path) -> HealthCheck:
     """Verify ``providers.yaml`` exists, is valid YAML, and has providers."""
-    providers_path = root / ".harness" / "providers.yaml"
+    providers_path = get_providers_path(root)
     if not providers_path.is_file():
         return _result(
             "providers-yaml", "fail",
@@ -197,7 +204,7 @@ def check_api_keys(root: Path) -> HealthCheck:
     """Verify all ``${VAR}`` references in providers.yaml resolve to env vars."""
     import re
 
-    providers_path = root / ".harness" / "providers.yaml"
+    providers_path = get_providers_path(root)
     if not providers_path.is_file():
         return _result(
             "api-keys", "warn",
@@ -254,8 +261,6 @@ def check_branch_match(root: Path) -> HealthCheck:
     try:
         from harness.scm.git import GitRepo
         from harness.domain.engagement.lifecycle import read_active_engagement
-        from harness.paths import get_engagement_dir
-
         repo = GitRepo(root)
         current_branch = repo.branch()
 
@@ -338,7 +343,7 @@ def check_agent_roles(root: Path) -> HealthCheck:
         from harness.agents.agent_registry import AGENTS, AgentSpec
 
         # Scan .harness/fleets.yaml and .harness/engagements/ for role references
-        fleet_path = root / ".harness" / "fleets.yaml"
+        fleet_path = get_fleets_path(root)
         referenced_roles: set[str] = set()
 
         if fleet_path.is_file():
@@ -432,8 +437,6 @@ def check_plan_consistency(root: Path) -> HealthCheck:
     """Verify plan.md is in sync with plan.yaml."""
     try:
         from harness.domain.engagement.lifecycle import read_active_engagement
-        from harness.paths import get_engagement_dir
-
         active = read_active_engagement(root)
         if active is None:
             return _result("plan-consistency", "pass", "No active engagement — skipping plan check.")
@@ -477,8 +480,6 @@ def check_manifest_link(root: Path) -> HealthCheck:
     """Verify assessment manifest files referenced by engagement exist."""
     try:
         from harness.domain.engagement.lifecycle import read_active_engagement
-        from harness.paths import get_engagement_dir
-
         active = read_active_engagement(root)
         if active is None:
             return _result("manifest-link", "pass", "No active engagement — skipping manifest check.")
@@ -614,8 +615,6 @@ def fix_branch_match(root: Path) -> list[str]:
     try:
         from harness.scm.git import GitRepo
         from harness.domain.engagement.lifecycle import read_active_engagement
-        from harness.paths import get_engagement_dir
-
         repo = GitRepo(root)
         current_branch = repo.branch()
 
@@ -663,7 +662,6 @@ def fix_plan_consistency(root: Path) -> list[str]:
         pm = PlanManager(root, slug_str)
         plan = pm.load()
         if plan is None or not plan.waves:
-            from harness.paths import get_engagement_plan_yaml
             plan_yaml = get_engagement_plan_yaml(root, slug_str)
             if not plan_yaml.is_file():
                 plan_yaml.write_text("waves: []\n")
@@ -730,7 +728,7 @@ def fix_missing_dir(root: Path) -> list[str]:
             return messages
 
         slug = active.get("slug") if isinstance(active, dict) else str(active)
-        eng_dir = root / ".harness" / "engagements" / slug
+        eng_dir = get_engagement_dir(root, slug)
 
         if not eng_dir.exists():
             eng_dir.mkdir(parents=True, exist_ok=True)
@@ -824,7 +822,7 @@ def fix_engagement(root: Path, slug: str) -> list[str]:
     messages.append(f"Fixing engagement '{slug}'...")
     messages.append("")
 
-    eng_dir = root / ".harness" / "engagements" / slug
+    eng_dir = get_engagement_dir(root, slug)
 
     if not eng_dir.exists():
         eng_dir.mkdir(parents=True, exist_ok=True)

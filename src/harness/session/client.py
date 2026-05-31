@@ -518,19 +518,16 @@ class SessionClient:
         backend = ApiBackend()
         runner = AgentOrchestrator()
 
-        # Prepare invocation
-        invocation = await backend.prepare(packet)
-
-        # Set up resolved config from .harness/providers.yaml
+        # Resolve provider config from .harness/providers.yaml
         resolved_config = self._resolve_provider_config()
-        if resolved_config:
-            invocation.resolved_config = resolved_config
-        else:
-            invocation.resolved_config = {}
+        model = resolved_config.get("model", "") if resolved_config else ""
 
-        # Set model from config or default
-        if resolved_config and resolved_config.get("model"):
-            invocation.model = resolved_config["model"]
+        # Prepare invocation with resolved config and model
+        invocation = await backend.prepare(
+            packet,
+            resolved_config=resolved_config,
+            model=model,
+        )
 
         # Attach RepoTool via runner
         runner._attach_repo_tool(packet, invocation)

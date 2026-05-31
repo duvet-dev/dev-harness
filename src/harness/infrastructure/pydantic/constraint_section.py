@@ -6,7 +6,7 @@ flows through ContextPacket and Invocation objects.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -27,10 +27,10 @@ class ConstraintSection(BaseModel):
     model: str = ""
     """Model override (e.g. 'deepseek-v4-pro', 'gpt-4o')."""
 
-    temperature: float | None = None
+    temperature: Optional[float] = None
     """Sampling temperature override (0.0–2.0)."""
 
-    max_tokens: int | None = None
+    max_tokens: Optional[int] = None
     """Maximum tokens in the response."""
 
     available_tools: list[dict[str, Any]] = Field(default_factory=list)

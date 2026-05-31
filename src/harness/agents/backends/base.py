@@ -14,6 +14,8 @@ from typing import Any
 
 from harness.agents.context import ContextPacket
 from harness.domain.enums import BackendStatus
+from harness.infrastructure.pydantic.resolved_config import ResolvedConfig
+from harness.infrastructure.pydantic.resolved_config import ResolvedConfig
 
 
 @dataclass
@@ -42,7 +44,7 @@ class Invocation:
     model: str = ""
     """Model override for API backends."""
 
-    resolved_config: dict[str, Any] = field(default_factory=dict)
+    resolved_config: ResolvedConfig = field(default_factory=ResolvedConfig)
     """Fully resolved provider configuration passed from the runner.
 
     Populated by :class:`~harness.agents.runner.AgentRunner` before
@@ -133,7 +135,7 @@ class AbstractBackend(abc.ABC):
     async def prepare(
         self,
         packet: ContextPacket,
-        resolved_config: dict[str, Any] | None = None,
+        resolved_config: ResolvedConfig | None = None,
         model: str = "",
     ) -> Invocation:
         """Convert a ContextPacket into a runnable Invocation.

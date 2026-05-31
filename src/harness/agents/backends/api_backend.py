@@ -96,7 +96,7 @@ class ApiBackend(AbstractBackend):
     async def prepare(
         self,
         packet: ContextPacket,
-        resolved_config: dict[str, Any] | None = None,
+        resolved_config: dict | None = None,  # Accepts ResolvedConfig at runtime
         model: str = "",
     ) -> Invocation:
         """Prepare an API invocation from the context packet.

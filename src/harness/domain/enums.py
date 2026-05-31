@@ -173,6 +173,16 @@ class HealthSeverity(str, Enum):
     INFO = "INFO"
 
 
+class ProjectType(str, Enum):
+    """Project archetype for architecture conformance checks."""
+
+    PYTHON = "python"
+    BACKEND_SERVICE = "backend-service"
+    LIBRARY = "library"
+    FRONTEND = "frontend"
+    UNKNOWN = "unknown"
+
+
 __all__ = [
     "PhaseName",
     "SessionType",
@@ -187,4 +197,5 @@ __all__ = [
     "Severity",
     "SnapshotStatus",
     "HealthSeverity",
+    "ProjectType",
 ]

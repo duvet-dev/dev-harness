@@ -1,9 +1,9 @@
-"""Tests for harness.engagement.phase_state."""
+"""Tests for harness.domain.engagement.phase_state."""
 
 import pytest
 import yaml
 
-from harness.engagement.phase_state import (
+from harness.domain.engagement.phase_state import (
     InvalidTransitionError,
     PhaseNotFoundError,
     PhaseRecord,

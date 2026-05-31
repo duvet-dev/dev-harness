@@ -20,9 +20,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from harness.engagement.health import EngagementHealthCheck, HealthReport
-from harness.engagement.model import Engagement, EngagementStatus, HealthWarning
-from harness.engagement.repository import EngagementRepository
+from harness.domain.engagement.health import EngagementHealthCheck, HealthReport
+from harness.domain.engagement.model import Engagement, EngagementStatus, HealthWarning
+from harness.domain.engagement.repository import EngagementRepository
 from harness.errors import (
     EngagementNotFoundError,
     EngagementBranchMissingError,

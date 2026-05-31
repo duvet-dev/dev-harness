@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from harness.engagement.model import (
+from harness.domain.engagement.model import (
     Engagement,
     EngagementStatus,
     HealthWarning,

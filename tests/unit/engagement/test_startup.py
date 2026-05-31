@@ -13,13 +13,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from harness.engagement.model import (
+from harness.domain.engagement.model import (
     Engagement,
     EngagementStatus,
     HealthWarning,
 )
-from harness.engagement.repository import EngagementRepository
-from harness.engagement.startup import (
+from harness.domain.engagement.repository import EngagementRepository
+from harness.domain.engagement.startup import (
     StartupResumeFlow,
     StartupResult,
     create_engagement,
@@ -86,7 +86,7 @@ def mock_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
         return result
 
     monkeypatch.setattr(
-        "harness.engagement.startup.subprocess.run", mock_run
+        "harness.domain.engagement.startup.subprocess.run", mock_run
     )
 
 
@@ -442,7 +442,7 @@ class TestBranchCreation:
             return MockFail()
 
         with patch(
-            "harness.engagement.startup.subprocess.run",
+            "harness.domain.engagement.startup.subprocess.run",
             side_effect=mock_git_fail,
         ):
             flow = StartupResumeFlow(root=project_root)
@@ -743,7 +743,7 @@ class TestConvenienceFunctions:
         """Convenience functions work without root (auto-discover)."""
         # These will use cwd which may or may not have a harness project;
         # test that they at least don't crash with a TypeError
-        with patch("harness.engagement.startup.find_project_root") as mock_find:
+        with patch("harness.domain.engagement.startup.find_project_root") as mock_find:
             mock_find.return_value = project_root
             result = create_engagement(
                 slug="auto-root",

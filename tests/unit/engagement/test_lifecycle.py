@@ -1,4 +1,4 @@
-"""Tests for harness.engagement.lifecycle."""
+"""Tests for harness.domain.engagement.lifecycle."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from harness.engagement.lifecycle import (
+from harness.domain.engagement.lifecycle import (
     _load_active_mapping,
     _parse_engagement_md,
     _save_active_mapping,

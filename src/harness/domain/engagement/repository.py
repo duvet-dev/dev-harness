@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from harness.engagement.model import Engagement, EngagementStatus, HealthWarning
+from harness.domain.engagement.model import Engagement, EngagementStatus, HealthWarning
 from harness.errors import EngagementNotFoundError
 from harness.paths import find_project_root, get_engagement_dir, get_engagements_dir
 

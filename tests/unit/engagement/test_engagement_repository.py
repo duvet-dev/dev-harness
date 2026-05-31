@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from harness.engagement.model import Engagement, EngagementStatus, HealthWarning
-from harness.engagement.repository import EngagementRepository
+from harness.domain.engagement.model import Engagement, EngagementStatus, HealthWarning
+from harness.domain.engagement.repository import EngagementRepository
 from harness.errors import EngagementNotFoundError
 
 

@@ -178,7 +178,7 @@ class TestPhaseManagementTypedHandler:
 
     def test_list_no_phases(self, phase_handler, tmp_project):
         """List with no recorded phases returns empty list."""
-        with patch("harness.engagement.phase_state.PhaseStateManager") as m_psm:
+        with patch("harness.domain.engagement.phase_state.PhaseStateManager") as m_psm:
             m_psm.return_value.list_phases.return_value = {}
             cmd = ManagePhaseCommand(
                 slug="my-eng",
@@ -192,12 +192,12 @@ class TestPhaseManagementTypedHandler:
 
     def test_list_with_phases(self, phase_handler, tmp_project):
         """List returns phase names and states."""
-        from harness.engagement.phase_state import PhaseState
+        from harness.domain.engagement.phase_state import PhaseState
         mock_phases = {
             "design": MagicMock(state=PhaseState.ACTIVE),
             "requirements": MagicMock(state=PhaseState.COMPLETED),
         }
-        with patch("harness.engagement.phase_state.PhaseStateManager") as m_psm:
+        with patch("harness.domain.engagement.phase_state.PhaseStateManager") as m_psm:
             m_psm.return_value.list_phases.return_value = mock_phases
             cmd = ManagePhaseCommand(
                 slug="my-eng",
@@ -229,9 +229,9 @@ class TestPhaseManagementTypedHandler:
             state_path,
         )
 
-        with patch("harness.engagement.phase_state.PhaseStateManager") as m_psm:
+        with patch("harness.domain.engagement.phase_state.PhaseStateManager") as m_psm:
             m_psm.return_value.list_phases.return_value = {}
-            with patch("harness.engagement.checkpoint.CheckpointManager") as m_ckm:
+            with patch("harness.domain.engagement.checkpoint.CheckpointManager") as m_ckm:
                 m_ckm.return_value.create.return_value = MagicMock(
                     checkpoint_id="ck-001")
                 cmd = ManagePhaseCommand(
@@ -264,13 +264,13 @@ class TestPhaseManagementTypedHandler:
             state_path,
         )
 
-        with patch("harness.engagement.phase_state.PhaseStateManager") as m_psm:
+        with patch("harness.domain.engagement.phase_state.PhaseStateManager") as m_psm:
             m_psm.return_value.list_phases.return_value = {}
-            with patch("harness.engagement.checkpoint.CheckpointManager") as m_ckm:
+            with patch("harness.domain.engagement.checkpoint.CheckpointManager") as m_ckm:
                 m_ckm.return_value.create.return_value = MagicMock(
                     checkpoint_id="ck-002")
                 with patch(
-                    "harness.engagement.feedback.FeedbackManager"
+                    "harness.domain.engagement.feedback.FeedbackManager"
                 ) as m_fbm:
                     m_fbm.return_value.create.return_value = (
                         tmp_project / "feedback.md"
@@ -291,7 +291,7 @@ class TestPhaseManagementTypedHandler:
     def test_resume_with_checkpoint(self, phase_handler, tmp_project):
         """Resume returns most recent checkpoint."""
         mock_ckpt = MagicMock(checkpoint_id="ck-latest", phase_name="design")
-        with patch("harness.engagement.checkpoint.CheckpointManager") as m_ckm:
+        with patch("harness.domain.engagement.checkpoint.CheckpointManager") as m_ckm:
             m_ckm.return_value.most_recent.return_value = mock_ckpt
             cmd = ManagePhaseCommand(
                 slug="my-eng",
@@ -306,7 +306,7 @@ class TestPhaseManagementTypedHandler:
 
     def test_resume_no_checkpoint(self, phase_handler, tmp_project):
         """Resume with no checkpoints returns not resumed."""
-        with patch("harness.engagement.checkpoint.CheckpointManager") as m_ckm:
+        with patch("harness.domain.engagement.checkpoint.CheckpointManager") as m_ckm:
             m_ckm.return_value.most_recent.return_value = None
             cmd = ManagePhaseCommand(
                 slug="my-eng",
@@ -320,7 +320,7 @@ class TestPhaseManagementTypedHandler:
 
     def test_status(self, phase_handler, tmp_project):
         """Status returns phase state dictionary."""
-        from harness.engagement.phase_state import PhaseState
+        from harness.domain.engagement.phase_state import PhaseState
         mock_phases = {
             "design": MagicMock(
                 state=PhaseState.ACTIVE,
@@ -328,7 +328,7 @@ class TestPhaseManagementTypedHandler:
                 feedback_target="",
             ),
         }
-        with patch("harness.engagement.phase_state.PhaseStateManager") as m_psm:
+        with patch("harness.domain.engagement.phase_state.PhaseStateManager") as m_psm:
             m_psm.return_value.list_phases.return_value = mock_phases
             cmd = ManagePhaseCommand(
                 slug="my-eng",
@@ -347,7 +347,7 @@ class TestPhaseManagementTypedHandler:
             status="pending", from_phase="design", to_phase="testing",
             title="Review needed",
         )
-        with patch("harness.engagement.feedback.FeedbackManager") as m_fbm:
+        with patch("harness.domain.engagement.feedback.FeedbackManager") as m_fbm:
             m_fbm.return_value.list_feedback.return_value = [mock_fb]
             cmd = ManagePhaseCommand(
                 slug="my-eng",
@@ -361,7 +361,7 @@ class TestPhaseManagementTypedHandler:
 
     def test_feedback_list_empty(self, phase_handler, tmp_project):
         """Empty feedback list returns empty array."""
-        with patch("harness.engagement.feedback.FeedbackManager") as m_fbm:
+        with patch("harness.domain.engagement.feedback.FeedbackManager") as m_fbm:
             m_fbm.return_value.list_feedback.return_value = []
             cmd = ManagePhaseCommand(
                 slug="my-eng",
@@ -412,7 +412,7 @@ class TestPhaseManagementTypedHandler:
     def test_exception_returns_error(self, phase_handler, tmp_project):
         """Unexpected exception returns error."""
         with patch(
-            "harness.engagement.phase_state.PhaseStateManager",
+            "harness.domain.engagement.phase_state.PhaseStateManager",
             side_effect=RuntimeError("boom"),
         ):
             cmd = ManagePhaseCommand(

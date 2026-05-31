@@ -26,7 +26,7 @@ class CreateEngagementHandler(TypedHandler[CreateEngagementCommand, CreateEngage
     def handle(self, command: CreateEngagementCommand) -> CreateEngagementResult:
         try:
             from pathlib import Path
-            from harness.engagement.startup import StartupResumeFlow
+            from harness.domain.engagement.startup import StartupResumeFlow
 
             root = Path.cwd()
             flow = StartupResumeFlow(root=root)
@@ -80,7 +80,7 @@ class ResumeEngagementHandler(TypedHandler[ResumeEngagementCommand, ResumeEngage
     def handle(self, command: ResumeEngagementCommand) -> ResumeEngagementResult:
         try:
             from pathlib import Path
-            from harness.engagement.startup import StartupResumeFlow
+            from harness.domain.engagement.startup import StartupResumeFlow
 
             root = Path.cwd()
             flow = StartupResumeFlow(root=root)
@@ -126,7 +126,7 @@ class AbortEngagementTypedHandler(TypedHandler[AbortEngagementCommand, AbortEnga
     def handle(self, command: AbortEngagementCommand) -> AbortEngagementResult:
         try:
             from harness.session.abort import AbortHandler
-            from harness.engagement.repository import EngagementRepository
+            from harness.domain.engagement.repository import EngagementRepository
             from pathlib import Path
 
             root = Path.cwd()

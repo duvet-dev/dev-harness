@@ -45,7 +45,7 @@ class CreateWavesFromAssessmentTypedHandler(
             refactoring = command.refactoring
 
             if not slug:
-                from harness.engagement.resolver import resolve_active_engagement
+                from harness.domain.engagement.resolver import resolve_active_engagement
                 slug = resolve_active_engagement(root)
 
             if not slug:
@@ -174,7 +174,7 @@ class CreateWaveFromFindingTypedHandler(
             finding_id = command.finding_id
 
             if not slug:
-                from harness.engagement.resolver import resolve_active_engagement
+                from harness.domain.engagement.resolver import resolve_active_engagement
                 slug = resolve_active_engagement(root)
 
             if not slug:
@@ -277,7 +277,7 @@ class ListWavesTypedHandler(TypedHandler[ListWavesCommand, ListWavesResult]):
             slug = command.slug
 
             if not slug:
-                from harness.engagement.resolver import resolve_active_engagement
+                from harness.domain.engagement.resolver import resolve_active_engagement
                 slug = resolve_active_engagement(root)
 
             if not slug:
@@ -316,7 +316,7 @@ class WaveStatusTypedHandler(TypedHandler[WaveStatusCommand, WaveStatusResult]):
             slug = command.slug
 
             if not slug:
-                from harness.engagement.resolver import resolve_active_engagement
+                from harness.domain.engagement.resolver import resolve_active_engagement
                 slug = resolve_active_engagement(root)
 
             if not slug:

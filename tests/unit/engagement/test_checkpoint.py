@@ -1,11 +1,11 @@
-"""Tests for harness.engagement.checkpoint."""
+"""Tests for harness.domain.engagement.checkpoint."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from harness.engagement.checkpoint import (
+from harness.domain.engagement.checkpoint import (
     CHECKPOINT_EXPIRY_HOURS,
     Checkpoint,
     CheckpointManager,

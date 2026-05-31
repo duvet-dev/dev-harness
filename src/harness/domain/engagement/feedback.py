@@ -16,7 +16,7 @@ import yaml
 
 from harness.domain.enums import FeedbackStatus
 
-from harness.engagement.lifecycle import ENGAGEMENTS_DIR
+from harness.domain.engagement.lifecycle import ENGAGEMENTS_DIR
 
 # ── Feedback directories ───────────────────────────────────────────────────
 

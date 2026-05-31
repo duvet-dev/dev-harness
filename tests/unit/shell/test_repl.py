@@ -120,7 +120,7 @@ class TestHarnessREPL:
         assert result is True
 
     @patch("harness.shell.repl.click.echo")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_get_well_no_engagement(self, mock_resolve, mock_echo, tmp_path):
         """/get-well with no active engagement should print message and continue."""
         mock_resolve.return_value = None
@@ -130,7 +130,7 @@ class TestHarnessREPL:
 
     @patch("harness.shell.repl.click.echo")
     @patch("harness.shell.repl._build_command_bus")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_get_well_with_engagement(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/get-well with active engagement should start a session."""
         from unittest.mock import AsyncMock
@@ -168,7 +168,7 @@ class TestHarnessREPL:
 
     @patch("harness.shell.repl.click.echo")
     @patch("harness.shell.repl._build_command_bus")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_get_well_with_custom_phase(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/get-well architecture-design starts from a specific phase."""
         from unittest.mock import AsyncMock
@@ -185,7 +185,7 @@ class TestHarnessREPL:
         assert kwargs.get("start_phase") == "architecture-design"
 
     @patch("harness.shell.repl.click.echo")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_session_get_well_no_engagement(self, mock_resolve, mock_echo, tmp_path):
         """/session --get-well with no active engagement should print message."""
         mock_resolve.return_value = None
@@ -195,7 +195,7 @@ class TestHarnessREPL:
 
     @patch("harness.shell.repl.click.echo")
     @patch("harness.shell.repl._build_command_bus")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_session_get_well_dispatches(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/session --get-well dispatches to get-well session with correct args."""
         from unittest.mock import AsyncMock
@@ -528,7 +528,7 @@ class TestREPLGetWellEdgeCases:
     """Edge cases for /get-well command."""
 
     @patch("harness.shell.repl.click.echo")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_get_well_no_engagement(self, mock_resolve, mock_echo, tmp_path):
         """/get-well with no active engagement should print message."""
         mock_resolve.return_value = None
@@ -539,7 +539,7 @@ class TestREPLGetWellEdgeCases:
 
     @patch("harness.shell.repl.click.echo")
     @patch("harness.shell.repl._build_command_bus")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_get_well_session_setup_fails(self, mock_resolve, mock_bus, mock_echo, tmp_path):
         """/get-well with failed session setup should print error."""
         from unittest.mock import MagicMock
@@ -555,7 +555,7 @@ class TestREPLGetWellEdgeCases:
 
     @patch("harness.shell.repl.click.echo")
     @patch("harness.shell.repl._dispatch_via_bus")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_get_well_session_run_exception(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/get-well when phase session raises Exception should print error."""
         from unittest.mock import AsyncMock
@@ -571,7 +571,7 @@ class TestREPLGetWellEdgeCases:
 
     @patch("harness.shell.repl.click.echo")
     @patch("harness.shell.repl._dispatch_via_bus")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_session_get_well_setup_fails(self, mock_resolve, mock_bus, mock_echo, tmp_path):
         """/session --get-well when dispatch fails should print error."""
         mock_bus.return_value = CommandResult(success=False, error="Setup failed")
@@ -582,7 +582,7 @@ class TestREPLGetWellEdgeCases:
 
     @patch("harness.shell.repl.click.echo")
     @patch("harness.shell.repl._dispatch_via_bus")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_session_get_well_run_exception(self, mock_resolve, mock_bus, mock_echo, tmp_path, monkeypatch):
         """/session --get-well when phase session raises Exception."""
         from unittest.mock import AsyncMock
@@ -597,7 +597,7 @@ class TestREPLGetWellEdgeCases:
         assert result is True
 
     @patch("harness.shell.repl.click.echo")
-    @patch("harness.engagement.resolver.resolve_active_engagement")
+    @patch("harness.domain.engagement.resolver.resolve_active_engagement")
     def test_session_no_engagement(self, mock_resolve, mock_echo, tmp_path):
         """/session with no active engagement should print message."""
         mock_resolve.return_value = None

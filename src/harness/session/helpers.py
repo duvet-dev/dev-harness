@@ -1178,7 +1178,7 @@ def _prompt_alternative(rejected: str) -> str | None:
 
 def _find_active_engagement(root: Path) -> Optional[str]:
     """Get the active engagement slug for the current branch."""
-    from harness.engagement.resolver import resolve_active_engagement
+    from harness.domain.engagement.resolver import resolve_active_engagement
     return resolve_active_engagement(root)
 
 

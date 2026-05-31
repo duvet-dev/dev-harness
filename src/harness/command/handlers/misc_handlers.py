@@ -34,7 +34,7 @@ class QueryStatusTypedHandler(TypedHandler[QueryStatusCommand, QueryStatusResult
 
     def handle(self, command: QueryStatusCommand) -> QueryStatusResult:
         try:
-            from harness.engagement.health import EngagementHealthCheck
+            from harness.domain.engagement.health import EngagementHealthCheck
 
             checker = EngagementHealthCheck()
             report = checker.check(command.slug)
@@ -65,7 +65,7 @@ class QueryWhatsNextTypedHandler(TypedHandler[QueryWhatsNextCommand, QueryWhatsN
     def handle(self, command: QueryWhatsNextCommand) -> QueryWhatsNextResult:
         try:
             from harness.session.whats_next import WhatsNextEngine
-            from harness.engagement.repository import EngagementRepository
+            from harness.domain.engagement.repository import EngagementRepository
             from pathlib import Path
 
             root = Path.cwd()

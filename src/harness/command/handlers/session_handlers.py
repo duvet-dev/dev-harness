@@ -17,7 +17,7 @@ class SessionTypedHandler(TypedHandler[SessionCommand, SessionResult]):
 
     def handle(self, command: SessionCommand) -> SessionResult:
         try:
-            from harness.engagement.startup import StartupResumeFlow
+            from harness.domain.engagement.startup import StartupResumeFlow
 
             root = Path.cwd()
             phase = command.phase

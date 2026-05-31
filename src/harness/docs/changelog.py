@@ -18,7 +18,7 @@ from typing import Optional
 
 import yaml
 
-from harness.engagement.lifecycle import ENGAGEMENTS_DIR
+from harness.domain.engagement.lifecycle import ENGAGEMENTS_DIR
 
 # ── Constants ───────────────────────────────────────────────────────────────
 

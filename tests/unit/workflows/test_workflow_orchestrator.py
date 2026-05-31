@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harness.engagement.model import Engagement
+from harness.domain.engagement.model import Engagement
 from harness.errors import UnknownWorkflowError
 from harness.phase.orchestrator import PhaseOrchestrator, PhaseOrchestratorResult
 from harness.workflow.model import (

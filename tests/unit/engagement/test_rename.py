@@ -1,4 +1,4 @@
-"""Tests for harness.engagement.rename."""
+"""Tests for harness.domain.engagement.rename."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from harness.engagement.rename import (
+from harness.domain.engagement.rename import (
     BranchStrategy,
     RenameResult,
     _archive_engagement,
@@ -15,7 +15,7 @@ from harness.engagement.rename import (
     rename_engagement,
     validate_slug,
 )
-from harness.engagement.lifecycle import (
+from harness.domain.engagement.lifecycle import (
     create_engagement_dir,
     write_engagement_metadata,
     set_active_engagement,
@@ -68,7 +68,7 @@ class TestUpdateEngagementYaml:
         plan_path.write_text(yaml.dump({"engagement_ref": "old-slug", "waves": []}))
         # We need to reference old_slug — but the function doesn't know it.
         # Let's test manually by patching.
-        from harness.engagement.rename import _update_engagement_yaml
+        from harness.domain.engagement.rename import _update_engagement_yaml
 
         # This test validates that plan.yaml references get updated when
         # the inner function _update_engagement_yaml checks for them.
@@ -176,7 +176,7 @@ class TestRenameEngagement:
         mapping_file = mapping_dir / "active-engagements.yaml"
         mapping_file.write_text(yaml.dump({"branches": {"main": "old-eng"}}))
 
-        with patch("harness.engagement.rename.update_active_engagement_mapping") as mock_update:
+        with patch("harness.domain.engagement.rename.update_active_engagement_mapping") as mock_update:
             rename_engagement("old-eng", "new-eng", tmp_path)
             mock_update.assert_called_once_with(tmp_path, "old-eng", "new-eng")
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from harness.engagement.model import Engagement
+from harness.domain.engagement.model import Engagement
 from harness.errors import UnknownWorkflowError, WorkflowNotActiveError
 from harness.phase.orchestrator import PhaseOrchestrator
 from harness.tracing import TraceLogger

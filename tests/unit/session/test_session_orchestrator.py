@@ -14,9 +14,9 @@ import pytest
 _RESOLVE_PATH = "harness.session.client.resolve_provider"
 _SESSION_CLIENT_PATH = "harness.session.client.SessionClient"
 _INTERACTIVE_SESSION_PATH = "harness.session.session_orchestrator.InteractiveSession"
-_PHASE_STATE_MANAGER_PATH = "harness.engagement.phase_state.PhaseStateManager"
-_CHECKPOINT_MANAGER_PATH = "harness.engagement.checkpoint.CheckpointManager"
-_FEEDBACK_MANAGER_PATH = "harness.engagement.feedback.FeedbackManager"
+_PHASE_STATE_MANAGER_PATH = "harness.domain.engagement.phase_state.PhaseStateManager"
+_CHECKPOINT_MANAGER_PATH = "harness.domain.engagement.checkpoint.CheckpointManager"
+_FEEDBACK_MANAGER_PATH = "harness.domain.engagement.feedback.FeedbackManager"
 _PLAN_MANAGER_PATH = "harness.plan.plan_manager.PlanManager"
 _SESSION_CR_PATH = "harness.session.commands.CommandResult"
 

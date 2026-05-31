@@ -31,13 +31,13 @@ from harness.session.helpers import (
     _report_apply_results,
     _write_phase_artifact,
 )
-from harness.engagement.checkpoint import (
+from harness.domain.engagement.checkpoint import (
     CHECKPOINT_EXPIRY_HOURS,
     CheckpointManager,
 )
-from harness.engagement.feedback import FeedbackManager, FeedbackPacket
-from harness.engagement.phase_state import PhaseState as PS
-from harness.engagement.phase_state import PhaseStateManager
+from harness.domain.engagement.feedback import FeedbackManager, FeedbackPacket
+from harness.domain.engagement.phase_state import PhaseState as PS
+from harness.domain.engagement.phase_state import PhaseStateManager
 
 logger = logging.getLogger(__name__)
 
@@ -606,10 +606,10 @@ async def run_phase_session(
         session_type: Session type identifier (e.g. "get-well", "greenfield").
         orchestrator: Pre-constructed PhaseOrchestrator, or None to create one.
     """
-    from harness.engagement.checkpoint import CheckpointManager
-    from harness.engagement.feedback import FeedbackManager
-    from harness.engagement.phase_state import PhaseState as PS
-    from harness.engagement.phase_state import PhaseStateManager
+    from harness.domain.engagement.checkpoint import CheckpointManager
+    from harness.domain.engagement.feedback import FeedbackManager
+    from harness.domain.engagement.phase_state import PhaseState as PS
+    from harness.domain.engagement.phase_state import PhaseStateManager
     from harness.session.client import (
         ChatTranscript,
         SessionClient,

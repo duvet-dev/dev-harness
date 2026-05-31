@@ -330,7 +330,7 @@ def write_assessment_report(
     import json
     from datetime import datetime, timezone
     from harness.paths import get_harness_dir, get_engagements_dir
-    from harness.engagement.lifecycle import read_active_engagement
+    from harness.domain.engagement.lifecycle import read_active_engagement
 
     import click
 

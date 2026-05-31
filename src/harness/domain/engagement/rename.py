@@ -2,7 +2,7 @@
 
 Usage::
 
-    from harness.engagement.rename import rename_engagement
+    from harness.domain.engagement.rename import rename_engagement
 
     result = rename_engagement(
         old_slug="typo-eng",
@@ -26,7 +26,7 @@ from typing import Optional
 
 import yaml
 
-from harness.engagement.lifecycle import (
+from harness.domain.engagement.lifecycle import (
     ENGAGEMENT_MD,
     ENGAGEMENT_YAML_FILE,
     PLAN_YAML,

@@ -1,11 +1,11 @@
-"""Tests for harness.engagement.feedback."""
+"""Tests for harness.domain.engagement.feedback."""
 
 from pathlib import Path
 
 import pytest
 import yaml
 
-from harness.engagement.feedback import (
+from harness.domain.engagement.feedback import (
     FeedbackManager,
     FeedbackPacket,
     OPEN_DIR,

@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 from harness.domain.identifiers import Slug
-from harness.engagement.model import Engagement, EngagementStatus, HealthWarning
+from harness.domain.engagement.model import Engagement, EngagementStatus, HealthWarning
 from harness.errors import EngagementNotFoundError
-from harness.engagement.repository import EngagementRepository as JsonEngagementRepository
+from harness.domain.engagement.repository import EngagementRepository as JsonEngagementRepository
 
 
 class YamlEngagementRepository:

@@ -253,7 +253,7 @@ def check_branch_match(root: Path) -> HealthCheck:
     """Verify current git branch matches the active engagement's stored branch."""
     try:
         from harness.scm.git import GitRepo
-        from harness.engagement.lifecycle import read_active_engagement
+        from harness.domain.engagement.lifecycle import read_active_engagement
         from harness.paths import get_engagement_dir
 
         repo = GitRepo(root)
@@ -431,7 +431,7 @@ def check_engagement_fresh(root: Path) -> HealthCheck:
 def check_plan_consistency(root: Path) -> HealthCheck:
     """Verify plan.md is in sync with plan.yaml."""
     try:
-        from harness.engagement.lifecycle import read_active_engagement
+        from harness.domain.engagement.lifecycle import read_active_engagement
         from harness.paths import get_engagement_dir
 
         active = read_active_engagement(root)
@@ -476,7 +476,7 @@ def check_plan_consistency(root: Path) -> HealthCheck:
 def check_manifest_link(root: Path) -> HealthCheck:
     """Verify assessment manifest files referenced by engagement exist."""
     try:
-        from harness.engagement.lifecycle import read_active_engagement
+        from harness.domain.engagement.lifecycle import read_active_engagement
         from harness.paths import get_engagement_dir
 
         active = read_active_engagement(root)
@@ -613,7 +613,7 @@ def fix_branch_match(root: Path) -> list[str]:
     messages: list[str] = []
     try:
         from harness.scm.git import GitRepo
-        from harness.engagement.lifecycle import read_active_engagement
+        from harness.domain.engagement.lifecycle import read_active_engagement
         from harness.paths import get_engagement_dir
 
         repo = GitRepo(root)
@@ -652,7 +652,7 @@ def fix_plan_consistency(root: Path) -> list[str]:
     """Fix plan.md by syncing it from plan.yaml via PlanManager."""
     messages: list[str] = []
     try:
-        from harness.engagement.lifecycle import read_active_engagement
+        from harness.domain.engagement.lifecycle import read_active_engagement
         slug = read_active_engagement(root)
         if slug is None:
             messages.append("No active engagement — cannot fix plan.")
@@ -720,7 +720,7 @@ def fix_missing_dir(root: Path) -> list[str]:
     """Fix missing engagement directories and metadata files."""
     messages: list[str] = []
     try:
-        from harness.engagement.lifecycle import (
+        from harness.domain.engagement.lifecycle import (
             read_active_engagement,
         )
 
@@ -755,7 +755,7 @@ def fix_missing_dir(root: Path) -> list[str]:
                 yaml_data = yaml.safe_load(f) or {}
             eng_slug = yaml_data.get("slug", slug)
             eng_branch = yaml_data.get("branch", branch)
-            from harness.engagement.lifecycle import write_engagement_metadata
+            from harness.domain.engagement.lifecycle import write_engagement_metadata
             write_engagement_metadata(
                 eng_dir, name=eng_slug.replace("-", " ").title(),
                 slug=eng_slug, branch=eng_branch,
@@ -851,7 +851,7 @@ def fix_engagement(root: Path, slug: str) -> list[str]:
         with open(eng_yaml) as f:
             yaml_data = yaml.safe_load(f) or {}
         eng_branch = yaml_data.get("branch", repo.branch())
-        from harness.engagement.lifecycle import write_engagement_metadata
+        from harness.domain.engagement.lifecycle import write_engagement_metadata
         write_engagement_metadata(
             eng_dir, name=slug.replace("-", " ").title(),
             slug=slug, branch=eng_branch,

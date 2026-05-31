@@ -398,7 +398,7 @@ class HarnessREPL:
     def _get_active_engagement(self) -> Optional[str]:
         """Return the active engagement slug, if any."""
         try:
-            from harness.engagement.lifecycle import read_active_engagement
+            from harness.domain.engagement.lifecycle import read_active_engagement
             return read_active_engagement(self.root)
         except Exception:
             return None
@@ -485,7 +485,7 @@ class HarnessREPL:
             """Run a get-well remediation session via CommandBus."""
             import asyncio
             from harness.session.session_orchestrator import run_phase_session
-            from harness.engagement.resolver import resolve_active_engagement
+            from harness.domain.engagement.resolver import resolve_active_engagement
 
             slug = resolve_active_engagement(self.root)
             if not slug:
@@ -526,7 +526,7 @@ class HarnessREPL:
             """Run a full multi-phase session via CommandBus."""
             import asyncio
             from harness.session.session_orchestrator import run_phase_session
-            from harness.engagement.resolver import resolve_active_engagement
+            from harness.domain.engagement.resolver import resolve_active_engagement
 
             slug = resolve_active_engagement(self.root)
             if not slug:

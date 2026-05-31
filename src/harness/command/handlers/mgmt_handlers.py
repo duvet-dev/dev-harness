@@ -39,7 +39,7 @@ class RenameEngagementTypedHandler(
 
     def handle(self, command: RenameEngagementCommand) -> RenameEngagementResult:
         try:
-            from harness.engagement.rename import BranchStrategy, rename_engagement
+            from harness.domain.engagement.rename import BranchStrategy, rename_engagement
 
             root = command.slug if Path(command.slug).is_absolute() else Path.cwd()
             new_slug = command.new_slug
@@ -138,7 +138,7 @@ class FixEngagementTypedHandler(TypedHandler[FixEngagementCommand, FixEngagement
             slug = command.slug
 
             if not slug:
-                from harness.engagement.resolver import resolve_active_engagement
+                from harness.domain.engagement.resolver import resolve_active_engagement
                 slug = resolve_active_engagement(root)
 
             if not slug:

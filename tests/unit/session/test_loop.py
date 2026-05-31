@@ -383,12 +383,12 @@ class TestFormatConsultResult:
 
 class TestFindActiveEngagement:
     def test_returns_slug(self, tmp_path):
-        with patch("harness.engagement.resolver.resolve_active_engagement", return_value="my-eng"):
+        with patch("harness.domain.engagement.resolver.resolve_active_engagement", return_value="my-eng"):
             slug = _find_active_engagement(tmp_path)
             assert slug == "my-eng"
 
     def test_returns_none(self, tmp_path):
-        with patch("harness.engagement.resolver.resolve_active_engagement", return_value=None):
+        with patch("harness.domain.engagement.resolver.resolve_active_engagement", return_value=None):
             slug = _find_active_engagement(tmp_path)
             assert slug is None
 

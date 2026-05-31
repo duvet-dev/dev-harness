@@ -142,7 +142,7 @@ class AbortHandler:
                     current_phase = state.current_phase or engagement.current_phase
 
             # Update engagement status to ABORTED
-            from harness.engagement.model import EngagementStatus
+            from harness.domain.engagement.model import EngagementStatus
 
             engagement.status = EngagementStatus.ABORTED
             engagement.last_active = datetime.now()

@@ -1,4 +1,4 @@
-"""Tests for harness.engagement.resolver."""
+"""Tests for harness.domain.engagement.resolver."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from harness.engagement.resolver import (
+from harness.domain.engagement.resolver import (
     ENG_BRANCH_PATTERN,
     load_active_engagements,
     resolve_active_engagement,

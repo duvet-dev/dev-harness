@@ -911,7 +911,7 @@ def run_wave(wave_id, no_test, backend, slug):
         from harness.cli.commands import dispatch_cli_command, run_wave_command
 
         if not slug:
-            from harness.engagement.resolver import resolve_active_engagement
+            from harness.domain.engagement.resolver import resolve_active_engagement
             from pathlib import Path
             slug = resolve_active_engagement(Path.cwd())
 
@@ -1039,7 +1039,7 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
     """Interactive LLM chat session within an engagement."""
     try:
         from harness.cli.commands import dispatch_cli_command, chat_command
-        from harness.engagement.resolver import resolve_active_engagement
+        from harness.domain.engagement.resolver import resolve_active_engagement
         from harness.paths import get_engagement_dir
         from pathlib import Path
 
@@ -1098,7 +1098,7 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
     """Run a full phase-by-phase session."""
     try:
         from harness.cli.commands import dispatch_cli_command, session_command
-        from harness.engagement.resolver import resolve_active_engagement
+        from harness.domain.engagement.resolver import resolve_active_engagement
         from harness.paths import get_engagement_dir
         from harness.cli.helpers import resolve_session_type_flag
         from pathlib import Path
@@ -1665,7 +1665,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
         root = require_project_root(command_name="engagement create")
 
         # Derive slug
-        from harness.engagement.lifecycle import slugify
+        from harness.domain.engagement.lifecycle import slugify
         slug = slug or slugify(name)
         if not slug:
             click.echo(
@@ -1714,7 +1714,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
                 raise click.Abort()
 
         # Create engagement directory structure
-        from harness.engagement.lifecycle import (
+        from harness.domain.engagement.lifecycle import (
             create_engagement_dir,
             write_engagement_metadata,
         )
@@ -1824,7 +1824,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
                     )
 
         # Set active engagement
-        from harness.engagement.lifecycle import set_active_engagement
+        from harness.domain.engagement.lifecycle import set_active_engagement
         set_active_engagement(root, slug)
 
         click.echo(f"Engagement created: {slug}")
@@ -1868,7 +1868,7 @@ def set_active(slug):
     try:
         root = require_project_root(command_name="engagement set-active")
 
-        from harness.engagement.lifecycle import set_active_engagement
+        from harness.domain.engagement.lifecycle import set_active_engagement
         set_active_engagement(root, slug)
 
         from harness.scm.git import GitRepo
@@ -1906,12 +1906,12 @@ def list_engagements():
 
         # Resolve active engagement
         try:
-            from harness.engagement.resolver import resolve_active_engagement
+            from harness.domain.engagement.resolver import resolve_active_engagement
             active_slug = resolve_active_engagement(root)
         except Exception:
             active_slug = None
 
-        from harness.engagement.lifecycle import _parse_engagement_md
+        from harness.domain.engagement.lifecycle import _parse_engagement_md
 
         rows = []
         for entry in sorted(engagements_dir.iterdir()):
@@ -1974,7 +1974,7 @@ def engagement_status(engagement_slug):
         # Resolve which engagement to show
         slug = engagement_slug
         if not slug:
-            from harness.engagement.resolver import resolve_active_engagement
+            from harness.domain.engagement.resolver import resolve_active_engagement
             slug = resolve_active_engagement(root)
             if not slug:
                 click.echo(
@@ -1989,7 +1989,7 @@ def engagement_status(engagement_slug):
             click.echo(f"Engagement '{slug}' not found.", err=True)
             raise click.Abort()
 
-        from harness.engagement.lifecycle import _parse_engagement_md
+        from harness.domain.engagement.lifecycle import _parse_engagement_md
         meta = _parse_engagement_md(md_file)
 
         title = meta.get("title", slug)
@@ -2113,7 +2113,7 @@ def close(slug):
             )
             raise click.Abort()
 
-        from harness.engagement.lifecycle import _parse_engagement_md
+        from harness.domain.engagement.lifecycle import _parse_engagement_md
         meta = _parse_engagement_md(md_file)
         status = meta.get("status", "unknown")
 
@@ -2187,7 +2187,7 @@ def diff(slug):
     root = require_project_root(command_name="engagement diff")
 
     if not slug:
-        from harness.engagement.resolver import resolve_active_engagement
+        from harness.domain.engagement.resolver import resolve_active_engagement
         slug = resolve_active_engagement(root)
 
     if not slug:

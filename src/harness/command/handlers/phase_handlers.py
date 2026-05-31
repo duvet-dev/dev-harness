@@ -71,12 +71,12 @@ class PhaseManagementTypedHandler(TypedHandler[ManagePhaseCommand, ManagePhaseRe
                     error="No engagement slug provided",
                 )
 
-            from harness.engagement.checkpoint import CheckpointManager
-            from harness.engagement.feedback import (
+            from harness.domain.engagement.checkpoint import CheckpointManager
+            from harness.domain.engagement.feedback import (
                 FeedbackManager,
                 FeedbackPacket,
             )
-            from harness.engagement.phase_state import (
+            from harness.domain.engagement.phase_state import (
                 PhaseState,
                 PhaseStateManager,
             )

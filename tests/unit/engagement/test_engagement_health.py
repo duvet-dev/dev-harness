@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from harness.engagement.health import EngagementHealthCheck, HealthReport, check_engagement_health
-from harness.engagement.model import Engagement, EngagementStatus
-from harness.engagement.repository import EngagementRepository
+from harness.domain.engagement.health import EngagementHealthCheck, HealthReport, check_engagement_health
+from harness.domain.engagement.model import Engagement, EngagementStatus
+from harness.domain.engagement.repository import EngagementRepository
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ class TestHealthReport:
 
     def test_with_warnings(self):
         """Adding warnings sets all_ok=False."""
-        from harness.engagement.model import HealthWarning
+        from harness.domain.engagement.model import HealthWarning
         report = HealthReport(slug="test")
         report.warnings.append(
             HealthWarning(type="dirty_repo", message="Changes found")

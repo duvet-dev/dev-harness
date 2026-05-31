@@ -16,7 +16,7 @@ from datetime import datetime
 import pytest
 
 from harness.session.abort import AbortHandler, AbortResult
-from harness.engagement.model import Engagement, EngagementStatus
+from harness.domain.engagement.model import Engagement, EngagementStatus
 
 
 # ── Stubs ────────────────────────────────────────────────────────────

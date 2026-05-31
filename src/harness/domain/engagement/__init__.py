@@ -9,17 +9,17 @@ Modules:
 - ``startup`` — StartupResumeFlow (engagement creation, resumption, auto mode)
 """
 
-from harness.engagement.health import EngagementHealthCheck, HealthReport, check_engagement_health
-from harness.engagement.lifecycle import (
+from harness.domain.engagement.health import EngagementHealthCheck, HealthReport, check_engagement_health
+from harness.domain.engagement.lifecycle import (
     close_engagement,
     create_engagement_dir,
     set_active_engagement,
     slugify,
     write_engagement_metadata,
 )
-from harness.engagement.repository import EngagementRepository
-from harness.engagement.resolver import resolve_active_engagement
-from harness.engagement.startup import (
+from harness.domain.engagement.repository import EngagementRepository
+from harness.domain.engagement.resolver import resolve_active_engagement
+from harness.domain.engagement.startup import (
     StartupResumeFlow,
     StartupResult,
     create_engagement,

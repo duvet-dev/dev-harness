@@ -216,16 +216,12 @@ class TestAgentOrchestratorBuildFallbackChain:
 
 class TestAgentOrchestratorResolveBackend:
     def test_uses_explicit_name(self):
-        from harness.agents.plugin_registry import PluginRegistry
-        PluginRegistry.initialize()
         o = AgentOrchestrator()
         packet = ContextPacket("t", "b", "t", "x")
         backend = o._resolve_backend(packet, "api")
         assert backend is not None
 
     def test_uses_backend_from_packet(self):
-        from harness.agents.plugin_registry import PluginRegistry
-        PluginRegistry.initialize()
         o = AgentOrchestrator()
         packet = ContextPacket(
             "t", "b", "t", "x",
@@ -236,8 +232,6 @@ class TestAgentOrchestratorResolveBackend:
 
     def test_falls_back_to_api_for_unknown(self):
         """Requesting a non-existent backend should fall back to 'api'."""
-        from harness.agents.plugin_registry import PluginRegistry
-        PluginRegistry.initialize()
         o = AgentOrchestrator()
         packet = ContextPacket("t", "b", "t", "x")
         backend = o._resolve_backend(packet, "non_existent_backend_xyz")

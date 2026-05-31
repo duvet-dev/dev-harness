@@ -36,7 +36,6 @@ from harness.agents.backends.base import (
     Invocation,
 )
 from harness.agents.context import ContextPacket, OutputContract
-from harness.agents.plugin_registry import PluginRegistry
 from harness.agents.repo_tool import RepoTool
 from harness.config.provider_registry import load_providers
 from harness.paths import get_providers_path
@@ -184,7 +183,9 @@ class AgentOrchestrator:
 
     def __init__(self, config: dict[str, Any] | None = None):
         self._config = OrchestratorConfig.from_dict(config or {})
-        PluginRegistry.initialize(config)
+        from harness.infrastructure.plugins.registry import PluginRegistry
+        self._plugin_registry = PluginRegistry()
+        self._plugin_registry.initialize(config)
 
     async def run(
         self,
@@ -422,16 +423,16 @@ class AgentOrchestrator:
         )
 
         try:
-            return PluginRegistry.get(name)
+            return self._plugin_registry.get(name)
         except KeyError:
             # Fallback chain: try api, then cli, then first available
             for fallback in ("api", "cli", "editor"):
-                if PluginRegistry.has_backend(fallback):
+                if self._plugin_registry.has_backend(fallback):
                     logger.warning(
                         "Backend '%s' not found, falling back to '%s'",
                         name, fallback,
                     )
-                    return PluginRegistry.get(fallback)
+                    return self._plugin_registry.get(fallback)
 
             raise BackendError(f"No backends available (requested: {name})")
 

@@ -510,10 +510,10 @@ class SessionClient:
 
         # Create runner and backend
         from harness.agents.backends.api_backend import ApiBackend
-        from harness.agents.plugin_registry import PluginRegistry
+        from harness.infrastructure.plugins.registry import PluginRegistry
         from harness.agents.orchestrator import AgentOrchestrator
 
-        PluginRegistry.initialize()
+        PluginRegistry().initialize()
 
         backend = ApiBackend()
         runner = AgentOrchestrator()

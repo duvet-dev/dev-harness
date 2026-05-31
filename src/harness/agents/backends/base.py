@@ -130,12 +130,22 @@ class AbstractBackend(abc.ABC):
         """Unique backend identifier (e.g. 'api', 'claude-code')."""
 
     @abc.abstractmethod
-    async def prepare(self, packet: ContextPacket) -> Invocation:
+    async def prepare(
+        self,
+        packet: ContextPacket,
+        resolved_config: dict[str, Any] | None = None,
+        model: str = "",
+    ) -> Invocation:
         """Convert a ContextPacket into a runnable Invocation.
 
         This is the 'plan' step — validate the packet and decide
         what command/URL to invoke. Should not perform I/O beyond
         configuration lookups.
+
+        Args:
+            packet: The context packet describing the agent task.
+            resolved_config: Optional resolved provider configuration.
+            model: Optional model override string.
         """
 
     @abc.abstractmethod

@@ -11,7 +11,10 @@ import unittest.mock
 from pathlib import Path
 
 import pytest
+from harness.agents.backends.base import BackendResult
 
+from harness.agents.backends.base import BackendResult
+from harness.agents.backends.base import BackendResult
 from harness.analysis.assessment import (
     AssessmentReport,
     gather_context,

@@ -361,8 +361,8 @@ class TestAgentOrchestratorAttachWebTool:
 
 
 @pytest.mark.asyncio
-async def test_run_simple_returns_string():
-    """run_simple returns artifact text on success."""
+async def test_run_simple_returns_backend_result():
+    """run_simple returns BackendResult."""
     o = AgentOrchestrator()
     fake_result = BackendResult(
         status="success",
@@ -372,8 +372,9 @@ async def test_run_simple_returns_string():
     with unittest.mock.patch.object(o, '_run_with_resolved_config',
                                      return_value=fake_result):
         result = await o.run_simple("do something impossible")
-    assert isinstance(result, str)
-    assert result == "analysis result"
+    assert isinstance(result, BackendResult)
+    assert result.status == "success"
+    assert result.artifacts.get("output") == "analysis result"
 
 
 @pytest.mark.asyncio
@@ -393,8 +394,8 @@ async def test_run_simple_with_project_dir(tmp_path):
             project_dir=str(tmp_path),
             agent_role="critical-analyser",
         )
-    assert isinstance(result, str)
-    assert result == "analysis result"
+    assert isinstance(result, BackendResult)
+    assert result.status == "success"
 
 
 @pytest.mark.asyncio

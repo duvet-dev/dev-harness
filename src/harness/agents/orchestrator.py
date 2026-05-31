@@ -334,14 +334,12 @@ class AgentOrchestrator:
             packet.target_directory = Path(temp_dir)
 
         try:
-            # Prepare invocation
-            invocation = await backend.prepare(packet)
-
-            # Attach resolved config
-            if resolved_config:
-                invocation.resolved_config = resolved_config
-            if model:
-                invocation.model = model
+            # Prepare invocation with resolved config and model
+            invocation = await backend.prepare(
+                packet,
+                resolved_config=resolved_config,
+                model=model,
+            )
 
             # Attach tools
             self.attach_repo_tool(packet, invocation)
@@ -446,11 +444,10 @@ class AgentOrchestrator:
         model: str | None = None,
         project_dir: str | Path | None = None,
         agent_role: str | None = None,
-    ) -> str:
-        """Convenience method: run with a spec string, get back content.
+    ) -> BackendResult:
+        """Run with a spec string, return BackendResult.
 
-        Useful for quick agent invocations where you just want the
-        produced text, not the full BackendResult.
+        Convenience method for quick agent invocations.
 
         When *project_dir* is provided, the RepoTool is attached and
         the agent can browse files during analysis (requires *agent_role*
@@ -486,9 +483,7 @@ class AgentOrchestrator:
         if self._config.cleanup_temp_dirs and not project_dir:
             _safety_rmtree(str(packet.target_directory))
 
-        if result.status == "success":
-            return "\n".join(result.artifacts.values())
-        return f"Error: {'; '.join(result.errors)}"
+        return result
 
     async def run_critic_loop(
         self,

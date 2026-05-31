@@ -83,7 +83,7 @@ class RunWaveTypedHandler(TypedHandler[RunWaveCommand, RunWaveResult]):
                 )
 
             from harness.phase.model import LoopConfig, Step
-            from harness.loop.runner import LoopRunner
+            from harness.loop.engine import LoopRunner
 
             loop_config = LoopConfig(
                 count=1,

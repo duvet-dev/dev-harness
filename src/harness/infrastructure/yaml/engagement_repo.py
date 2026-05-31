@@ -50,5 +50,10 @@ class YamlEngagementRepository:
         return list(self._impl.list_all())
 
     def update_status(self, slug: Slug, status: object) -> object:
-        eng_status = EngagementStatus(str(status)) if isinstance(status, str) else status
+        if isinstance(status, EngagementStatus):
+            eng_status = status
+        elif isinstance(status, str):
+            eng_status = EngagementStatus(status)
+        else:
+            eng_status = status
         return self._impl.update_status(str(slug), eng_status)

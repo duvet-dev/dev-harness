@@ -1,46 +1,12 @@
 """LoopRunner — recursive loop step execution — V7 §5.2, R33.
 
+Moved from ``runner.py`` (deleted) to ``engine.py`` (permanent home).
+
 Executes LoopConfig steps: runs a sequence of sub-steps ``count`` times
 (or until convergence), feeding outputs from iteration N to iteration N+1.
 Supports re-entry semantics (R18), loop counter tracking (per-loop, not
 global), convergence-aware iteration with 5 strategies, and circuit
 breaker escalation per iteration.
-
-Escalation chain per iteration: iteration → loop → parent step.
-
-Error classification: raises LoopExecutionError if the loop fails
-entirely.
-
-Usage::
-
-    runner = LoopRunner(
-        step_executor=step_executor,
-        circuit_breaker_registry=circuit_breaker_registry,
-    )
-    result = await runner.run(
-        loop_config=LoopConfig(count=3, description="Review cycle"),
-        steps=[step1, step2],
-        context=StepContext(slug="my-workflow", mode="auto"),
-    )
-    print(f"Iterations: {result.iteration_count}")
-    print(f"Success: {result.success}")
-
-Convergence-aware usage::
-
-    from harness.loop.convergence import resolve_strategy
-
-    config = ConvergenceConfig(strategy="gate_judgment", max_iterations=3)
-    strategy = resolve_strategy(config)
-
-    async def convergence_check(step_results, artifacts, iteration):
-        return await strategy.check(step_results, artifacts, iteration)
-
-    result = await runner.run(
-        loop_config=LoopConfig(convergence=config),
-        steps=[step1, step2, step3],
-        context=context,
-        convergence_check=convergence_check,
-    )
 """
 
 from __future__ import annotations

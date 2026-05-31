@@ -9,10 +9,11 @@ The harness's agent system provides:
 - TeamRegistry (team/registry.py) — manages AgentTeam definitions
 - Validator (validator.py) — output contract validation
 
-Note: CycleRunner (cycle.py) and AgentRunner (runner.py) have been deleted.
-Use AgentOrchestrator for LLM agent execution. Use config-driven critic loops
-via template steps in .harness/step_templates.yaml or LoopRunner with
-convergence strategies from harness.loop.convergence instead.
+Note: CycleRunner (cycle.py), AgentRunner (runner.py), and AgentOrchestrator
+(orchestrator.py) have been deleted. Use AgentService
+(harness.application.services.agent_service) for agent execution. Use
+config-driven critic loops via template steps in .harness/step_templates.yaml
+or LoopRunner with convergence strategies from harness.loop.convergence.
 """
 
 from harness.agents.agent_registry import (
@@ -30,7 +31,6 @@ from harness.agents.consultation import (
     ConsultationResult,
 )
 from harness.agents.detectors import LanguageDetector, LanguagePatterns
-from harness.agents.orchestrator import AgentOrchestrator
 from harness.team.model import AgentTeam
 from harness.team.registry import TeamRegistry
 
@@ -38,8 +38,7 @@ __all__ = [
     "LanguageDetector",
     "LanguagePatterns",
     "AGENTS",
-    "AgentOrchestrator",
-    # AgentRole — removed in Wave J; roles are plain strings
+    # AgentOrchestrator — deleted; use AgentService (harness.application.services.agent_service)
     "AgentSpec",
     "AgentTeam",
     "ConsultationOrchestrator",

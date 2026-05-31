@@ -40,10 +40,16 @@ class TestCoreInfrastructure:
                 fpath = root / ".harness" / fname
             assert fpath.is_file(), f"Missing: {fname} at {fpath}"
 
-    def test_agent_orchestrator_importable(self):
-        """AgentOrchestrator replaces legacy AgentRunner."""
-        from harness.agents.orchestrator import AgentOrchestrator
-        assert AgentOrchestrator is not None
+    def test_agent_service_importable(self):
+        """AgentService replaces legacy AgentOrchestrator."""
+        from harness.application.services.agent_service import AgentService
+        assert AgentService is not None
+
+    def test_legacy_agent_orchestrator_deleted(self):
+        """agents/orchestrator.py (legacy AgentOrchestrator) is fully removed."""
+        import importlib
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            importlib.import_module("harness.agents.orchestrator")
 
     def test_session_orchestrator_importable(self):
         """SessionOrchestrator replaces legacy session_loop."""

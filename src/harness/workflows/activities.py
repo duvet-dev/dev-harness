@@ -103,7 +103,8 @@ async def run_single_agent(context_packet: dict) -> dict:
         from pathlib import Path
 
         from harness.agents.context import ContextPacket, OutputContract
-        from harness.agents.orchestrator import AgentOrchestrator
+        from harness.application.services.agent_service import AgentService
+        from harness.infrastructure.plugins.registry import PluginRegistry
 
         architecture_rules = context_packet.get("architecture_rules", [])
         if isinstance(architecture_rules, str):
@@ -135,9 +136,11 @@ async def run_single_agent(context_packet: dict) -> dict:
             "constraint_section", {}
         ).get("backend")
 
-        # Run through AgentOrchestrator
-        runner = AgentOrchestrator()
-        result = await runner.run(packet, backend_name=backend_name)
+        # Run through AgentService
+        _registry = PluginRegistry()
+        _registry.initialize()
+        service = AgentService(_registry)
+        result = await service.run(packet, backend_name=backend_name)
 
         return {
             "status": result.status,

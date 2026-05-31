@@ -6,8 +6,8 @@ strategies (gate_judgment, all_gates, test_suite, stable,
 external_approval), and failure handling via the circuit breaker
 escalation chain.
 
-Replaces the old WaveCycleRunner (deprecated in Wave 4) and CycleRunner
-(Wave 18 migration — cycle.py deleted).
+The ``LoopRunner`` class lives in :mod:`harness.loop.engine` (moved
+from ``runner.py`` which was deleted).
 
 Usage::
 
@@ -32,7 +32,7 @@ from harness.loop.convergence import (
     resolve_strategy_name,
 )
 from harness.loop.model import LoopState
-from harness.loop.runner import (
+from harness.loop.engine import (
     ConvergenceCheckFn,
     LoopRunner,
     LoopRunnerResult,

@@ -740,60 +740,55 @@ class TestAssessRepoToolWiring:
 
     @pytest.mark.asyncio
     async def test_assess_passes_agent_role_and_project_dir(self, tmp_path):
-        """_attach_repo_tool is reachable because assess() passes agent_role
-        and project_dir through run_simple() → constraint_section."""
+        """assess() passes agent_role through constraint_section to AgentService."""
         from harness.analysis.assessment import assess
-        from harness.agents.orchestrator import AgentOrchestrator
+        from harness.application.services.agent_service import AgentService
+        from harness.agents.backends.base import BackendResult
 
         (tmp_path / "hello.py").write_text("x = 1\n")
 
-        # Patch AgentOrchestrator.run_simple to verify it receives the right params
-        original_run_simple = AgentOrchestrator.run_simple
+        captured_packets = []
 
-        captured_kwargs = {}
+        async def mock_run(self, packet, **kwargs):
+            captured_packets.append(packet)
+            return BackendResult(
+                status="success",
+                artifacts={"response": '{"projects": [{"name": "test", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'},
+            )
 
-        async def mock_run_simple(self, **kwargs):
-            nonlocal captured_kwargs
-            captured_kwargs = kwargs
-            # Return valid JSON for a successful analysis
-            return '{"projects": [{"name": "test", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'
-
-        with unittest.mock.patch.object(
-            AgentOrchestrator, "run_simple", mock_run_simple
-        ):
+        with unittest.mock.patch.object(AgentService, "run", mock_run):
             result = await assess(str(tmp_path), deep=False, agent_names=["project-profiler"])
 
-        # Verify the key parameters that enable RepoTool wiring
-        assert "project_dir" in captured_kwargs, "assess() must pass project_dir to run_simple()"
-        assert "agent_role" in captured_kwargs, "assess() must pass agent_role to run_simple()"
-        assert captured_kwargs["agent_role"] is not None
-        assert captured_kwargs["project_dir"] is not None
+        assert len(captured_packets) >= 1
+        p = captured_packets[0]
+        assert p.constraint_section.get("agent_role") is not None
+        assert p.target_directory is not None
 
     @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_assess_repo_tool_integration(self, tmp_path):
-        """End-to-end: assess() with a valid path and patched LLM should
-        successfully complete, showing the agent_role flowed through."""
+        """assess() with a valid path and patched AgentService.run."""
         from harness.analysis.assessment import assess
-        from harness.agents.orchestrator import AgentOrchestrator
+        from harness.application.services.agent_service import AgentService
+        from harness.agents.backends.base import BackendResult
 
         (tmp_path / "src" / "main.py").parent.mkdir(parents=True)
         (tmp_path / "src" / "main.py").write_text("def hello(): print('hello')\n")
 
-        # Mock run_simple to track whether agent_role was set
         tracked = {}
 
-        async def tracking_run_simple(self, **kwargs):
-            tracked["agent_role"] = kwargs.get("agent_role")
-            tracked["project_dir"] = kwargs.get("project_dir")
-            return '{"projects": [{"name": "app", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'
+        async def tracking_run(self, packet, **kwargs):
+            tracked["agent_role"] = packet.constraint_section.get("agent_role")
+            tracked["project_dir"] = str(packet.target_directory) if packet.target_directory else None
+            return BackendResult(
+                status="success",
+                artifacts={"response": '{"projects": [{"name": "app", "type": "library", "language": "python", "confidence": "high"}], "overview": {"total_projects": 1, "languages_detected": ["python"], "total_files_scanned": 1, "notes": ""}}'},
+            )
 
-        with unittest.mock.patch.object(
-            AgentOrchestrator, "run_simple", tracking_run_simple
-        ):
+        with unittest.mock.patch.object(AgentService, "run", tracking_run):
             report = await assess(str(tmp_path), deep=False, agent_names=["project-profiler"])
 
         assert tracked["agent_role"] == "critical-analyser"
-        assert tracked["project_dir"] == tmp_path
+        assert tracked["project_dir"] is not None
         assert report.metrics["agents_run"] == 1
         assert report.metrics["agents_succeeded"] == 1

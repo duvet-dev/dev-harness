@@ -20,7 +20,7 @@ import pytest
 
 from harness.errors import LoopExecutionError
 from harness.loop.model import LoopState
-from harness.loop.runner import LoopRunner, LoopRunnerResult
+from harness.loop.engine import LoopRunner, LoopRunnerResult
 from harness.phase.circuit_breaker import CircuitBreakerRegistry
 from harness.phase.model import LoopConfig, Step
 

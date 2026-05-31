@@ -508,15 +508,16 @@ class SessionClient:
             },
         )
 
-        # Create runner and backend
+        # Create service and backend
         from harness.agents.backends.api_backend import ApiBackend
         from harness.infrastructure.plugins.registry import PluginRegistry
-        from harness.agents.orchestrator import AgentOrchestrator
+        from harness.application.services.agent_service import AgentService
 
-        PluginRegistry().initialize()
+        _registry = PluginRegistry()
+        _registry.initialize()
+        service = AgentService(_registry)
 
         backend = ApiBackend()
-        runner = AgentOrchestrator()
 
         # Resolve provider config from .harness/providers.yaml
         resolved_config = self._resolve_provider_config()
@@ -529,8 +530,8 @@ class SessionClient:
             model=model,
         )
 
-        # Attach RepoTool via runner
-        runner._attach_repo_tool(packet, invocation)
+        # Attach RepoTool via service
+        service.attach_repo_tool(packet, invocation)
 
         # Run with streaming
         full_response = ""

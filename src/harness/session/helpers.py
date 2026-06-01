@@ -246,7 +246,79 @@ PHASES: list[dict[str, Any]] = [
             "suggestion), location references, and recommended actions."
         ),
     },
+    {
+        "name": "analyse",
+        "title": "Analyse & Understand",
+        "agent": "purpose-decoder",
+        "fleets": ["analysis"],
+        "artifact": "analysis.md",
+        "prompt": (
+            "You are an **Analysis Agent**. You are in the ANALYSE phase of a "
+            "development engagement.\n\n"
+            "YOUR JOB:\n"
+            "- Understand the existing codebase structure\n"
+            "- Identify insertion points for new functionality\n"
+            "- Assess risks and impact of changes\n"
+            "- For get-well: convert raw issues into structured requirements / "
+            "resolution items\n\n"
+            "YOUR BOUNDARIES:\n"
+            "- Do NOT design solutions \u2014 focus on understanding\n"
+            "- Do NOT implement changes \u2014 analysis only\n\n"
+            "OUTPUT FORMAT:\n"
+            "Write an analysis report covering structure review, insertion "
+            "points, and risk assessment."
+        ),
+    },
 ]
+
+# ── Phase aliases ────────────────────────────────────────────────────────────
+
+PHASE_ALIASES: dict[str, str] = {
+    "build": "implementation",
+    "plan": "planning",
+    "execute": "implementation",
+    "test": "testing",
+    "fix": "implementation",
+    "discover": "requirements",
+}
+
+
+# ── Workflow phase registries ───────────────────────────────────────────────
+
+PHASES_BY_WORKFLOW: dict[str, list[dict]] = {}
+
+
+def get_phases_for_workflow(workflow_name: str) -> list[dict]:
+    """Resolve phase definitions for the given workflow name.
+
+    Falls back to the full PHASES list if no workflow-specific
+    registry entry exists.
+    """
+    # Resolve workflow name for standard (used by greenfield)
+    resolved = {"standard": "standard"}.get(workflow_name, workflow_name)
+    wf_phases = PHASES_BY_WORKFLOW.get(resolved)
+    if wf_phases is not None:
+        return wf_phases
+
+    return list(PHASES)
+
+
+def resolve_phase(phase_name: str) -> str:
+    """Resolve a phase name through the alias map.
+
+    Returns the canonical phase name or the original if no alias.
+    """
+    return PHASE_ALIASES.get(phase_name, phase_name)
+
+
+def get_phase_definition(phase_name: str) -> dict | None:
+    """Look up a phase definition by name (resolving aliases first)."""
+    canonical = resolve_phase(phase_name)
+    for p in PHASES:
+        if p["name"] == canonical:
+            return p
+    return None
+
 
 
 # ── Get-Well phase list builder ───────────────────────────────────────────

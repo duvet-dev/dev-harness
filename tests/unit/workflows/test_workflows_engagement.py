@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
 
 from harness.workflows.engagement import (
     EngagementWorkflow,
-    ALLOWED_PHASES,
+    DEFAULT_PHASES,
     GATE_TIMEOUT,
 )
 
@@ -21,9 +21,9 @@ from harness.workflows.engagement import (
 class TestEngagementWorkflowConstants:
     """Tests for module-level constants."""
 
-    def test_allowed_phases(self):
-        assert ALLOWED_PHASES == [
-            "requirements", "understanding", "design", "build", "review"
+    def test_default_phases(self):
+        assert DEFAULT_PHASES == [
+            "requirements", "design", "planning", "implementation", "testing", "review"
         ]
 
     def test_gate_timeout(self):

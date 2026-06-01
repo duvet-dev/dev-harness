@@ -31,6 +31,21 @@ class PhaseName:
         "review",
         "deployment",
         "assessment-triage",
+        # v3 additions — workflow architecture corrections
+        "analyse",
+        "planning",
+        "discover",
+        "fix",
+        "validate",
+        "deliver",
+        "assess",
+        "audit",
+        "report",
+        "remediation-requirements",
+        "architecture-design",
+        "characterise",
+        "refactor",
+        "verify",
     })
 
     __slots__ = ("_name",)

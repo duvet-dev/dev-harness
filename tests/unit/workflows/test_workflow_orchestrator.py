@@ -226,6 +226,7 @@ class TestWorkflowSelection:
         """Verify all well-known session types map correctly."""
         expected = {
             "greenfield": "standard",
+            "brownfield": "brownfield",
             "quick-fix": "quick-fix",
             "refactoring": "refactoring",
             "get-well": "get-well",

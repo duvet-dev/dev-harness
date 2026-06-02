@@ -302,16 +302,31 @@ AGENTS: list[AgentSpec] = [
         role="validation-agent",
         name="Validation Agent",
         description=(
-            "Checks that implementation matches requirements. "
+            "Validates that the build output meets all requirements across "
+            "three dimensions:\n"
+            "1. Tests against requirements — Does the test suite cover "
+            "every requirement?\n"
+            "2. Tests against code — Do tests actually validate what "
+            "they claim?\n"
+            "3. Domain language against requirements — Is the ubiquitous "
+            "language consistent across reqs, code, and tests?\n"
             "The bridge between 'what was asked for' and 'what was built'."
         ),
         sop_summary=[
-            "Map each requirement to code and tests",
-            "Verify implementation satisfies every requirement",
-            "Flag discrepancies and scope creep",
-            "Produce requirements traceability matrix",
+            "Verify tests against requirements: map each requirement to specific "
+            "tests, flag untested requirements, verify tests exercise stated "
+            "behaviour (not superficial assertions)",
+            "Verify tests against code: check test assertions validate intended "
+            "behaviour, flag no-op checks, always-true conditions, over-mocked "
+            "boundaries, and shared state issues",
+            "Verify domain language against requirements: build a domain glossary "
+            "from codebase and compare against requirements, flag inconsistencies "
+            "in terminology across code, tests, and specifications",
+            "Produce a structured Validation Report with three sections: "
+            "Requirements Coverage matrix, Test Correctness analysis, and "
+            "Domain Language Consistency audit",
         ],
-        tags=["validation", "quality", "requirements"],
+        tags=["validation", "quality", "requirements", "conformance", "coverage"],
         tool_permissions=ToolPermissions.read_only(),
     ),
     AgentSpec(

@@ -36,6 +36,35 @@ step_templates:
     team: validation
     output: validation-report
 
+  - name: validation-review
+    description: "Three-dimension validation: tests cover requirements, test correctness, domain language consistency. Validation agent produces report, requirements-conformance-reviewer critiques, cycle loops until gate convergence (max 3)."
+    loop:
+      convergence:
+        strategy: gate_judgment
+        gate_agent: validation-agent
+        max_iterations: 3
+        on_timeout: best_effort
+        convergence_keywords:
+          - "converged"
+          - "all dimensions verified"
+          - "no new issues"
+          - "validation complete"
+    steps:
+      - agents: ["validation-agent"]
+        role: produce
+        output: "validation-report"
+      - agents: ["requirements-conformance-reviewer"]
+        role: critique
+        input: ["validation-report"]
+        output: "conformance-critique"
+      - agents: ["validation-agent"]
+        role: critique
+        input: ["conformance-critique", "validation-report"]
+        output: "revised-validation-report"
+      - agents: ["validation-agent"]
+        role: gate
+        output: "gate-decision"
+
   - name: research-and-discovery
     description: "Research phase using discovery team"
     team: discovery

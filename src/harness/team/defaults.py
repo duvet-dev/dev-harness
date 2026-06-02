@@ -102,6 +102,22 @@ def get_builtin_teams() -> list[AgentTeam]:
                 "validation-agent",
                 "example-scenarios-agent",
             ],
-            guidelines=None,
+            guidelines=(
+                "## Validation Team Guidelines\n"
+                "- Verify tests against requirements: every requirement must "
+                "have at least one test that validates its stated behaviour.\n"
+                "- Verify tests against code: test assertions must validate "
+                "actual intended behaviour — flag no-op checks, always-true "
+                "conditions, over-mocked boundaries, and fragile tests.\n"
+                "- Verify domain language consistency: build a glossary from "
+                "requirements, code, and tests; flag terminology mismatches.\n"
+                "- Produce a structured Validation Report with three sections: "
+                "Requirements Coverage matrix, Test Correctness findings, "
+                "and Domain Language Consistency audit.\n"
+                "- When conflicts arise between dimensions, prioritise: "
+                "requirements coverage > test correctness > language consistency.\n"
+                "- Route unresolved validation failures back to the coding "
+                "team with clear findings and reproduction steps."
+            ),
         ),
     ]

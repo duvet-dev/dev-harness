@@ -614,25 +614,69 @@ class StartupResumeFlow:
     # ── Internal Methods ─────────────────────────────────────────────
 
     def _create_default_orchestrator(self) -> WorkflowOrchestrator:
-        """Create a WorkflowOrchestrator with default workflows.
+        """Create a WorkflowOrchestrator with bootstrapped phases
+        and default workflows.
+
+        Constructs the full orchestration chain:
+           TeamRegistry → StepTemplateRegistry
+           → StepDispatcher → SequentialPhaseStrategy → StrategyRunner
+           → PhaseOrchestrator (with bootstrapped phases)
+           → WorkflowOrchestrator (with default workflows)
 
         Returns:
             A configured WorkflowOrchestrator instance.
         """
         from harness.phase.orchestrator import PhaseOrchestrator
         from harness.phase.strategy.runner import StrategyRunner
+        from harness.phase.strategy.sequential import (
+            SequentialPhaseStrategy,
+        )
+        from harness.phase.dispatcher import StepDispatcher
+        from harness.phase.bootstrap import bootstrap_and_register
+        from harness.phase.template_registry import (
+            StepTemplateRegistry,
+        )
+        from harness.team.registry import TeamRegistry
+        from harness.team.defaults import get_builtin_teams
 
-        # StrategyRunner and PhaseOrchestrator are async — used for
-        # the _async variants only. For sync operations we just need
-        # the orchestrator for workflow resolution.
-        orchestrator = WorkflowOrchestrator.__new__(WorkflowOrchestrator)
-        orchestrator._workflows = {}
-        orchestrator._states = {}
-        orchestrator._phase_orchestrator = None
+        # 1. Team registry (built-in teams)
+        team_registry = TeamRegistry(builtin=get_builtin_teams())
 
-        # Register default workflows
-        for name, wf in DEFAULT_WORKFLOWS.items():
-            orchestrator._workflows[name] = wf
+        # 2. Step template registry
+        template_registry = StepTemplateRegistry(
+            team_registry=team_registry,
+        )
+
+        # 3. Minimal StepDispatcher (stub dispatch — real dispatch
+        #    requires full async agent infrastructure)
+        dispatcher = StepDispatcher(
+            team_registry=team_registry,
+        )
+
+        # 4. Phase execution strategy
+        sequential = SequentialPhaseStrategy(dispatcher=dispatcher)
+        strategy_runner = StrategyRunner(sequential=sequential)
+
+        # 5. PhaseOrchestrator
+        phase_orchestrator = PhaseOrchestrator(
+            strategy_runner=strategy_runner,
+        )
+
+        # 6. Bootstrap phase definitions from config and register
+        bootstrap_and_register(
+            orchestrator=phase_orchestrator,
+            template_registry=template_registry,
+            phases_path=self._root / ".harness" / "phases.yaml"
+            if self._root else None,
+            templates_path=self._root / ".harness" / "step_templates.yaml"
+            if self._root else None,
+        )
+
+        # 7. Create WorkflowOrchestrator
+        orchestrator = WorkflowOrchestrator(
+            phase_orchestrator=phase_orchestrator,
+        )
+        orchestrator.register_workflows(DEFAULT_WORKFLOWS)
 
         return orchestrator
 

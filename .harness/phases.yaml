@@ -35,6 +35,10 @@ phases:
       - team: testing
         input: implementation
         output: test-results
+      - agents: ["architecture-analyser", "code-critic"]
+        input: [implementation, test-results]
+        parallel: true
+        output: analysis-report
 
   - name: review
     lead_agent: review-coordinator

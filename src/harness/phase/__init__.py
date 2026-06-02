@@ -7,6 +7,7 @@ step dispatch, parallel dispatch, and lead aggregation.
 from __future__ import annotations
 
 from harness.phase.aggregator import AggregateResult, LeadAggregator
+from harness.phase.bootstrap import bootstrap_phases, bootstrap_and_register
 from harness.phase.circuit_breaker import (
     CircuitBreakerRegistry,
     CircuitBreakerState,
@@ -28,6 +29,8 @@ from harness.phase.strategy.runner import StrategyRunner
 __all__ = [
     "AggregateResult",
     "ArtifactSummariser",
+    "bootstrap_and_register",
+    "bootstrap_phases",
     "CircuitBreakerRegistry",
     "CircuitBreakerState",
     "ContextPruner",

@@ -80,9 +80,15 @@ version-bump:
 
 .PHONY: test
 test:
-	$(PYTHON) -m pytest tests/ -W error::RuntimeWarning --tb=short -q
+	$(PYTHON) -m pytest tests/unit/ tests/smoke/ -W error::RuntimeWarning --tb=short -q
 	@echo ""
 	@echo "✓ All functional tests passed."
+
+.PHONY: test-all
+test-all:
+	$(PYTHON) -m pytest tests/ -W error::RuntimeWarning --tb=short -q
+	@echo ""
+	@echo "✓ All tests passed."
 
 # ── CI ────────────────────────────────────────────────────────────────────
 
@@ -97,7 +103,7 @@ ci: test-ci
 .PHONY: test-coverage
 test-coverage:
 	@$(PYTHON) -m pytest \
-		tests/ \
+		tests/unit/ tests/smoke/ \
 		-W error::RuntimeWarning \
 		--tb=short \
 		--cov=src/harness \
@@ -114,9 +120,33 @@ coverage-html: test-coverage
 
 .PHONY: test-e2e
 test-e2e:
-	$(PYTHON) -m pytest -m e2e --tb=short -v
+	$(PYTHON) -m pytest tests/e2e/ --tb=short -v
 	@echo ""
 	@echo "✓ E2E tests complete."
+
+.PHONY: test-smoke
+test-smoke:
+	$(PYTHON) -m pytest tests/smoke/ --tb=short -v
+	@echo ""
+
+# ── Profiling ──────────────────────────────────────────────────────────────
+
+.PHONY: test-profile
+test-profile:
+	@echo "Running CI test suite with duration profiling..."
+	@echo "Results written to test-profile.log"
+	@$(PYTHON) -m pytest tests/unit/ tests/smoke/ -W error::RuntimeWarning --tb=short -q --durations=0 2>&1 | tee test-profile.log
+	@echo ""
+	@echo "✓ Profile complete. See test-profile.log for all timings."
+
+.PHONY: test-profile-all
+test-profile-all:
+	@echo "Running ALL tests with duration profiling (including e2e)..."
+	@echo "Results written to test-profile-all.log"
+	@$(PYTHON) -m pytest tests/ -W error::RuntimeWarning --tb=short -q --durations=0 2>&1 | tee test-profile-all.log
+	@echo ""
+	@echo "✓ Full profile complete. See test-profile-all.log for all timings."
+	@echo "✓ Smoke tests complete."
 
 .PHONY: test-verbose
 test-verbose:

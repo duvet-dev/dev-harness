@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from harness.engagement.model import Engagement
+from harness.domain.engagement.model import Engagement
 from harness.errors import UnknownWorkflowError, WorkflowNotActiveError
 from harness.phase.orchestrator import PhaseOrchestrator
 from harness.tracing import TraceLogger
@@ -41,11 +41,23 @@ DEFAULT_WORKFLOWS: dict[str, Workflow] = {
         phases=[
             "discover",
             "design",
+            "planning",  # ADDED v3 — planning after design
             "build",
             "review",
             "test",
             "validate",
             "deliver",
+        ],
+    ),
+    "brownfield": Workflow(  # NEW v3
+        name="brownfield",
+        phases=[
+            "analyse",
+            "design",
+            "planning",
+            "build",
+            "test",
+            "review",
         ],
     ),
     "quick-fix": Workflow(
@@ -58,7 +70,16 @@ DEFAULT_WORKFLOWS: dict[str, Workflow] = {
     ),
     "get-well": Workflow(
         name="get-well",
-        phases=["triage", "fix", "test", "validate", "deliver"],
+        phases=[
+            "analyse",  # ADDED v3 — prepend analyse per Andy C3
+            "assessment-triage",
+            "remediation-requirements",
+            "architecture-design",
+            "planning",
+            "implementation",
+            "testing",
+            "review",
+        ],
     ),
     "inspect": Workflow(
         name="inspect",
@@ -69,11 +90,13 @@ DEFAULT_WORKFLOWS: dict[str, Workflow] = {
 # Session type → workflow name mapping
 SESSION_TYPE_MAP: dict[str, str] = {
     "greenfield": "standard",
+    "brownfield": "brownfield",  # ADDED v3
     "quick-fix": "quick-fix",
     "refactoring": "refactoring",
     "get-well": "get-well",
-    "audit": "inspect",
+    "audit": "inspect",  # canonical
     "inspect": "inspect",
+    # "review" maps to inspect for backward compatibility
     "review": "inspect",
 }
 

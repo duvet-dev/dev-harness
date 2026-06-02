@@ -93,15 +93,25 @@ class ApiBackend(AbstractBackend):
     # prepare() — build the invocation
     # ------------------------------------------------------------------
 
-    async def prepare(self, packet: ContextPacket) -> Invocation:
+    async def prepare(
+        self,
+        packet: ContextPacket,
+        resolved_config: dict | None = None,  # Accepts ResolvedConfig at runtime
+        model: str = "",
+    ) -> Invocation:
         """Prepare an API invocation from the context packet.
 
         Builds the request payload from the packet's spec_content and
         any additional context. Sets model from packet constraints or
         default. Attaches available tools from the packet constraints
         (if any) for function-calling support.
+
+        Args:
+            packet: The context packet describing the agent task.
+            resolved_config: Optional resolved provider configuration.
+            model: Optional model override string.
         """
-        model = packet.constraint_section.get(
+        model_key = model or packet.constraint_section.get(
             "model", self._config.default_model
         )
 
@@ -129,7 +139,7 @@ class ApiBackend(AbstractBackend):
             command=self._config.default_endpoint,
             args=[
                 json.dumps({
-                    "model": model,
+                    "model": model_key,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content},
@@ -144,7 +154,7 @@ class ApiBackend(AbstractBackend):
             env={},
             work_dir=packet.target_directory,
             input_packet=packet,
-            model=model,
+            model=model_key,
             available_tools=tools,
             timeout_seconds=self._config.timeout_seconds,
         )

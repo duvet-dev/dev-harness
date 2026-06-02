@@ -1,70 +1,34 @@
 """Git operations adapter with typed results.
 
 Pure subprocess-based implementation — no GitPython dependency.
+
+Architecture
+------------
+* ``_parse_*`` module-level helpers — pure functions for parsing git output.
+* ``GitCommandRunner`` (from ``infrastructure/git/git_command.py``) — executes
+  subprocess commands; injected into ``GitRepo`` for testability.
+* ``GitRepo`` — business logic for git operations, delegates to the runner.
 """
 
 import re
 import subprocess
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-# ---------------------------------------------------------------------------
-# Error hierarchy
-# ---------------------------------------------------------------------------
-
-
-class GitOperationError(Exception):
-    """Raised when a git subprocess call fails."""
-
-    def __init__(self, cmd: str, exit_code: int, stderr: str):
-        self.cmd = cmd
-        self.exit_code = exit_code
-        self.stderr = stderr
-        super().__init__(f"git {cmd} failed (exit={exit_code}): {stderr.strip()}")
-
-
-class NotAGitRepoError(GitOperationError):
-    """Raised when the target path is not inside a git repository."""
-
-    def __init__(self, path: Path, stderr: str = ""):
-        self.repo_path = path
-        super().__init__(
-            cmd=f"rev-parse --git-dir in {path}",
-            exit_code=128,
-            stderr=stderr or f"Not a git repository: {path}",
-        )
-
-
-# ---------------------------------------------------------------------------
-# Typed result dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class DiffResult:
-    files_changed: list[str] = field(default_factory=list)
-    insertions: int = 0
-    deletions: int = 0
-
-
-@dataclass
-class StatusResult:
-    staged: list[str] = field(default_factory=list)
-    unstaged: list[str] = field(default_factory=list)
-    untracked: list[str] = field(default_factory=list)
-    branch: str = ""
-    ahead: int = 0
-    behind: int = 0
-
-
-@dataclass
-class LogEntry:
-    commit_hash: str = ""
-    author: str = ""
-    date: str = ""
-    message: str = ""
-
+from harness.infrastructure.git.git_command import GitCommandRunner
+from harness.scm.git_types import (
+    DiffResult,
+    GitAddError,
+    GitCheckoutError,
+    GitCommitError,
+    GitInitError,
+    GitLsFilesError,
+    GitOperationError,
+    GitRevParseError,
+    LogEntry,
+    NotAGitRepoError,
+    StatusResult,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -74,41 +38,8 @@ _GIT_TIMEOUT: int = 30  # seconds
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Parsing helpers (pure functions, no subprocess calls)
 # ---------------------------------------------------------------------------
-
-
-def _run_git(
-    args: list[str],
-    cwd: Path,
-    timeout: int = _GIT_TIMEOUT,
-) -> str:
-    """Run a git subprocess and return stdout (stripped).
-
-    Raises ``GitOperationError`` on failure.
-    """
-    cmd = ["git"] + args
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=str(cwd),
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        raise GitOperationError(
-            cmd=" ".join(cmd),
-            exit_code=-1,
-            stderr=f"Command timed out after {timeout}s",
-        )
-    if result.returncode != 0:
-        raise GitOperationError(
-            cmd=" ".join(cmd),
-            exit_code=result.returncode,
-            stderr=result.stderr,
-        )
-    return result.stdout
 
 
 def _parse_numstat(stdout: str) -> tuple[list[str], int, int]:
@@ -164,7 +95,7 @@ def _parse_status_porcelain(stdout: str) -> tuple[list[str], list[str], list[str
 
 
 def _parse_log_entries(stdout: str) -> list[LogEntry]:
-    """Parse ``git log --format="%H|%an|%ad|%s"`` output."""
+    """Parse ``git log --format=\"%H|%an|%ad|%s\"`` output."""
     entries: list[LogEntry] = []
     for line in stdout.splitlines():
         if not line.strip():
@@ -191,11 +122,18 @@ def _parse_log_entries(stdout: str) -> list[LogEntry]:
 class GitRepo:
     """Interface to a local git repository.
 
-    All subprocess calls use a 30-second timeout.
+    All subprocess calls use a 30-second timeout and are delegated to
+    a ``GitCommandRunner`` (injectable for testing).
+
+    Args:
+        root: Absolute path to the git repository root.
+        runner: Optional ``GitCommandRunner``. Defaults to a new instance.
     """
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, runner: Optional[GitCommandRunner] = None):
         self._root = root.resolve()
+        self._runner = runner or GitCommandRunner()
+
         # Validate that root exists and is inside a git repo.
         if not self._root.is_dir():
             raise NotAGitRepoError(
@@ -203,7 +141,7 @@ class GitRepo:
                 stderr=f"Directory does not exist: {self._root}",
             )
         try:
-            _run_git(["rev-parse", "--git-dir"], cwd=self._root)
+            self._runner.run(["rev-parse", "--git-dir"], cwd=self._root)
         except GitOperationError as exc:
             raise NotAGitRepoError(path=self._root, stderr=exc.stderr) from exc
 
@@ -229,7 +167,7 @@ class GitRepo:
         else:
             spec = f"{ref_a}..{ref_b}"
 
-        stdout = _run_git(["diff", "--numstat", spec], cwd=self._root)
+        stdout = self._runner.run(["diff", "--numstat", spec], cwd=self._root)
         files, insertions, deletions = _parse_numstat(stdout)
         return DiffResult(
             files_changed=files,
@@ -241,7 +179,7 @@ class GitRepo:
 
     def status(self) -> StatusResult:
         """Return a ``StatusResult`` for the repository."""
-        stdout_porcelain = _run_git(
+        stdout_porcelain = self._runner.run(
             ["status", "--porcelain"], cwd=self._root
         )
         staged, unstaged, untracked = _parse_status_porcelain(stdout_porcelain)
@@ -250,8 +188,8 @@ class GitRepo:
 
         ahead, behind = 0, 0
         try:
-            ahead_stdout = _run_git(
-                ["rev-list", "--count", f"@{'{upstream}'}", "..HEAD"],
+            ahead_stdout = self._runner.run(
+                ["rev-list", "--count", "@{upstream}", "..HEAD"],
                 cwd=self._root,
                 timeout=_GIT_TIMEOUT,
             )
@@ -259,8 +197,8 @@ class GitRepo:
         except GitOperationError:
             ahead = 0
         try:
-            behind_stdout = _run_git(
-                ["rev-list", "--count", "HEAD.." f"@{'{upstream}'}"],
+            behind_stdout = self._runner.run(
+                ["rev-list", "--count", "HEAD..@{upstream}"],
                 cwd=self._root,
                 timeout=_GIT_TIMEOUT,
             )
@@ -302,25 +240,25 @@ class GitRepo:
         ]
         if since is not None:
             # Detect if 'since' is a full SHA: use ref-range notation
-            if re.match(r'^[0-9a-f]{40}$', since):
+            if re.match(r"^[0-9a-f]{40}$", since):
                 args.append(f"{since}..HEAD")
             else:
                 # git's --since=<date> treats date-only (YYYY-MM-DD) as
                 # exclusive of that day (commits from the next day onward).
                 # Appending T00:00:00 makes it inclusive of the whole day.
                 _since = since
-                if re.match(r'^\d{4}-\d{2}-\d{2}$', _since):
+                if re.match(r"^\d{4}-\d{2}-\d{2}$", _since):
                     _since = f"{_since}T00:00:00"
                 args.append(f"--since={_since}")
 
-        stdout = _run_git(args, cwd=self._root)
+        stdout = self._runner.run(args, cwd=self._root)
         return _parse_log_entries(stdout)
 
     # -- branch --------------------------------------------------------------
 
     def branch(self) -> str:
         """Return the current branch name."""
-        stdout = _run_git(
+        stdout = self._runner.run(
             ["branch", "--show-current"], cwd=self._root
         )
         return stdout.strip()
@@ -330,7 +268,7 @@ class GitRepo:
     def merge_detected(self, watched_branch: str) -> bool:
         """Check if *watched_branch* has commits not in the current branch."""
         try:
-            _run_git(
+            self._runner.run(
                 ["merge-base", "--is-ancestor", watched_branch, self.branch()],
                 cwd=self._root,
             )
@@ -362,7 +300,7 @@ class GitRepo:
             "--",
             interface_path,
         ]
-        stdout = _run_git(args, cwd=self._root)
+        stdout = self._runner.run(args, cwd=self._root)
         return _parse_log_entries(stdout)
 
     def rename_branch(self, old_name: str, new_name: str) -> None:
@@ -373,8 +311,194 @@ class GitRepo:
             new_name: Desired new branch name.
 
         Raises:
-            RuntimeError: If the git command fails (e.g. old_name doesn't
-                exist, new_name already exists, or repo is dirty).
+            GitOperationError: If the git command fails.
         """
         args = ["branch", "-m", old_name, new_name]
-        _run_git(args, cwd=self._root)
+        self._runner.run(args, cwd=self._root)
+        return None
+
+    # ── init ----------------------------------------------------------------
+
+    def init(self, path: Path) -> None:
+        """Run ``git init <path>``.
+
+        Args:
+            path: Directory to initialise.
+
+        Raises:
+            GitInitError: If the init command fails.
+        """
+        try:
+            self._runner.run(
+                ["init", str(path)],
+                cwd=path.parent,
+                ensure_cwd=True,
+            )
+        except GitOperationError as exc:
+            raise GitInitError(
+                cmd=f"init {path}",
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── add / stage ---------------------------------------------------------
+
+    def add(self, paths: Optional[list[str]] = None) -> None:
+        """Stage files with ``git add``.
+
+        Args:
+            paths: Specific paths to stage, or None for all (``-A``).
+
+        Raises:
+            GitAddError: If the add command fails.
+        """
+        try:
+            args = ["add"]
+            if paths is not None:
+                args.extend(paths)
+            else:
+                args.append("-A")
+            self._runner.run(args, cwd=self._root)
+        except GitOperationError as exc:
+            raise GitAddError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── commit --------------------------------------------------------------
+
+    def commit(self, message: str = "") -> str:
+        """Create a commit and return the commit SHA.
+
+        Args:
+            message: Commit message. When empty, the commit opens the
+                configured git editor (no ``-m`` flag).
+
+        Returns:
+            The SHA of the new commit.
+
+        Raises:
+            GitCommitError: If the commit fails.
+        """
+        try:
+            args = ["commit"]
+            if message:
+                args.extend(["-m", message])
+            self._runner.run(args, cwd=self._root)
+        except GitOperationError as exc:
+            raise GitCommitError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+        return self.head_sha()
+
+    # ── checkout ------------------------------------------------------------
+
+    def checkout(self, branch: str, create: bool = False) -> None:
+        """Switch to a branch, optionally creating it.
+
+        Args:
+            branch: Branch name.
+            create: If True, create the branch first (``git checkout -b``).
+
+        Raises:
+            GitCheckoutError: If the checkout fails.
+        """
+        try:
+            args = ["checkout"]
+            if create:
+                args.extend(["-b", branch])
+            else:
+                args.append(branch)
+            self._runner.run(args, cwd=self._root)
+        except GitOperationError as exc:
+            raise GitCheckoutError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── rev-parse -----------------------------------------------------------
+
+    def rev_parse(self, ref: str) -> str:
+        """Resolve a git ref to a full SHA.
+
+        Args:
+            ref: Git reference (branch, tag, HEAD, etc.).
+
+        Returns:
+            The full SHA of the resolved ref.
+
+        Raises:
+            GitRevParseError: If the ref cannot be resolved.
+        """
+        try:
+            stdout = self._runner.run(
+                ["rev-parse", ref], cwd=self._root
+            )
+            return stdout.strip()
+        except GitOperationError as exc:
+            raise GitRevParseError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    def head_sha(self) -> str:
+        """Return the full SHA of HEAD.
+
+        Raises:
+            GitRevParseError: If HEAD cannot be resolved.
+        """
+        return self.rev_parse("HEAD")
+
+    # ── ls-files ------------------------------------------------------------
+
+    def ls_files(
+        self,
+        others: bool = False,
+        exclude_standard: bool = True,
+    ) -> list[str]:
+        """List files tracked by the index (or untracked with ``--others``).
+
+        Args:
+            others: If True, list untracked files instead of tracked.
+            exclude_standard: If True with ``--others``, apply standard
+                exclusions (``.gitignore``, etc.).
+
+        Returns:
+            List of file paths relative to repo root.
+
+        Raises:
+            GitLsFilesError: If the ls-files command fails.
+        """
+        try:
+            args = ["ls-files"]
+            if others:
+                args.append("--others")
+            if exclude_standard:
+                args.append("--exclude-standard")
+            stdout = self._runner.run(args, cwd=self._root)
+            return [f for f in stdout.splitlines() if f.strip()]
+        except GitOperationError as exc:
+            raise GitLsFilesError(
+                cmd=exc.cmd,
+                exit_code=exc.exit_code,
+                stderr=exc.stderr,
+            ) from exc
+
+    # ── is_git_repo ---------------------------------------------------------
+
+    def is_git_repo(self) -> bool:
+        """Check if the working directory is inside a git repository.
+
+        Returns:
+            True if ``git rev-parse --git-dir`` succeeds.
+        """
+        try:
+            self._runner.run(["rev-parse", "--git-dir"], cwd=self._root)
+            return True
+        except GitOperationError:
+            return False

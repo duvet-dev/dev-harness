@@ -18,7 +18,7 @@ from typing import Optional
 
 import yaml
 
-from harness.engagement.lifecycle import ENGAGEMENTS_DIR
+from harness.paths import get_engagement_dir, get_engagements_dir
 
 # ── Constants ───────────────────────────────────────────────────────────────
 
@@ -264,7 +264,7 @@ def generate_changelog_entry(
     Returns:
         A ``ChangelogEntry`` with artifact-sourced content.
     """
-    eng_dir = project_root / ENGAGEMENTS_DIR / engagement_slug
+    eng_dir = get_engagement_dir(project_root, engagement_slug)
 
     files = _scan_files_written(eng_dir)
     tests = _scan_tests(project_root)
@@ -448,7 +448,7 @@ def rollup_project_changelog(
     if output_path is None:
         output_path = project_root / "CHANGELOG.md"
 
-    engagements_dir = project_root / ENGAGEMENTS_DIR
+    engagements_dir = get_engagements_dir(project_root)
     if not engagements_dir.is_dir():
         output_path.write_text("# Changelog\n\nNo engagements found.\n")
         return output_path

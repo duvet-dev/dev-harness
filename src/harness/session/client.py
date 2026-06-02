@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 import yaml
 
+from harness.infrastructure.pydantic import ConstraintSection
 from harness.paths import get_engagement_dir, get_providers_path
 
 # ── Data types ─────────────────────────────────────────────────────────────
@@ -333,7 +334,7 @@ class InteractiveClient:
 class SessionClient:
     """Tool-aware streaming LLM client for interactive sessions.
 
-    Wraps ``AgentRunner`` + ``ApiBackend`` to provide function-calling
+    Wraps ``AgentOrchestrator`` + ``ApiBackend`` to provide function-calling
     (RepoTool read/write/list/exists) during interactive chat and
     session loops. Builds a ``ContextPacket`` from session state,
     attaches the RepoTool via the agent runner, and streams the final
@@ -460,7 +461,7 @@ class SessionClient:
     async def stream(self, user_message: str, agent_role: str = "") -> AsyncIterator[str]:
         """Send a message and stream the response.
 
-        Builds a ContextPacket, runs via AgentRunner > ApiBackend with
+        Builds a ContextPacket, runs via AgentOrchestrator > ApiBackend with
         RepoTool attached. Tool calls execute silently (writing files),
         then the final response is streamed token by token.
 
@@ -501,39 +502,37 @@ class SessionClient:
             architecture_rules=[],
             target_directory=self.root,
             output_contract=OutputContract(),
-            constraint_section={
-                "agent_role": agent_role,
-                "temperature": 0.7,
-                "max_tokens": 16384,
-            },
+            constraint_section=ConstraintSection(
+                agent_role=agent_role,
+                temperature=0.7,
+                max_tokens=16384,
+            ),
         )
 
-        # Create runner and backend
+        # Create service and backend
         from harness.agents.backends.api_backend import ApiBackend
-        from harness.agents.plugin_registry import PluginRegistry
-        from harness.agents.runner import AgentRunner
+        from harness.infrastructure.plugins.registry import PluginRegistry
+        from harness.application.services.agent_service import AgentService
 
-        PluginRegistry.initialize()
+        _registry = PluginRegistry()
+        _registry.initialize()
+        service = AgentService(_registry)
 
         backend = ApiBackend()
-        runner = AgentRunner()
 
-        # Prepare invocation
-        invocation = await backend.prepare(packet)
-
-        # Set up resolved config from .harness/providers.yaml
+        # Resolve provider config from .harness/providers.yaml
         resolved_config = self._resolve_provider_config()
-        if resolved_config:
-            invocation.resolved_config = resolved_config
-        else:
-            invocation.resolved_config = {}
+        model = resolved_config.get("model", "") if resolved_config else ""
 
-        # Set model from config or default
-        if resolved_config and resolved_config.get("model"):
-            invocation.model = resolved_config["model"]
+        # Prepare invocation with resolved config and model
+        invocation = await backend.prepare(
+            packet,
+            resolved_config=resolved_config,
+            model=model,
+        )
 
-        # Attach RepoTool via runner
-        runner._attach_repo_tool(packet, invocation)
+        # Attach RepoTool via service
+        service.attach_repo_tool(packet, invocation)
 
         # Run with streaming
         full_response = ""

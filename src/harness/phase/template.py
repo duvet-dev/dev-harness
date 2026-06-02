@@ -5,6 +5,10 @@ instances. Templates reference teams or agents (mutually exclusive, same
 rule as Step) and carry output, parallel, role, input, and description
 fields that are merged into the resolved Step.
 
+For critic loop templates, templates can also carry `loop` and `steps`
+fields. When set, the template represents a convergence-aware critic loop
+rather than a single agent/team step.
+
 See V7 §7 (Config Schema: step_templates.yaml) and §10.5 for the full
 specification.
 """
@@ -16,6 +20,7 @@ from typing import Any
 
 from harness.artifact.types import ArtifactType
 from harness.errors import StepMutualExclusionError
+from harness.phase.model import LoopConfig, Step
 
 
 @dataclass
@@ -27,8 +32,9 @@ class StepTemplate:
     :class:`Step <harness.phase.model.Step>` objects at runtime by the
     :class:`StepTemplateRegistry`.
 
-    Exactly one of ``team`` or ``agents`` must be set (D35). This is
-    the same mutual exclusivity rule as :class:`Step`.
+    For simple templates, exactly one of ``team`` or ``agents`` must be
+    set (D35). For critic loop templates, ``loop`` and ``steps`` can be
+    set instead.
 
     Attributes:
         name: Unique template name used for lookups.
@@ -44,45 +50,61 @@ class StepTemplate:
             template.
         description: Human-readable description of what this template
             does.
+        loop: Loop configuration for critic loop templates. When set,
+            the template expands to a loop step with convergence config.
+        steps: Sub-steps for the critic loop. Only valid when ``loop``
+            is also set.
+        input_artifact_names: List of artifact names consumed from the
+            parent context when the template is expanded.
+        output_artifact_name: The "final" artifact name produced by
+            this template, for use by calling phases.
     """
 
     name: str
 
-    # Mutually exclusive — exactly one of these two:
+    # Simple template fields (mutually exclusive with loop+steps):
     team: str | None = None
     agents: list[str] | None = None
 
     # Step configuration fields:
-    output: list[ArtifactType] | None = None
+    output: list[ArtifactType] | str | None = None
     parallel: bool = False
     role: str | None = None
     input: list[ArtifactType] | None = None
     description: str | None = None
 
-    def __post_init__(self) -> None:
-        """Validate mutual exclusivity of team and agents.
+    # Critic loop template fields:
+    loop: LoopConfig | None = None
+    steps: list[Step] = field(default_factory=list)
+    input_artifact_names: list[str] | None = None
+    output_artifact_name: str | None = None
 
-        Raises StepMutualExclusionError if both or neither is set.
+    def __post_init__(self) -> None:
+        """Validate mutual exclusivity of team/agents and loop+steps.
+
+        Raises StepMutualExclusionError if both team/agents AND
+        loop+steps are set, or if neither side is populated
+        meaningfully.
         """
-        specified = sum(
-            [
-                self.team is not None,
-                self.agents is not None,
-            ]
-        )
-        if specified != 1:
+        has_simple = self.team is not None or self.agents is not None
+        has_loop = self.loop is not None and len(self.steps) > 0
+
+        if has_simple and has_loop:
             raise StepMutualExclusionError(
-                "Exactly one of 'team' or 'agents' must be specified "
-                "in a StepTemplate. "
-                f"Found {specified} (team={self.team}, "
-                f"agents={self.agents})"
+                "A StepTemplate cannot have both team/agents AND "
+                "loop/steps. Use one or the other. "
+                f"team={self.team}, agents={self.agents}, "
+                f"loop={'set' if self.loop else 'None'}, "
+                f"steps={len(self.steps)}"
             )
 
     @property
     def template_type(self) -> str:
-        """Return 'team' or 'agents' depending on which field is set."""
+        """Return 'team', 'agents', or 'critic_loop' depending on config."""
         if self.team is not None:
             return "team"
         if self.agents is not None:
             return "agents"
+        if self.loop is not None:
+            return "critic_loop"
         return "unknown"

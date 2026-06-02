@@ -17,7 +17,7 @@ from typing import Optional
 
 import yaml
 
-from harness.paths import get_config_path, get_engagement_dir, get_settings_path
+from harness.paths import get_config_path, get_engagement_dir, get_engagement_yaml, get_settings_path
 
 # ── Defaults ───────────────────────────────────────────────────────────────
 
@@ -174,7 +174,7 @@ class HarnessConfigManager:
 
     def _engagement_allow_refactoring(self, slug: str) -> Optional[bool]:
         """Check per-engagement override for refactoring suggestions."""
-        eng_yaml = get_engagement_dir(self._root, slug) / "engagement.yaml"
+        eng_yaml = get_engagement_yaml(self._root, slug)
         if not eng_yaml.is_file():
             return None
 
@@ -201,7 +201,7 @@ class HarnessConfigManager:
         self, slug: str, value: bool
     ) -> None:
         """Set ``allow_refactoring_suggestions`` in an engagement's file."""
-        eng_yaml = get_engagement_dir(self._root, slug) / "engagement.yaml"
+        eng_yaml = get_engagement_yaml(self._root, slug)
         if eng_yaml.is_file():
             with open(eng_yaml) as f:
                 data = yaml.safe_load(f) or {}

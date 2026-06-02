@@ -13,6 +13,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from harness.agents.context import ContextPacket
+from harness.domain.enums import BackendStatus
+from harness.infrastructure.pydantic.resolved_config import ResolvedConfig
+from harness.infrastructure.pydantic.resolved_config import ResolvedConfig
 
 
 @dataclass
@@ -41,7 +44,7 @@ class Invocation:
     model: str = ""
     """Model override for API backends."""
 
-    resolved_config: dict[str, Any] = field(default_factory=dict)
+    resolved_config: ResolvedConfig = field(default_factory=ResolvedConfig)
     """Fully resolved provider configuration passed from the runner.
 
     Populated by :class:`~harness.agents.runner.AgentRunner` before
@@ -81,8 +84,8 @@ class BackendResult:
     All backends return this from their run() method.
     """
 
-    status: str = "failure"
-    """One of: 'success', 'failure', 'timeout', 'skipped'."""
+    status: BackendStatus = BackendStatus.FAILURE
+    """Execution status."""
 
     output_dir: str = ""
     """Agent output directory (where produced artifacts live)."""
@@ -99,8 +102,8 @@ class BackendResult:
     def merge(self, other: BackendResult) -> BackendResult:
         """Merge another BackendResult into this one."""
         if other.status == "failure" and self.status == "success":
-            self.status = "partial"  # mixed results
-        elif other.status != "success":
+            self.status = BackendStatus.PARTIAL  # mixed results
+        elif other.status != BackendStatus.SUCCESS:
             self.status = other.status
         self.artifacts.update(other.artifacts)
         self.errors.extend(other.errors)
@@ -129,12 +132,22 @@ class AbstractBackend(abc.ABC):
         """Unique backend identifier (e.g. 'api', 'claude-code')."""
 
     @abc.abstractmethod
-    async def prepare(self, packet: ContextPacket) -> Invocation:
+    async def prepare(
+        self,
+        packet: ContextPacket,
+        resolved_config: ResolvedConfig | None = None,
+        model: str = "",
+    ) -> Invocation:
         """Convert a ContextPacket into a runnable Invocation.
 
         This is the 'plan' step — validate the packet and decide
         what command/URL to invoke. Should not perform I/O beyond
         configuration lookups.
+
+        Args:
+            packet: The context packet describing the agent task.
+            resolved_config: Optional resolved provider configuration.
+            model: Optional model override string.
         """
 
     @abc.abstractmethod

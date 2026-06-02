@@ -1,10 +1,12 @@
 """StepExecutor — dispatch any step type — V7 §5.2.
 
 The StepExecutor is the central dispatch point for all three step
-types (agent, loop, phase). It delegates to the appropriate handler:
+types (agent, loop, phase) plus the new template step type. It
+delegates to the appropriate handler:
 - Agent/team steps → StepDispatcher
-- Loop steps → LoopRunner
+- Loop steps → LoopRunner (with optional convergence check wiring)
 - Phase steps → PhaseOrchestrator
+- Template steps → TemplateRegistry → expansion → recursive dispatch
 
 Usage::
 
@@ -25,7 +27,8 @@ from typing import Any
 
 from harness.artifact.repository import Artifact
 from harness.errors import LoopExecutionError, PhaseExecutionError
-from harness.phase.model import Step
+from harness.loop.convergence import resolve_strategy
+from harness.phase.model import ConvergenceConfig, Step, StepResult as PhaseStepResult
 from harness.tracing import TraceLogger
 
 logger = TraceLogger("harness.phase.step_executor")
@@ -40,9 +43,11 @@ class StepResult:
         artifacts: Artifacts produced by the step.
         error: Error message if the step failed.
         step_type: The type of step that was executed
-            ("agent", "team", "loop", "phase").
+            ("agent", "team", "loop", "phase", "template").
         escalation: Escalation target if step failed
             ("loop", "phase", "workflow", or None).
+        jump_target: Phase jump target if convergence_status
+            indicated a phase_jump signal.
         trace_id: Trace ID for structured logging.
     """
 
@@ -51,6 +56,7 @@ class StepResult:
     error: str | None = None
     step_type: str = "unknown"
     escalation: str | None = None
+    jump_target: str | None = None
     trace_id: str = ""
 
 
@@ -59,8 +65,9 @@ class StepExecutor:
 
     The StepExecutor implements the recursive dispatch pattern:
     - Agent/team steps → StepDispatcher (agent dispatch)
-    - Loop steps → LoopRunner (recursive sub-step execution)
+    - Loop steps → LoopRunner (recursive sub-step execution, convergence)
     - Phase steps → PhaseOrchestrator (phase jump)
+    - Template steps → resolve template → recursively dispatch
 
     This mirrors the Harness's own escalation chain: step → loop →
     phase → workflow.
@@ -71,6 +78,7 @@ class StepExecutor:
         step_dispatcher: Any | None = None,
         loop_runner: Any | None = None,
         phase_orchestrator: Any | None = None,
+        template_registry: Any | None = None,
     ) -> None:
         """Initialise the StepExecutor.
 
@@ -81,12 +89,16 @@ class StepExecutor:
                 If None, a stub is used.
             phase_orchestrator: PhaseOrchestrator for phase steps.
                 If None, a stub is used.
+            template_registry: StepTemplateRegistry for template
+                resolution. If None, templates will fail with a
+                clear error message.
         """
         self._step_dispatcher = step_dispatcher or self._stub_dispatcher
         self._loop_runner = loop_runner or self._stub_loop_runner
         self._phase_orchestrator = (
             phase_orchestrator or self._stub_phase_orchestrator
         )
+        self._template_registry = template_registry
 
     async def execute(
         self,
@@ -95,8 +107,11 @@ class StepExecutor:
     ) -> StepResult:
         """Execute any step type by routing to the right handler.
 
+        Handles all 5 step types: agent, team, loop, phase, template.
+
         Args:
-            step: The step to execute (agent, loop, or phase).
+            step: The step to execute (agent, team, loop, phase,
+                or template).
             context: Execution context with slug, mode, and
                 accumulated data.
 
@@ -108,6 +123,9 @@ class StepExecutor:
             PhaseExecutionError: If phase step fails entirely.
         """
         trace_id = getattr(context, "trace_id", "") if context else ""
+
+        if step.template:
+            return await self._dispatch_template_step(step, context)
 
         if step.agents or step.team:
             return await self._dispatch_agent_step(step, context)
@@ -125,10 +143,74 @@ class StepExecutor:
         )
         return StepResult(
             success=False,
-            error="Unknown step type (no agents, team, loop, or phase)",
+            error="Unknown step type (no template, agents, team, loop, or phase)",
             step_type="unknown",
             trace_id=trace_id,
         )
+
+    async def _dispatch_template_step(
+        self,
+        step: Step,
+        context: Any | None,
+    ) -> StepResult:
+        """Dispatch a template step via template registry expansion.
+
+        Looks up the template by name, expands it to concrete steps,
+        then dispatches the expanded steps recursively.
+        """
+        trace_id = self._get_context_attr(context, "trace_id", "")
+        template_name = step.template or ""
+
+        logger.info(
+            "StepExecutor — dispatching template step",
+            extra={"template": template_name},
+        )
+
+        if not self._template_registry:
+            return StepResult(
+                success=False,
+                error=f"Template registry not configured — cannot resolve '{template_name}'",
+                step_type="template",
+                trace_id=trace_id,
+            )
+
+        try:
+            # Expand template — returns a Step instance
+            expanded_step = self._template_registry.expand(
+                template_name, context={}
+            )
+
+            # If this is a critic loop template, inject sub-steps
+            # into the context so _dispatch_loop_step can find them
+            if expanded_step.loop is not None:
+                sub_steps = (
+                    self._template_registry.get_template_sub_steps(
+                        template_name
+                    )
+                )
+                if sub_steps:
+                    if isinstance(context, dict):
+                        context["steps"] = sub_steps
+                    elif hasattr(context, "steps"):
+                        context.steps = sub_steps
+
+            # Recursively dispatch the expanded step
+            return await self.execute(expanded_step, context)
+
+        except Exception as e:
+            logger.error(
+                "StepExecutor — template dispatch error",
+                extra={
+                    "template": template_name,
+                    "error": str(e),
+                },
+            )
+            return StepResult(
+                success=False,
+                error=f"Template '{template_name}' dispatch error: {e}",
+                step_type="template",
+                trace_id=trace_id,
+            )
 
     async def _dispatch_agent_step(
         self,
@@ -183,7 +265,14 @@ class StepExecutor:
         step: Step,
         context: Any | None,
     ) -> StepResult:
-        """Dispatch a loop step via LoopRunner."""
+        """Dispatch a loop step via LoopRunner with convergence wiring.
+
+        If the loop config has a convergence configuration, wires up
+        the appropriate convergence strategy and passes it to LoopRunner
+        as the convergence_check callable.
+
+        Handles phase_jump propagation and consult step isolation.
+        """
         trace_id = self._get_context_attr(context, "trace_id", "")
 
         logger.info(
@@ -192,6 +281,11 @@ class StepExecutor:
                 "count": step.loop.count if step.loop else 0,
                 "description": (
                     step.loop.description if step.loop else ""
+                ),
+                "has_convergence": (
+                    step.loop.convergence is not None
+                    if step.loop
+                    else False
                 ),
             },
         )
@@ -204,6 +298,23 @@ class StepExecutor:
                 trace_id=trace_id,
             )
 
+        # Build convergence check callable (if convergence is configured)
+        convergence_check = None
+        if step.loop.convergence:
+            try:
+                strategy = resolve_strategy(step.loop.convergence)
+                async def _convergence_check(sr, arts, it):
+                    return await strategy.check(sr, arts, it)
+                convergence_check = _convergence_check
+            except ValueError as e:
+                logger.warning(
+                    "StepExecutor — unknown convergence strategy",
+                    extra={
+                        "strategy": step.loop.convergence.strategy,
+                        "error": str(e),
+                    },
+                )
+
         # Extract sub-steps from context or default to an empty list
         # Loop steps reference sub-steps via context.steps
         sub_steps = getattr(context, "steps", []) or []
@@ -215,7 +326,20 @@ class StepExecutor:
                 steps=sub_steps,
                 context=_LoopContext.from_context(context),
                 reentry=reentry,
+                convergence_check=convergence_check,
             )
+
+            # Handle phase_jump detection from convergence status
+            jump_target = None
+            conv_status = getattr(
+                loop_result, "convergence_status", None
+            )
+            if conv_status and conv_status.startswith("phase_jump:"):
+                jump_target = conv_status.split(":", 1)[1]
+                logger.info(
+                    "StepExecutor — phase jump detected",
+                    extra={"jump_target": jump_target},
+                )
 
             if not loop_result.success:
                 raise LoopExecutionError(
@@ -228,6 +352,7 @@ class StepExecutor:
                 artifacts=loop_result.last_artifacts,
                 step_type="loop",
                 escalation=None,
+                jump_target=jump_target,
                 trace_id=trace_id,
             )
 
@@ -337,6 +462,7 @@ class StepExecutor:
             last_artifacts=[],
             error=None,
             escalation=None,
+            convergence_status=None,
         )
 
     async def _stub_phase_orchestrator(

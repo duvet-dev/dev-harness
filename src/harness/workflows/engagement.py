@@ -24,7 +24,9 @@ with workflow.unsafe.imports_passed_through():
 
 
 GATE_TIMEOUT = timedelta(hours=72)
-ALLOWED_PHASES = ["requirements", "understanding", "design", "build", "review"]
+
+# Default phase list used when no phases are provided in config
+DEFAULT_PHASES = ["requirements", "design", "planning", "implementation", "testing", "review"]
 
 
 @workflow.defn(name="engagement-workflow")
@@ -46,6 +48,7 @@ class EngagementWorkflow:
         self._pending_items = []
         self._retry_count = 0
         self._phases = []
+        self._phase_list = list(DEFAULT_PHASES)
         self._tasks = []
         self._decisions = []
         self._gate_decision = None
@@ -65,6 +68,7 @@ class EngagementWorkflow:
         self._description = config.get("description", "")
         self._gate_mode = config.get("gate_mode", "auto")
         self._phase = config.get("start_phase", "requirements")
+        self._phase_list = config.get("phases", DEFAULT_PHASES)
 
         # Load iteration config if provided
         iteration_config_dict = config.get("iteration_config", {})
@@ -76,10 +80,10 @@ class EngagementWorkflow:
         self._status = "in_progress"
 
         # Iterate through phases
-        phase_idx = ALLOWED_PHASES.index(self._phase)
+        phase_idx = self._phase_list.index(self._phase)
 
-        while phase_idx < len(ALLOWED_PHASES):
-            self._phase = ALLOWED_PHASES[phase_idx]
+        while phase_idx < len(self._phase_list):
+            self._phase = self._phase_list[phase_idx]
             self._current_iteration = 0
 
             # Inner iteration loop for the current phase

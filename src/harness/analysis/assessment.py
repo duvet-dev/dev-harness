@@ -1,7 +1,7 @@
 """Assessment — independent codebase assessment via LLM analysis agents.
 
 Gathers repo context, dispatches P1-P5 analysis agents in parallel
-via AgentRunner, parses JSON responses, and aggregates into an
+via AgentOrchestrator, parses JSON responses, and aggregates into an
 AssessmentReport with scoring and formatting.
 
 R22 — Independent Repository Assessment
@@ -18,7 +18,11 @@ from pathlib import Path
 from typing import Any, Awaitable
 import click
 
-from harness.agents.runner import AgentRunner
+from harness.agents.backends.base import BackendResult
+from harness.agents.context import ContextPacket, OutputContract
+from harness.application.services.agent_service import AgentService
+from harness.infrastructure.plugins.registry import PluginRegistry
+from harness.infrastructure.pydantic import ConstraintSection
 from harness.analysis.agents import AnalysisAgent, AnalysisAgentRegistry
 
 logger = logging.getLogger(__name__)
@@ -254,7 +258,7 @@ async def assess(
     """Run a full independent assessment of a codebase.
 
     This is the main entry point. Gathers context, dispatches all
-    selected analysis agents in parallel via AgentRunner, parses
+    selected analysis agents in parallel via AgentOrchestrator, parses
     JSON responses, and aggregates into an AssessmentReport.
 
     Args:
@@ -262,7 +266,7 @@ async def assess(
         deep: If True, run all P1-P5 agents. If False, run only
             P1 (Project Profiler) and P2 (Responsibility Decoder).
         agent_names: Specific agents to run (overrides deep flag).
-        runner_config: Optional config for AgentRunner.
+        runner_config: Optional config for AgentOrchestrator.
 
     Returns:
         AssessmentReport with all findings.
@@ -294,8 +298,18 @@ async def assess(
         report.metrics["duration_ms"] = 0
         return report
 
-    # 4. Dispatch all agents in parallel
-    runner = AgentRunner(runner_config or {})
+    # 4. Dispatch all analysis agents sequentially
+    _registry = PluginRegistry()
+    _registry.initialize(runner_config)
+    _cfg = runner_config or {}
+    _service = AgentService(
+        plugin_registry=_registry,
+        default_backend=_cfg.get("default_backend", "api"),
+        temp_dir_prefix=_cfg.get("temp_dir_prefix", "harness_agent_"),
+        cleanup_temp_dirs=_cfg.get("cleanup_temp_dirs", True),
+        project_dir=_cfg.get("project_dir", ""),
+        max_fallbacks=int(_cfg.get("max_fallbacks", 3)),
+    )
     context_json = _format_context_for_llm(context)
 
     async def run_agent(agent: AnalysisAgent) -> tuple[str, dict[str, Any], str]:
@@ -305,21 +319,36 @@ async def assess(
             click.echo(f"  \u23f3 Running {agent.name}...")
             spec = _build_agent_prompt(agent, context_json)
 
-            result = await runner.run_simple(
+            # Inline run_simple logic
+            from pathlib import Path as _Path
+            constraint_section = ConstraintSection(backend="api")
+            if agent.model:
+                constraint_section.model = agent.model
+            if agent.agent_role:
+                constraint_section.agent_role = agent.agent_role
+
+            packet = ContextPacket(
+                engagement_id="_assessment",
+                phase_name="analysis",
+                task_id=spec[:40],
                 spec_content=spec,
-                backend_name="api",
-                model=agent.model,
-                project_dir=root,
-                agent_role=agent.agent_role,
+                architecture_rules=[],
+                target_directory=root,
+                output_contract=OutputContract(),
+                constraint_section=constraint_section,
             )
 
-            if result.startswith("Error:"):
-                logger.warning("Agent '%s' failed: %s", agent.name, result)
+            result: BackendResult = await _service.run(packet, backend_name="api")
+
+            # Collect artifact content for JSON parsing
+            result_text = _format_backend_result(result)
+            if result.status != "success":
+                logger.warning("Agent '%s' failed: %s", agent.name, result.errors)
                 click.echo(f"  \u274c {agent.name}: failed")
                 return agent.name, {}, "failure"
 
             # Try to parse JSON from the result
-            parsed = _extract_json(result)
+            parsed = _extract_json(result_text)
             if parsed is None:
                 logger.warning(
                     "Agent '%s' returned non-JSON output. "
@@ -327,7 +356,7 @@ async def assess(
                     agent.name,
                 )
                 click.echo(f"  \u26a0\ufe0f {agent.name}: degraded (non-JSON)")
-                return agent.name, {"_raw_text": result[:2000]}, "degraded"
+                return agent.name, {"_raw_text": result_text[:2000]}, "degraded"
 
             click.echo(f"  \u2705 {agent.name}: complete")
             return agent.name, parsed, "success"
@@ -363,7 +392,7 @@ async def assess(
         try:
             click.echo("  \u23f3 Running P10 Critical Reviewer...")
             deep_tasks.append((
-                "P10", _run_critical_review(report, runner, root),
+                "P10", _run_critical_review(report, _service, root),
             ))
         except Exception as exc:
             logger.warning("P10 setup failed: %s", exc)
@@ -372,7 +401,7 @@ async def assess(
         try:
             click.echo("  \u23f3 Running P11 Refactoring Analyser...")
             deep_tasks.append((
-                "P11", _run_refactoring_analysis(report, runner, root),
+                "P11", _run_refactoring_analysis(report, _service, root),
             ))
         except Exception as exc:
             logger.warning("P11 setup failed: %s", exc)
@@ -394,7 +423,7 @@ async def assess(
     if deep and report.metrics.get("agents_succeeded", 0) > 0:
         try:
             click.echo("Running P9 Synthesis Agent (unified report)...")
-            synthesis = await _synthesize_report(report, runner, root)
+            synthesis = await _synthesize_report(report, _service, root)
             if synthesis:
                 report.report_text = synthesis
         except Exception as exc:
@@ -412,19 +441,14 @@ async def assess(
 
 async def _run_critical_review(
     report: AssessmentReport,
-    runner: "AgentRunner",
+    service: AgentService,
     root: Path,
 ) -> str | None:
     """Run P10 Critical Reviewer: deep cross-cutting analysis with RepoTool.
 
-    Takes all P1-P8 outputs plus fast scan results and runs a single
-    LLM call with full RepoTool access. The critical reviewer can
-    navigate any file in the repo to find issues the specialised
-    agents miss.
-
     Args:
         report: The AssessmentReport with all P1-P8 agent results.
-        runner: The AgentRunner instance for running the LLM call.
+        service: AgentService instance for running the LLM call.
         root: Project root path.
 
     Returns:
@@ -440,7 +464,6 @@ async def _run_critical_review(
         data = report.agent_results.get(agent_name, {})
         agent_outputs.append(f"## {agent_name} ({status})")
         if data:
-            # Compute finding count for metadata
             dims = data.get("dimensions", []) if isinstance(data, dict) else []
             finding_count = (
                 len(data.get("findings", [])) +
@@ -453,7 +476,6 @@ async def _run_critical_review(
 
     agent_summary = "\n\n---\n\n".join(agent_outputs)
 
-    # Get the fast scan results from the report
     fast_scan_summary = (
         f"Structure: {report.files} files, {report.dirs} dirs\n"
         f"Coverage: {report.coverage_pct}% module coverage\n"
@@ -472,29 +494,32 @@ async def _run_critical_review(
         ),
     )
 
-    result = await runner.run_simple(
+    from pathlib import Path as _Path
+    packet = ContextPacket(
+        engagement_id="_assessment_critical",
+        phase_name="critical_review",
+        task_id=spec[:40],
         spec_content=spec,
-        backend_name="api",
-        model="deepseek-v4-pro",
-        project_dir=root,
-        agent_role="critical-analyser",  # Enables RepoTool
+        architecture_rules=[],
+        target_directory=root,
+        output_contract=OutputContract(),
+        constraint_section=ConstraintSection(backend="api", model="deepseek-v4-pro", agent_role="critical-analyser"),
     )
+    result: BackendResult = await service.run(packet, backend_name="api")
 
-    if result.startswith("Error:"):
-        logger.warning("P10 Critical Reviewer failed: %s", result)
+    result_text = _format_backend_result(result)
+    if result.status != "success":
+        logger.warning("P10 Critical Reviewer failed: %s", result.errors)
         return None
 
-    # Store raw output in report for P9 to consume
-    parsed = _extract_json(result)
+    parsed = _extract_json(result_text)
     if parsed:
         report.agent_results["critical-reviewer"] = parsed
         report.agent_status["critical-reviewer"] = "success"
         report.metrics["agents_succeeded"] = report.metrics.get("agents_succeeded", 0) + 1
-
-        # Add P10 findings to report (same module, no import needed)
         _merge_agent_output(report, "critical-reviewer", parsed)
 
-    return result
+    return result_text
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -504,21 +529,14 @@ async def _run_critical_review(
 
 async def _run_refactoring_analysis(
     report: AssessmentReport,
-    runner: "AgentRunner",
+    service: AgentService,
     root: Path,
 ) -> str | None:
     """Run P11 Refactoring Analyser: concept-extraction analysis with RepoTool.
 
-    Takes all P1-P8 outputs plus fast scan results and runs a single
-    LLM call with full RepoTool access. Identifies duplication patterns,
-    missing abstractions, and concept-extraction opportunities.
-
-    Philosophy: duplication signals a missing concept. Extract the
-    concept, implement once, use everywhere.
-
     Args:
         report: The AssessmentReport with all P1-P8 agent results.
-        runner: The AgentRunner instance for running the LLM call.
+        service: AgentService instance for running the LLM call.
         root: Project root path.
 
     Returns:
@@ -527,7 +545,6 @@ async def _run_refactoring_analysis(
     from harness.analysis.agents import P11_REFACTORING_ANALYSER
     import json as _json
 
-    # Build summary of all agent results to feed into P11
     agent_outputs: list[str] = []
     for agent_name in sorted(report.agent_results.keys()):
         status = report.agent_status.get(agent_name, "unknown")
@@ -561,35 +578,36 @@ async def _run_refactoring_analysis(
             f"## Project Root\n{root}\n\n"
             f"The outputs above are from P1-P8. Use RepoTool to read "
             f"actual source files and identify concept-extraction "
-            f"opportunities. Look for code that implements the same "
-            f"concept in different forms — that's where abstractions "
-            f"should live."
+            f"opportunities."
         ),
     )
 
-    result = await runner.run_simple(
+    from pathlib import Path as _Path
+    packet = ContextPacket(
+        engagement_id="_assessment_refactoring",
+        phase_name="refactoring_analysis",
+        task_id=spec[:40],
         spec_content=spec,
-        backend_name="api",
-        model="deepseek-v4-pro",
-        project_dir=root,
-        agent_role="critical-analyser",  # Enables RepoTool
+        architecture_rules=[],
+        target_directory=root,
+        output_contract=OutputContract(),
+        constraint_section=ConstraintSection(backend="api", model="deepseek-v4-pro", agent_role="critical-analyser"),
     )
+    result: BackendResult = await service.run(packet, backend_name="api")
 
-    if result.startswith("Error:"):
-        logger.warning("P11 Refactoring Analyser failed: %s", result)
+    result_text = _format_backend_result(result)
+    if result.status != "success":
+        logger.warning("P11 Refactoring Analyser failed: %s", result.errors)
         return None
 
-    # Store raw output in report for P9 to consume
-    parsed = _extract_json(result)
+    parsed = _extract_json(result_text)
     if parsed:
         report.agent_results["refactoring-analyser"] = parsed
         report.agent_status["refactoring-analyser"] = "success"
         report.metrics["agents_succeeded"] = report.metrics.get("agents_succeeded", 0) + 1
-
-        # Add P11 findings to report
         _merge_agent_output(report, "refactoring-analyser", parsed)
 
-    return result
+    return result_text
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -599,7 +617,7 @@ async def _run_refactoring_analysis(
 
 async def _synthesize_report(
     report: AssessmentReport,
-    runner: "AgentRunner",
+    service: AgentService,
     root: Path,
 ) -> str | None:
     """Run P9 Synthesis Agent: combine all P1-P8 outputs into a unified report.
@@ -617,13 +635,12 @@ async def _synthesize_report(
 
     Args:
         report: The completed AssessmentReport with all agent results.
-        runner: The AgentRunner instance for running the LLM call.
+        service: AgentService instance for running the LLM call.
         root: Project root path.
 
     Returns:
         The unified report string, or ``None`` on failure.
     """
-    # Build a summary of all agent outputs with metadata headers
     sections: list[str] = []
     for agent_name in sorted(report.agent_results.keys()):
         status = report.agent_status.get(agent_name, "unknown")
@@ -631,7 +648,6 @@ async def _synthesize_report(
         sections.append(f"## {agent_name} ({status})\n\n")
         if data:
             import json
-            # Compute metadata for the synthesis agent
             agent_finding_count = 0
             if isinstance(data, dict):
                 agent_finding_count = (
@@ -667,18 +683,25 @@ async def _synthesize_report(
         "Be honest about gaps — if an agent produced no findings, say so."
     )
 
-    result = await runner.run_simple(
+    from pathlib import Path as _Path
+    packet = ContextPacket(
+        engagement_id="_assessment_synthesis",
+        phase_name="synthesis",
+        task_id=synthesis_prompt[:40],
         spec_content=synthesis_prompt,
-        backend_name="api",
-        model="deepseek-v4-pro",
-        agent_role=None,  # No RepoTool needed for synthesis
+        architecture_rules=[],
+        target_directory=None,
+        output_contract=OutputContract(),
+        constraint_section=ConstraintSection(backend="api", model="deepseek-v4-pro"),
     )
+    result: BackendResult = await service.run(packet, backend_name="api")
 
-    if result.startswith("Error:"):
-        logger.warning("Synthesis agent failed: %s", result)
+    result_text = _format_backend_result(result)
+    if result.status != "success":
+        logger.warning("Synthesis agent failed: %s", result.errors)
         return None
 
-    return result
+    return result_text
 
 
 # ── Context helpers ───────────────────────────────────────────────────────────
@@ -1050,7 +1073,7 @@ def _build_agent_prompt(agent: AnalysisAgent, context: str) -> str:
 
     Combines the agent's system prompt, codebase context, and output
     schema instructions into a single spec_content string for the
-    AgentRunner.
+    AgentOrchestrator.
 
     When the agent has RepoTool access (agent_role="critical-analyser"),
     adds a tool announcement so the LLM knows it can read files.
@@ -1140,6 +1163,19 @@ def _extract_json(text: str) -> dict[str, Any] | None:
                             break
 
     return None
+
+
+def _format_backend_result(result: BackendResult) -> str:
+    """Extract artifact text from a BackendResult for JSON parsing.
+
+    Concatenates all artifact values (which contain the LLM output text).
+    If no artifacts exist, falls back to joining error messages.
+    """
+    if result.artifacts:
+        return " ".join(v for v in result.artifacts.values() if v)
+    if result.errors:
+        return " ".join(result.errors)
+    return ""
 
 
 # ── Result merging ───────────────────────────────────────────────────────────

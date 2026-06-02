@@ -7,6 +7,10 @@ resolution via TeamRegistry), and listing available templates.
 
 Templates that reference a team (``team:`` field) are validated against
 the TeamRegistry at registration time to ensure the team exists.
+
+Critic loop templates (with ``loop`` and ``steps`` fields) are expanded
+into loop Steps with convergence configuration. The sub-steps are
+stored in the registry for retrieval by the StepExecutor.
 """
 
 from __future__ import annotations
@@ -23,6 +27,10 @@ class StepTemplateRegistry:
     Templates are registered by name and can be resolved into concrete
     :class:`Step` instances via :meth:`expand`, which handles team
     reference expansion through the provided TeamRegistry.
+
+    For critic loop templates (with loop+steps), the registry also
+    stores the sub-steps for retrieval by the StepExecutor when
+    dispatching the expanded loop step.
 
     Args:
         team_registry: The TeamRegistry to use for validating team
@@ -43,6 +51,8 @@ class StepTemplateRegistry:
     ) -> None:
         self._team_registry = team_registry
         self._templates: dict[str, StepTemplate] = {}
+        # Stores sub-steps for critic loop templates, keyed by template name
+        self._template_sub_steps: dict[str, list[Step]] = {}
         if templates:
             for template in templates:
                 self.register(template)
@@ -52,6 +62,9 @@ class StepTemplateRegistry:
 
         Validates that if the template references a team (``team:``
         field), the team exists in the TeamRegistry.
+
+        For critic loop templates, stores the sub-steps for later
+        retrieval by expand().
 
         Args:
             template: The StepTemplate to register.
@@ -73,6 +86,10 @@ class StepTemplateRegistry:
             self._team_registry.resolve(template.team)
 
         self._templates[name] = template
+
+        # Store sub-steps for critic loop templates
+        if template.loop is not None and template.steps:
+            self._template_sub_steps[name] = template.steps
 
     def resolve(self, name: str) -> StepTemplate:
         """Get a template by name.
@@ -100,9 +117,16 @@ class StepTemplateRegistry:
     ) -> Step:
         """Expand a template into a concrete Step instance.
 
-        Resolves the template, validates that any team reference exists
-        in the TeamRegistry, and produces a :class:`Step` with the
+        Resolves the template and produces a :class:`Step` with the
         template's configuration.
+
+        For simple templates (agents/team): returns a Step with the
+        agent or team configuration.
+
+        For critic loop templates (loop+steps): returns a Step with
+        loop=LoopConfig containing the convergence configuration from
+        the template. The sub-steps can be retrieved via
+        get_template_sub_steps().
 
         Args:
             template_name: Name of the template to expand.
@@ -118,9 +142,21 @@ class StepTemplateRegistry:
                 does not exist in the TeamRegistry.
         """
         template = self.resolve(template_name)
-        context = context or {}
 
-        # If team-based, validate the team still exists
+        # Critic loop template: expand to loop step
+        if template.loop is not None and template.steps:
+            return Step(
+                loop=template.loop,
+                phase=None,
+                parallel=False,
+                input=template.input,
+                output=template.output_artifact_name or template.output,
+                role=None,
+                auto=None,
+                max_retries=1,
+            )
+
+        # Simple template: expand to agent/team step
         if template.team is not None and self._team_registry is not None:
             self._team_registry.resolve(template.team)
 
@@ -138,6 +174,19 @@ class StepTemplateRegistry:
             action=None,
             auto=None,
         )
+
+    def get_template_sub_steps(
+        self, template_name: str
+    ) -> list[Step] | None:
+        """Get the sub-steps for a critic loop template.
+
+        Args:
+            template_name: Name of the template.
+
+        Returns:
+            List of sub-steps, or None if not a critic loop template.
+        """
+        return self._template_sub_steps.get(template_name)
 
     def list_templates(self) -> list[str]:
         """List all registered template names.

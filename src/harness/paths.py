@@ -31,6 +31,8 @@ Harness directory (``.harness/``)
 - ``get_docs_backups_dir(root)``
 - ``get_freshness_path(root)``
 - ``get_harness_state_path(root)``
+- ``get_engagement_assessments_dir(root, slug)``
+- ``get_engagement_chat_dir(root, slug)``
 """
 
 from __future__ import annotations
@@ -66,6 +68,32 @@ _WAVES_DIR = "waves"
 _CHECKPOINTS_DIR = "checkpoints"
 _FEEDBACK_DIR = "feedback"
 _CHANGELOG_DIR = "changelog"
+_ASSESSMENTS_DIR = "assessments"
+_CHAT_DIR = "chat"
+
+
+# ── Public filename constants (used in place of old domain constant duplication) ──
+
+ENGAGEMENTS_DIR = f"{_HARNESS_DIR_NAME}/{_ENGAGEMENTS_DIR_NAME}"
+"""Deprecated constant; prefer get_engagements_dir(root)."""
+
+ENGAGEMENT_MD = _ENGAGEMENT_MD
+"""Filename for the engagement metadata markdown file."""
+
+ENGAGEMENT_YAML_FILE = _ENGAGEMENT_YAML
+"""Filename for the engagement YAML metadata file."""
+
+PLAN_MD = _PLAN_MD
+"""Filename for the engagement plan markdown file."""
+
+PLAN_YAML = _PLAN_YAML
+"""Filename for the engagement plan YAML file."""
+
+WAVES_DIR = _WAVES_DIR
+"""Directory name for engagement wave artifacts."""
+
+ACTIVE_ENGAGEMENTS_FILE = f"{_HARNESS_DIR_NAME}/{_ACTIVE_ENGAGEMENTS_FILE}"
+"""Deprecated constant; prefer get_active_engagements_path(root)."""
 
 
 # ── Project root discovery ───────────────────────────────────────────────
@@ -215,6 +243,16 @@ def get_engagement_feedback_dir(root: Path, slug: str) -> Path:
 def get_engagement_changelog_dir(root: Path, slug: str) -> Path:
     """Return the engagement changelog directory."""
     return get_engagement_dir(root, slug) / _CHANGELOG_DIR
+
+
+def get_engagement_assessments_dir(root: Path, slug: str) -> Path:
+    """Return the engagement assessments directory."""
+    return get_engagement_dir(root, slug) / _ASSESSMENTS_DIR
+
+
+def get_engagement_chat_dir(root: Path, slug: str) -> Path:
+    """Return the engagement chat transcript directory."""
+    return get_engagement_dir(root, slug) / _CHAT_DIR
 
 
 def get_context_cache_dir(root: Path, slug: str) -> Path:

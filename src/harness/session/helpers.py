@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from harness.agents.consultation import ConsultationOrchestrator, ConsultationResult
-from harness.agents.cycle import MAX_PHASE_JUMPS_PER_PHASE
+# Max phase jumps per phase (migrated from cycle.py, which is deleted)
+MAX_PHASE_JUMPS_PER_PHASE = 3
 from harness.context.loader import ContextLoader
 
 logger = logging.getLogger(__name__)
@@ -245,7 +246,79 @@ PHASES: list[dict[str, Any]] = [
             "suggestion), location references, and recommended actions."
         ),
     },
+    {
+        "name": "analyse",
+        "title": "Analyse & Understand",
+        "agent": "purpose-decoder",
+        "fleets": ["analysis"],
+        "artifact": "analysis.md",
+        "prompt": (
+            "You are an **Analysis Agent**. You are in the ANALYSE phase of a "
+            "development engagement.\n\n"
+            "YOUR JOB:\n"
+            "- Understand the existing codebase structure\n"
+            "- Identify insertion points for new functionality\n"
+            "- Assess risks and impact of changes\n"
+            "- For get-well: convert raw issues into structured requirements / "
+            "resolution items\n\n"
+            "YOUR BOUNDARIES:\n"
+            "- Do NOT design solutions \u2014 focus on understanding\n"
+            "- Do NOT implement changes \u2014 analysis only\n\n"
+            "OUTPUT FORMAT:\n"
+            "Write an analysis report covering structure review, insertion "
+            "points, and risk assessment."
+        ),
+    },
 ]
+
+# ── Phase aliases ────────────────────────────────────────────────────────────
+
+PHASE_ALIASES: dict[str, str] = {
+    "build": "implementation",
+    "plan": "planning",
+    "execute": "implementation",
+    "test": "testing",
+    "fix": "implementation",
+    "discover": "requirements",
+}
+
+
+# ── Workflow phase registries ───────────────────────────────────────────────
+
+PHASES_BY_WORKFLOW: dict[str, list[dict]] = {}
+
+
+def get_phases_for_workflow(workflow_name: str) -> list[dict]:
+    """Resolve phase definitions for the given workflow name.
+
+    Falls back to the full PHASES list if no workflow-specific
+    registry entry exists.
+    """
+    # Resolve workflow name for standard (used by greenfield)
+    resolved = {"standard": "standard"}.get(workflow_name, workflow_name)
+    wf_phases = PHASES_BY_WORKFLOW.get(resolved)
+    if wf_phases is not None:
+        return wf_phases
+
+    return list(PHASES)
+
+
+def resolve_phase(phase_name: str) -> str:
+    """Resolve a phase name through the alias map.
+
+    Returns the canonical phase name or the original if no alias.
+    """
+    return PHASE_ALIASES.get(phase_name, phase_name)
+
+
+def get_phase_definition(phase_name: str) -> dict | None:
+    """Look up a phase definition by name (resolving aliases first)."""
+    canonical = resolve_phase(phase_name)
+    for p in PHASES:
+        if p["name"] == canonical:
+            return p
+    return None
+
 
 
 # ── Get-Well phase list builder ───────────────────────────────────────────
@@ -522,7 +595,8 @@ def _report_apply_results(results: list[tuple[str, str]], root: Path) -> None:
 
 def _phase_output_dir(root: Path, slug: str, phase_name: str) -> Path:
     """Get or create the output directory for a phase's artifacts."""
-    d = root / ".harness" / "engagements" / slug / phase_name
+    from harness.paths import get_engagement_dir
+    d = get_engagement_dir(root, slug) / phase_name
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -833,8 +907,8 @@ def _format_consult_result(result: ConsultationResult) -> str:
     """Format a :class:`ConsultationResult` for terminal display."""
     lines = ["\u2500\u2500 Consultation \u2500\u2500", f"  Question: {result.question}"]
     lines.append(f"  Status: {result.status}")
-    if result.fleet_name:
-        lines.append(f"  Fleet: {result.fleet_name}")
+    if result.team_name:
+        lines.append(f"  Team: {result.team_name}")
     if result.capability:
         lines.append(f"  Capability: {result.capability}")
     if result.mode == "blocking":
@@ -948,7 +1022,8 @@ def _load_engagement_context(
     root: Path, engagement_slug: str, tier: int = 2
 ) -> str:
     """Load the engagement context bundle for agent awareness."""
-    engagement_root = root / ".harness" / "engagements" / engagement_slug
+    from harness.paths import get_engagement_dir
+    engagement_root = get_engagement_dir(root, engagement_slug)
     if not engagement_root.is_dir():
         return ""
     try:
@@ -1094,37 +1169,9 @@ def read_session_type(root: Path, slug: str) -> str | None:
         data = yaml.safe_load(f) or {}
 
     raw = data.get("session_type")
-    if raw is not None and str(raw) in SessionType._VALID:
+    if raw is not None and str(raw) in _SESSION_TYPE_VALUES:
         return str(raw)
     return None
-
-
-# ── SessionType — backward-compatible shim ──────────────────────────────────
-# SessionType was formerly a ``(str, enum.Enum)``. Session types are now
-# config-driven from constitution.yaml. The class below provides backward-
-# compatible attribute access so that existing code like
-# ``SessionType.REFACTORING`` continues to resolve to ``"refactoring"``.
-
-
-class SessionType(str):
-    """Backward-compatible shim replacing the former SessionType enum.
-
-    Provides the same attribute access (``SessionType.REFACTORING`` →
-    ``"refactoring"``). No longer an enum — use string values for new code.
-    """
-
-    GREENFIELD = "greenfield"
-    BROWNFIELD = "brownfield"
-    REFACTORING = "refactoring"
-    GET_WELL = "get-well"
-
-    _VALID = frozenset({"greenfield", "brownfield", "refactoring", "get-well"})
-
-    def __new__(cls, value: str) -> str:
-        """Allow ``SessionType("greenfield")`` style construction."""
-        if value in cls._VALID:
-            return value
-        raise ValueError(f"'{value}' is not a valid SessionType")
 
 
 _REFACTORING_KEYWORDS = {
@@ -1145,13 +1192,13 @@ _BROWNFIELD_KEYWORDS = {
 _SESSION_TYPE_VALUES = ["greenfield", "brownfield", "refactoring", "get-well"]
 
 
-def detect_session_type(prompt: str) -> SessionType | None:
+def detect_session_type(prompt: str) -> str | None:
     """Infer the likely session type from a requirements prompt."""
     lower = prompt.lower()
     if any(kw in lower for kw in _REFACTORING_KEYWORDS):
-        return SessionType.REFACTORING
+        return "refactoring"
     if any(kw in lower for kw in _BROWNFIELD_KEYWORDS):
-        return SessionType.BROWNFIELD
+        return "brownfield"
     return None
 
 
@@ -1205,7 +1252,7 @@ def _prompt_alternative(rejected: str) -> str | None:
 
 def _find_active_engagement(root: Path) -> Optional[str]:
     """Get the active engagement slug for the current branch."""
-    from harness.engagement.resolver import resolve_active_engagement
+    from harness.domain.engagement.resolver import resolve_active_engagement
     return resolve_active_engagement(root)
 
 

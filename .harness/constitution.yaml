@@ -21,3 +21,6 @@ session_types:
   get-well:
     enforce_boundary_tests: true
     guidance: "Fix broken tests first. Boundaries may be restructured with explicit override."
+  brownfield:
+    enforce_boundary_tests: false
+    guidance: "Work with existing codebase. No boundary test constraint."

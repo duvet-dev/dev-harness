@@ -24,7 +24,6 @@ from harness.paths import (
     get_agent_standards_dir,
     get_config_path,
     get_providers_path,
-    get_fleets_path,
     get_patterns_dir,
     get_cache_dir,
     get_architecture_goal_path,
@@ -168,11 +167,6 @@ class TestDirectoryGetters:
         """Returns providers.yaml path."""
         result = get_providers_path(tmp_root)
         assert "providers.yaml" in str(result)
-
-    def test_get_fleets_path(self, tmp_root: Path) -> None:
-        """Returns fleets.yaml path."""
-        result = get_fleets_path(tmp_root)
-        assert "fleets.yaml" in str(result)
 
     def test_get_patterns_dir(self, tmp_root: Path) -> None:
         """Returns the patterns directory."""

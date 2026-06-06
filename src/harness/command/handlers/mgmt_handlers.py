@@ -2,7 +2,7 @@
 
 Covers: RenameEngagementHandler, SetBranchHandler, FixEngagementHandler,
 RefreshAgentsHandler, SetGovernanceHandler, AgentListHandler,
-FleetListHandler, ConsultHandler.
+TeamListHandler, ConsultHandler.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from harness.command.commands.mgmt import (
     AgentListCommand,
     ConsultCommand,
     FixEngagementCommand,
-    FleetListCommand,
+    TeamListCommand,
     RefreshAgentsCommand,
     RenameEngagementCommand,
     SetBranchCommand,
@@ -24,7 +24,7 @@ from harness.command.results.mgmt import (
     AgentListResult,
     ConsultResult,
     FixEngagementResult,
-    FleetListResult,
+    TeamListResult,
     RefreshAgentsResult,
     RenameEngagementResult,
     SetBranchResult,
@@ -277,10 +277,10 @@ class AgentListTypedHandler(TypedHandler[AgentListCommand, AgentListResult]):
             )
 
 
-class FleetListTypedHandler(TypedHandler[FleetListCommand, FleetListResult]):
+class TeamListTypedHandler(TypedHandler[TeamListCommand, TeamListResult]):
     """List all registered teams."""
 
-    def handle(self, command: FleetListCommand) -> FleetListResult:
+    def handle(self, command: TeamListCommand) -> TeamListResult:
         try:
             from harness.team.registry import TeamRegistry
             from harness.team.defaults import get_builtin_teams
@@ -296,7 +296,7 @@ class FleetListTypedHandler(TypedHandler[FleetListCommand, FleetListResult]):
                     "description": team.description,
                 })
 
-            return FleetListResult(
+            return TeamListResult(
                 success=True,
                 message=f"{len(teams_data)} team(s) registered.",
                 teams=teams_data,
@@ -304,10 +304,10 @@ class FleetListTypedHandler(TypedHandler[FleetListCommand, FleetListResult]):
             )
 
         except Exception as exc:
-            return FleetListResult(
+            return TeamListResult(
                 success=False,
                 error=str(exc),
-                message=f"Fleet list failed: {exc}",
+                message=f"Team list failed: {exc}",
             )
 
 

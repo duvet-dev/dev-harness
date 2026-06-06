@@ -151,6 +151,6 @@ class TestGetActiveAgents:
         assert isinstance(agents, list)
         assert len(agents) >= 1
 
-    def test_nonexistent_fleet(self, tmp_path):
+    def test_nonexistent_team(self, tmp_path):
         agents = get_active_agents_for_project(tmp_path, "nonexistent")
         assert agents == []

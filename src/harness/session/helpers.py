@@ -28,7 +28,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "requirements",
         "title": "Requirements Gathering",
         "agent": "requirements-builder",
-        "fleets": ["discovery"],
+        "teams": ["discovery"],
         "artifact": "requirements.md",
         "prompt": (
             "You are a **Requirements Builder**. You are in the REQUIREMENTS "
@@ -58,7 +58,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "research",
         "title": "Research & Analysis",
         "agent": "researcher",
-        "fleets": ["discovery"],
+        "teams": ["discovery"],
         "artifact": "research.md",
         "prompt": (
             "You are a **Researcher**. You are in the RESEARCH phase of a "
@@ -85,7 +85,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "design",
         "title": "Architecture & Design",
         "agent": "architect",
-        "fleets": ["architecture"],
+        "teams": ["architecture"],
         "artifact": "design.md",
         "prompt": (
             "You are a **Software Architect**. You are in the DESIGN phase "
@@ -117,7 +117,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "planning",
         "title": "Planning & Task Decomposition",
         "agent": "planning-agent",
-        "fleets": ["planning"],
+        "teams": ["planning"],
         "artifact": "plan.md",
         "prompt": (
             "You are a **Planning Agent**. You are in the PLANNING phase "
@@ -161,7 +161,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "implementation",
         "title": "Implementation",
         "agent": "coder",
-        "fleets": ["coding"],
+        "teams": ["coding"],
         "artifact": "implementation.md",
         "prompt": (
             "You are a **Coder**. You are in the IMPLEMENTATION phase of a "
@@ -200,7 +200,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "testing",
         "title": "Testing & Validation",
         "agent": "tester",
-        "fleets": ["testing", "validation"],
+        "teams": ["testing", "validation"],
         "artifact": "testing.md",
         "prompt": (
             "You are a **Tester**. You are in the TESTING phase of a "
@@ -229,7 +229,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "review",
         "title": "Review & Polish",
         "agent": "reviewer",
-        "fleets": ["review", "validation"],
+        "teams": ["review", "validation"],
         "artifact": "review.md",
         "prompt": (
             "You are a **Reviewer**. You are in the REVIEW phase of a "
@@ -254,7 +254,7 @@ PHASES: list[dict[str, Any]] = [
         "name": "analyse",
         "title": "Analyse & Understand",
         "agent": "purpose-decoder",
-        "fleets": ["analysis"],
+        "teams": ["analysis"],
         "artifact": "analysis.md",
         "prompt": (
             "You are an **Analysis Agent**. You are in the ANALYSE phase of a "
@@ -334,7 +334,7 @@ def build_get_well_phase_list() -> list[dict]:
         "name": "assessment-triage",
         "title": "Assessment Triage & Finding Prioritisation",
         "agent": "coordinator",
-        "fleets": ["discovery"],
+        "teams": ["discovery"],
         "artifact": "triage.md",
         "prompt": (
             "You are an **Assessment Triage Agent**. You are in the ASSESSMENT TRIAGE "
@@ -373,7 +373,7 @@ def build_get_well_phase_list() -> list[dict]:
         "name": "remediation-requirements",
         "title": "Remediation Requirements Definition",
         "agent": "requirements-builder",
-        "fleets": ["discovery"],
+        "teams": ["discovery"],
         "artifact": "remediation-requirements.md",
         "prompt": (
             "You are a **Remediation Requirements Analyst**. You are in the REMEDIATION "
@@ -420,7 +420,7 @@ def build_get_well_phase_list() -> list[dict]:
         "name": "architecture-design",
         "title": "Architecture Design & Critical Analysis",
         "agent": "critical-analyser",
-        "fleets": ["architecture"],
+        "teams": ["architecture"],
         "artifact": "remediation-design.md",
         "prompt": (
             "You are a **Remediation Architect** with full codebase access via RepoTool. "
@@ -661,7 +661,7 @@ def _print_help() -> None:
     click.echo("  /exec <cmd>  -- run a shell command")
     click.echo("  /navigate <p>-- jump to a specific phase")
     click.echo("  /resume      -- resume from a paused checkpoint")
-    click.echo("  /consult <q> -- consult a fleet")
+    click.echo("  /consult <q> -- consult a team")
     click.echo()
 
     click.echo("Line editing: Alt+Left/Right to jump words, Home/End for line ends")
@@ -672,10 +672,10 @@ def _print_consult_help() -> None:
     """Print consultation-related meta-commands in help output."""
     import click
     click.echo(
-        "  /consult <q>        -- route a question to the matching fleet"
+        "  /consult <q>        -- route a question to the matching team"
     )
     click.echo(
-        "    --fleet <name>    scoped to a specific fleet"
+        "    --team <name>    scoped to a specific team"
     )
     click.echo(
         "    --mode <m>        override mode (advisory|blocking)"
@@ -840,12 +840,12 @@ def format_providers_table(
 def _do_consult(
     root: Path,
     question: str,
-    fleet_filter: Optional[str] = None,
+    team_filter: Optional[str] = None,
     mode: Optional[str] = None,
 ) -> ConsultationResult:
     """Route a consultation question through the orchestrator.
 
-    Uses TeamRegistry with a Fleet-compatible adapter for
+    Uses TeamRegistry adapter for
     ConsultationOrchestrator.
     """
     from dataclasses import dataclass
@@ -853,38 +853,38 @@ def _do_consult(
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
-    # Minimal Fleet-like dataclass for ConsultationOrchestrator
+    # Minimal dataclass for consultation team adapter
     @dataclass
-    class _FleetLike:
+    class _TeamLike:
         name: str = ""
         consultations: list = None
 
-    class _RegistryAdapter:
-        """Adapter: wraps TeamRegistry for ConsultationOrchestrator."""
+    class _TeamRegistryWrapper:
+        """Wraps TeamRegistry for ConsultationOrchestrator."""
 
         def __init__(self, team_reg: TeamRegistry):
             self._team_reg = team_reg
 
-        def list_fleets(self) -> list:
+        def list_teams_with_consults(self) -> list:
             result = []
             for name in self._team_reg.list_teams():
                 team = self._team_reg.resolve(name)
                 consultations = getattr(team, "consultations", [])
                 if not consultations:
                     continue
-                fleet = _FleetLike(name=name, consultations=list(consultations))
-                result.append(fleet)
+                entry = _TeamLike(name=name, consultations=list(consultations))
+                result.append(entry)
             return result
 
     team_reg = TeamRegistry(builtin=get_builtin_teams())
-    registry = _RegistryAdapter(team_reg)
+    registry = _TeamRegistryWrapper(team_reg)
     orch = ConsultationOrchestrator(registry)
-    return orch.route(question, fleet_filter=fleet_filter, mode=mode)
+    return orch.route(question, team_filter=team_filter, mode=mode)
 
 
 def _parse_consult_flags(raw: str) -> dict:
-    """Parse ``--fleet`` and ``--mode`` flags from a ``/consult`` command line."""
-    fleet_filter: Optional[str] = None
+    """Parse ``--team`` and ``--mode`` flags from a ``/consult`` command line."""
+    team_filter: Optional[str] = None
     mode: Optional[str] = None
 
     words = raw.split()
@@ -892,8 +892,8 @@ def _parse_consult_flags(raw: str) -> dict:
     i = 0
     while i < len(words):
         w = words[i]
-        if w == "--fleet" and i + 1 < len(words):
-            fleet_filter = words[i + 1]
+        if w == "--team" and i + 1 < len(words):
+            team_filter = words[i + 1]
             i += 2
             continue
         if w == "--mode" and i + 1 < len(words):
@@ -904,7 +904,7 @@ def _parse_consult_flags(raw: str) -> dict:
         i += 1
 
     question = " ".join(keep).strip()
-    return {"question": question, "fleet_filter": fleet_filter, "mode": mode}
+    return {"question": question, "team_filter": team_filter, "mode": mode}
 
 
 def _format_consult_result(result: ConsultationResult) -> str:
@@ -929,7 +929,7 @@ def _format_consult_result(result: ConsultationResult) -> str:
     lines.append(resp)
     if result.status == "unmatched":
         lines.append(
-            "\n  Tip: Type /consult [--fleet <name>] [--mode <m>]"
+            "\n  Tip: Type /consult [--team <name>] [--mode <m>]"
             " <question> to ask with different phrasing."
         )
         lines.append("  Or use one of the questions listed above.")
@@ -1051,30 +1051,30 @@ def _build_system_prompt(
     context: str = "",
     conversation: str = "",
     engagement_context: str | None = None,
-    fleet_section: str | None = None,
+    team_section: str | None = None,
     patterns_section: str | None = None,
 ) -> str:
     """Build the system prompt for an agent in a given phase.
 
-    Injects fleet guidelines and patterns between the phase prompt
+    Injects team guidelines and patterns between the phase prompt
     and prior artifacts when root is available.
 
     The injection order is:
         1. Domain language preamble
         2. Engagement context bundle (file awareness)
         3. Phase prompt (role definition)
-        4. Fleet guidelines (from all fleets in phase["fleets"])
+        4. Team guidelines (from all teams in phase["teams"])
         5. Injected patterns (if pattern files exist)
         6. Prior artifacts from previous phases
         7. Conversation history
     """
     parts = [DOMAIN_LANGUAGE_PREAMBLE, phase["prompt"]]
 
-    resolved_fleet = fleet_section
+    resolved_team = team_section
     resolved_patterns = patterns_section
-    fleet_names: list[str] = phase.get("fleets", [])
+    team_names: list[str] = phase.get("teams", [])
 
-    if resolved_fleet is None and root is not None and fleet_names:
+    if resolved_team is None and root is not None and team_names:
         from harness.agents.context_builder import (
             get_fleet_system_prompt_section_for_phase,
         )
@@ -1082,14 +1082,14 @@ def _build_system_prompt(
         from harness.team.defaults import get_builtin_teams
 
         registry = TeamRegistry(builtin=get_builtin_teams())
-        resolved_fleet = get_fleet_system_prompt_section_for_phase(
-            fleet_names, registry
+        resolved_team = get_fleet_system_prompt_section_for_phase(
+            team_names, registry
         )
 
         from harness.agents.pattern import PatternLoader
         loader = PatternLoader(root)
-        for fleet_name in fleet_names:
-            patterns = loader.load_for_fleet(fleet_name)
+        for team_name in team_names:
+            patterns = loader.load_for_fleet(team_name)
             if patterns:
                 section = loader.format_patterns_section(patterns)
                 if section:
@@ -1098,8 +1098,8 @@ def _build_system_prompt(
                     else:
                         resolved_patterns = section
 
-    if resolved_fleet:
-        parts.append(resolved_fleet)
+    if resolved_team:
+        parts.append(resolved_team)
     if resolved_patterns:
         parts.append(resolved_patterns)
 

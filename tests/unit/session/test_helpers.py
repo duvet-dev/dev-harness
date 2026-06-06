@@ -41,7 +41,7 @@ class TestPhases:
         assert analyse is not None
         assert analyse["title"] == "Analyse & Understand"
         assert analyse["agent"] == "purpose-decoder"
-        assert analyse["fleets"] == ["analysis"]
+        assert analyse["teams"] == ["analysis"]
         assert analyse["artifact"] == "analysis.md"
         assert "analysis.md" in str(analyse["artifact"])
 

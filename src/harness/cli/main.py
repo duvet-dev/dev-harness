@@ -440,7 +440,7 @@ def agent():
 def list_agents():
     """List all registered harness agent roles.
 
-    Displays a table of agent roles, their tags, and the fleet they
+    Displays a table of agent roles, their tags, and the team they
     belong to (if any).
 
     Examples::
@@ -487,7 +487,7 @@ def show(agent_role):
     """Show details for a specific agent role.
 
     Displays the agent's role, description, tags, tool permissions,
-    and fleet membership.
+    and team membership.
 
     Examples::
 
@@ -557,13 +557,13 @@ def run(agent_name, preview, output):
 
 
 # ---------------------------------------------------------------------------
-# Fleet management commands
+# Team management commands
 # ---------------------------------------------------------------------------
 
 
 @main.group()
-def fleet():
-    """Manage harness teams (formerly fleets).
+def team():
+    """Manage harness teams.
 
     Teams group related agents into domain groups (architecture, coding,
     review, testing). Each team has agents and optional shared guidelines.
@@ -576,20 +576,20 @@ def fleet():
     pass
 
 
-@fleet.command(name="list")
+@team.command(name="list")
 @click.option("--consults", is_flag=True, help="Show consultation capabilities for each team")
-def list_fleets(consults):
-    """List all registered teams (formerly fleets) with their agents.
+def list_teams(consults):
+    """List all registered teams with their agents.
 
     Shows teams, their agent count, and description.
 
     Examples::
 
-        harness fleet list
+        harness team list
 
-        harness fleet list --consults
+        harness team list --consults
     """
-    require_project_root(command_name="fleet list")
+    require_project_root(command_name="team list")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -618,21 +618,21 @@ def list_fleets(consults):
     click.echo()
 
 
-@fleet.command()
+@team.command()
 @click.argument("team_name")
 @click.option("--json", "json_flag", is_flag=True, help="Output as JSON")
 def show(team_name, json_flag):
-    """Show details for a specific team (formerly fleet).
+    """Show details for a specific team.
 
     Displays team name, description, agents, and guidelines.
 
     Examples::
 
-        harness fleet show architecture
+        harness team show architecture
 
-        harness fleet show review --json
+        harness team show review --json
     """
-    require_project_root(command_name="fleet show")
+    require_project_root(command_name="team show")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -668,13 +668,13 @@ def show(team_name, json_flag):
         click.echo("  Guidelines: (none)")
 
 
-@fleet.command(name="add-agent")
+@team.command(name="add-agent")
 @click.argument("team_name")
 @click.argument("agent_role")
-def add_agent_to_fleet(team_name, agent_role):
+def add_agent_to_team(team_name, agent_role):
     """Add an agent role to a team.
 
-    Note: Team management is now done via ``.harness/teams.yaml``.
+    Note: Team management is done via ``.harness/teams.yaml``.
 
     Examples::
 
@@ -683,7 +683,7 @@ def add_agent_to_fleet(team_name, agent_role):
         #     architecture:
         #       agents: ["architect", "my-custom-agent"]
     """
-    require_project_root(command_name="fleet add-agent")
+    require_project_root(command_name="team add-agent")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -704,13 +704,13 @@ def add_agent_to_fleet(team_name, agent_role):
     )
 
 
-@fleet.command(name="remove-agent")
+@team.command(name="remove-agent")
 @click.argument("team_name")
 @click.argument("agent_role")
-def remove_agent_from_fleet(team_name, agent_role):
+def remove_agent_from_team(team_name, agent_role):
     """Remove an agent role from a team.
 
-    Note: Team management is now done via ``.harness/teams.yaml``.
+    Note: Team management is done via ``.harness/teams.yaml``.
 
     Examples::
 
@@ -720,7 +720,7 @@ def remove_agent_from_fleet(team_name, agent_role):
         #       agents:
         #         - existing-agent
     """
-    require_project_root(command_name="fleet remove-agent")
+    require_project_root(command_name="team remove-agent")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -737,20 +737,20 @@ def remove_agent_from_fleet(team_name, agent_role):
     )
 
 
-@fleet.command(name="consult")
+@team.command(name="consult")
 @click.argument("team_name")
 @click.option("--no-truncate", is_flag=True,
               help="Show full match phrases without truncation")
-def fleet_consult(team_name, no_truncate):
+def team_consult(team_name, no_truncate):
     """Show consultation capabilities for a team.
 
     Examples::
 
-        harness fleet consult architecture
+        harness team consult architecture
 
-        harness fleet consult coding --no-truncate
+        harness team consult coding --no-truncate
     """
-    require_project_root(command_name="fleet consult")
+    require_project_root(command_name="team consult")
     from harness.team.registry import TeamRegistry
     from harness.team.defaults import get_builtin_teams
 
@@ -772,7 +772,7 @@ def fleet_consult(team_name, no_truncate):
     click.echo("  (Consultation capabilities are managed at the engagement level in .harness/teams.yaml)")
 
 
-@fleet.command(name="set-governance")
+@team.command(name="set-governance")
 @click.argument("level", type=click.Choice(["exploration", "standard", "strict"]))
 @click.option("--engagement", "slug", help="Apply to a specific engagement instead of project")
 def set_governance(level, slug):

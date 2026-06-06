@@ -23,7 +23,6 @@ Harness directory (``.harness/``)
 - ``get_agents_dir(root)``
 - ``get_config_path(root)``
 - ``get_providers_path(root)``
-- ``get_fleets_path(root)``
 - ``get_patterns_dir(root)``
 - ``get_cache_dir(root)``
 - ``get_architecture_goal_path(root)``
@@ -49,7 +48,6 @@ _ACTIVE_ENGAGEMENTS_FILE = "active-engagements.yaml"
 _CONFIG_FILE = "config.yaml"
 _PROVIDERS_FILE = "providers.yaml"
 _SETTINGS_FILE = "settings.yaml"
-_FLEETS_FILE = "fleets.yaml"
 _PATTERNS_DIR_NAME = "patterns"
 _CACHE_DIR_NAME = "cache"
 _ARCHITECTURE_GOAL_FILE = "architecture-goal.yaml"
@@ -322,10 +320,6 @@ def get_providers_path(root: Path) -> Path:
     """Return the project-level providers file path."""
     return get_harness_dir(root) / _PROVIDERS_FILE
 
-
-def get_fleets_path(root: Path) -> Path:
-    """Return the project-level fleets file path."""
-    return get_harness_dir(root) / _FLEETS_FILE
 
 
 def get_patterns_dir(root: Path) -> Path:

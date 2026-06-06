@@ -83,7 +83,7 @@ class TestEngagementCommandPattern:
             "AgentRole alias still present in agent_registry.py"
         )
 
-    def test_fleet_sweep_clean(self):
+    def test_fleet_imports_clean(self):
         """No Fleet/FleetRegistry imports remain in src/."""
         import subprocess
         result = subprocess.run(

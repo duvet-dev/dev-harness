@@ -44,7 +44,7 @@ from harness.command.results.mgmt import (
     AgentListResult,
     ConsultResult,
     FixEngagementResult,
-    FleetListResult,
+    TeamListResult,
     RefreshAgentsResult,
     RenameEngagementResult,
     SetBranchResult,

@@ -1,7 +1,7 @@
 """Typed results for simple engagement operations.
 
 Covers: rename_engagement, set_branch, fix_engagement, refresh_agents,
-set_governance, agent_list, fleet_list, consult.
+set_governance, agent_list, team_list, consult.
 """
 
 from __future__ import annotations
@@ -89,8 +89,8 @@ class AgentListResult(TypedResult):
 
 
 @dataclass(frozen=True)
-class FleetListResult(TypedResult):
-    """Result of listing fleets/teams."""
+class TeamListResult(TypedResult):
+    """Result of listing teams."""
 
     success: bool = True
     message: str = ""
@@ -122,6 +122,6 @@ __all__ = [
     "RefreshAgentsResult",
     "SetGovernanceResult",
     "AgentListResult",
-    "FleetListResult",
+    "TeamListResult",
     "ConsultResult",
 ]

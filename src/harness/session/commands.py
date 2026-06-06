@@ -322,10 +322,10 @@ def _handle_model_switch(arg: str, state: dict[str, Any]) -> CommandResult:
 
 
 def _handle_consult(query: str) -> CommandResult:
-    """Handle /consult <question> — route to fleet."""
+    """Handle /consult <question> — route to team."""
     if not query:
         return CommandResult(display_lines=[
-            "Usage: /consult [--fleet <name>] [--mode advisory|blocking]"
+            "Usage: /consult [--team <name>] [--mode advisory|blocking]"
             " <question>"
         ])
 
@@ -333,7 +333,7 @@ def _handle_consult(query: str) -> CommandResult:
     parsed = _parse_consult_flags(query)
     if not parsed["question"]:
         return CommandResult(display_lines=[
-            "Usage: /consult [--fleet <name>] [--mode advisory|blocking]"
+            "Usage: /consult [--team <name>] [--mode advisory|blocking]"
             " <question>"
         ])
 

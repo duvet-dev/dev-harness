@@ -107,7 +107,7 @@ def create_bus() -> CommandBus:
         AgentListTypedHandler,
         ConsultTypedHandler,
         FixEngagementTypedHandler,
-        FleetListTypedHandler,
+        TeamListTypedHandler,
         RefreshAgentsTypedHandler,
         RenameEngagementTypedHandler,
         SetBranchTypedHandler,
@@ -130,7 +130,7 @@ def create_bus() -> CommandBus:
         AgentListCommand,
         ConsultCommand,
         FixEngagementCommand,
-        FleetListCommand,
+        TeamListCommand,
         RefreshAgentsCommand,
         RenameEngagementCommand,
         SetBranchCommand,
@@ -152,7 +152,7 @@ def create_bus() -> CommandBus:
     bus.register_type(RefreshAgentsTypedHandler(), RefreshAgentsCommand)
     bus.register_type(SetGovernanceTypedHandler(), SetGovernanceCommand)
     bus.register_type(AgentListTypedHandler(), AgentListCommand)
-    bus.register_type(FleetListTypedHandler(), FleetListCommand)
+    bus.register_type(TeamListTypedHandler(), TeamListCommand)
     bus.register_type(ConsultTypedHandler(), ConsultCommand)
 
     return bus

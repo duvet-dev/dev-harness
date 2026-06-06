@@ -870,23 +870,23 @@ class TestAgentListCommand:
         assert output is not None
 
 
-class TestFleetListCommand:
-    """Tests for FleetListCommand."""
+class TestTeamListCommand:
+    """Tests for TeamListCommand."""
 
     def test_constructor(self):
-        from harness.command.commands.mgmt import FleetListCommand
-        cmd = FleetListCommand(slug="")
+        from harness.command.commands.mgmt import TeamListCommand
+        cmd = TeamListCommand(slug="")
         assert cmd.slug == ""
 
     def test_positive(self, bus):
-        from harness.command.commands.mgmt import FleetListCommand
-        _register_ok(bus, FleetListCommand)
-        result = bus.dispatch(FleetListCommand(slug=""))
+        from harness.command.commands.mgmt import TeamListCommand
+        _register_ok(bus, TeamListCommand)
+        result = bus.dispatch(TeamListCommand(slug=""))
         assert result.success is True
 
     def test_presenter(self, cli_presenter):
-        from harness.command.results.mgmt import FleetListResult
-        result = FleetListResult(success=True, message="Fleet listed", count=2)
+        from harness.command.results.mgmt import TeamListResult
+        result = TeamListResult(success=True, message="Teams listed", count=2)
         output = cli_presenter.present(result)
         assert output is not None
 

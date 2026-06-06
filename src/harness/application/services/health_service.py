@@ -17,7 +17,6 @@ from harness.domain.health import (
     HealthReport,
 )
 from harness.paths import (
-    get_fleets_path,
     get_harness_dir,
 )
 
@@ -71,26 +70,23 @@ class HealthService:
         return _result("harness-dir", "pass", ".harness/ directory structure is intact")
 
     def check_agent_roles(self, root: Path) -> HealthCheck:
-        """Verify all agent roles referenced in fleet/phase configs exist."""
+        """Verify all agent roles referenced in team configs exist in agent registry."""
         try:
-            from harness.agents.agent_registry import AGENTS
-
-            fleet_path = get_fleets_path(root)
-            referenced_roles: set[str] = set()
-
-            if fleet_path.is_file():
-                import yaml
-                with open(fleet_path) as f:
-                    fleet_data = yaml.safe_load(f) or {}
-                for fleet_name, fleet_def in fleet_data.items():
-                    if isinstance(fleet_def, dict):
-                        for agent in fleet_def.get("agents", []):
-                            if isinstance(agent, dict):
-                                referenced_roles.add(agent.get("name", ""))
-                            elif isinstance(agent, str):
-                                referenced_roles.add(agent)
+            from harness.agents.agent_registry import AGENTS, list_agent_roles
+            from harness.team.registry import TeamRegistry
+            from harness.team.defaults import get_builtin_teams
 
             valid_values = set(spec.role for spec in AGENTS)
+            registry = TeamRegistry(builtin=get_builtin_teams())
+            team_names = registry.list_teams()
+            referenced_roles: set[str] = set()
+
+            for name in team_names:
+                team = registry.resolve(name)
+                for agent_role in team.agents:
+                    if agent_role:
+                        referenced_roles.add(agent_role)
+
             missing = [r for r in referenced_roles if r and r not in valid_values]
 
             if missing:

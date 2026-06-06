@@ -41,9 +41,9 @@ class TestQueryCommands:
         result = bus.dispatch(AgentListCommand(slug=""))
         assert isinstance(result, CommandResult)
 
-    def test_fleet_list_dispatches(self, bus):
-        from harness.command.commands.mgmt import FleetListCommand
-        result = bus.dispatch(FleetListCommand(slug=""))
+    def test_team_list_dispatches(self, bus):
+        from harness.command.commands.mgmt import TeamListCommand
+        result = bus.dispatch(TeamListCommand(slug=""))
         assert isinstance(result, CommandResult)
 
     def test_consult_dispatches(self, bus):

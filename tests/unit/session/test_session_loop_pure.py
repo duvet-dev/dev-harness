@@ -91,13 +91,13 @@ class TestParseConsultFlags:
     def test_no_flags(self):
         result = _parse_consult_flags("check this design")
         assert result["question"] == "check this design"
-        assert result["fleet_filter"] is None
+        assert result["team_filter"] is None
         assert result["mode"] is None
 
-    def test_fleet_flag(self):
-        result = _parse_consult_flags("--fleet architecture check this")
+    def test_team_flag(self):
+        result = _parse_consult_flags("--team architecture check this")
         assert result["question"] == "check this"
-        assert result["fleet_filter"] == "architecture"
+        assert result["team_filter"] == "architecture"
 
     def test_mode_flag(self):
         result = _parse_consult_flags("--mode blocking check this")
@@ -105,20 +105,20 @@ class TestParseConsultFlags:
         assert result["question"] == "check this"
 
     def test_both_flags(self):
-        result = _parse_consult_flags("--fleet infra --mode advisory check the database")
-        assert result["fleet_filter"] == "infra"
+        result = _parse_consult_flags("--team infra --mode advisory check the database")
+        assert result["team_filter"] == "infra"
         assert result["mode"] == "advisory"
         assert result["question"] == "check the database"
 
     def test_flags_without_values(self):
-        result = _parse_consult_flags("--fleet")
-        assert result["fleet_filter"] is None
-        assert result["question"] == "--fleet"
+        result = _parse_consult_flags("--team")
+        assert result["team_filter"] is None
+        assert result["question"] == "--team"
 
     def test_empty_string(self):
         result = _parse_consult_flags("")
         assert result["question"] == ""
-        assert result["fleet_filter"] is None
+        assert result["team_filter"] is None
         assert result["mode"] is None
 
     def test_flag_at_end(self):
@@ -262,8 +262,8 @@ class TestBuildSystemPrompt:
     without needing a real filesystem.
     """
 
-    def make_phase(self, prompt: str = "You are a test agent.", fleets=None):
-        phase = {"name": "test", "prompt": prompt, "fleets": fleets or []}
+    def make_phase(self, prompt: str = "You are a test agent.", teams=None):
+        phase = {"name": "test", "prompt": prompt, "teams": teams or []}
         return phase
 
     def test_basic_prompt_with_phase(self):
@@ -303,19 +303,19 @@ class TestBuildSystemPrompt:
         assert "CONVERSATION HISTORY" in result
         assert "architecture" in result
 
-    def test_with_fleet_section(self):
+    def test_with_team_section(self):
         from harness.session.helpers import _build_system_prompt
-        phase = self.make_phase(fleets=["architecture"])
+        phase = self.make_phase(teams=["architecture"])
         result = _build_system_prompt(
             phase,
-            fleet_section="## Architecture Fleet\nFollow the onion architecture.",
+            team_section="## Architecture Team\nFollow the onion architecture.",
         )
-        assert "Architecture Fleet" in result
+        assert "Architecture Team" in result
         assert "onion architecture" in result
 
     def test_with_patterns_section(self):
         from harness.session.helpers import _build_system_prompt
-        phase = self.make_phase(fleets=["testing"])
+        phase = self.make_phase(teams=["testing"])
         result = _build_system_prompt(
             phase,
             patterns_section="## Testing Patterns\nArrange-Act-Assert",
@@ -330,7 +330,7 @@ class TestBuildSystemPrompt:
         result = _build_system_prompt(
             phase,
             engagement_context="[ENGAGEMENT_CONTEXT]",
-            fleet_section="[FLEET]",
+            team_section="[FLEET]",
             patterns_section="[PATTERNS]",
             context="[ARTIFACTS]",
             conversation="[CONVERSATION]",
@@ -340,15 +340,15 @@ class TestBuildSystemPrompt:
         pos_preamble = result.find(DOMAIN_LANGUAGE_PREAMBLE)
         pos_context = result.find("[ENGAGEMENT_CONTEXT]")
         pos_prompt = result.find("You are a test agent.")
-        pos_fleet = result.find("[FLEET]")
+        pos_team = result.find("[FLEET]")
         pos_patterns = result.find("[PATTERNS]")
         pos_artifacts = result.find("[ARTIFACTS]")
         pos_conversation = result.find("[CONVERSATION]")
 
         assert pos_preamble < pos_context, "preamble before context"
         assert pos_context < pos_prompt, "context before phase prompt"
-        assert pos_prompt < pos_fleet or pos_fleet == -1, "prompt before fleet"
-        assert pos_fleet < pos_patterns or pos_patterns == -1 or pos_fleet == -1, "fleet before patterns"
+        assert pos_prompt < pos_team or pos_team == -1, "prompt before team"
+        assert pos_team < pos_patterns or pos_patterns == -1 or pos_team == -1, "team before patterns"
         assert pos_artifacts > pos_patterns, "artifacts after everything"
         assert pos_conversation > pos_artifacts, "conversation last"
 

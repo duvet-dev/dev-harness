@@ -23,7 +23,7 @@ from harness.cli.commands import (
     refresh_agents_command,
     set_governance_command,
     agent_list_command,
-    fleet_list_command,
+    team_list_command,
     consult_command,
 )
 
@@ -178,11 +178,11 @@ class TestAgentListFactory:
         assert isinstance(cmd, AgentListCommand)
 
 
-class TestFleetListFactory:
+class TestTeamListFactory:
     def test_returns_typed(self):
-        cmd = fleet_list_command()
-        from harness.command.commands.mgmt import FleetListCommand
-        assert isinstance(cmd, FleetListCommand)
+        cmd = team_list_command()
+        from harness.command.commands.mgmt import TeamListCommand
+        assert isinstance(cmd, TeamListCommand)
 
 
 class TestConsultFactory:

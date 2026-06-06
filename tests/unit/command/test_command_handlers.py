@@ -8,7 +8,7 @@ from __future__ import annotations
 from harness.command.handlers.mgmt_handlers import (
     AgentListTypedHandler,
     ConsultTypedHandler,
-    FleetListTypedHandler,
+    TeamListTypedHandler,
 )
 from harness.command.setup import create_bus
 from harness.command.types import CommandHandler, CommandResult
@@ -36,25 +36,25 @@ class TestAgentListTypedHandler:
         assert isinstance(result, CommandResult)
 
 
-class TestFleetListTypedHandler:
-    """Tests for FleetListTypedHandler."""
+class TestTeamListTypedHandler:
+    """Tests for TeamListTypedHandler."""
 
     def test_importable(self):
-        handler = FleetListTypedHandler()
-        assert isinstance(handler, FleetListTypedHandler)
+        handler = TeamListTypedHandler()
+        assert isinstance(handler, TeamListTypedHandler)
 
     def test_returns_team_list(self):
-        handler = FleetListTypedHandler()
-        from harness.command.commands.mgmt import FleetListCommand
-        cmd = FleetListCommand()
+        handler = TeamListTypedHandler()
+        from harness.command.commands.mgmt import TeamListCommand
+        cmd = TeamListCommand()
         result = handler.handle(cmd)
         assert result.success
         assert result.count >= 1
 
     def test_registered_in_registry(self):
         bus = create_bus()
-        from harness.command.commands.mgmt import FleetListCommand
-        result = bus.dispatch(FleetListCommand())
+        from harness.command.commands.mgmt import TeamListCommand
+        result = bus.dispatch(TeamListCommand())
         assert isinstance(result, CommandResult)
 
 

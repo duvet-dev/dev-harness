@@ -76,33 +76,30 @@ class TestCheckHarnessDir:
 
 
 class TestCheckAgentRoles:
-    """Verify agent roles check."""
+    """Verify agent roles check via TeamRegistry."""
 
-    def test_no_fleets_file(self, service, tmp_path):
+    def test_builtin_teams_checked(self, service, tmp_path):
+        """Builtin teams reference agents checked against AGENTS."""
         result = service.check_agent_roles(tmp_path)
         assert result.name == "agent-roles"
-        assert result.status == "pass"
+        # Builtin teams reference some phantom roles, so expect warn
+        assert result.status in ("pass", "warn")
 
-    def test_fleets_with_agents_by_dict(self, service, tmp_path):
-        fleet_dir = tmp_path / ".harness"
-        fleet_dir.mkdir(parents=True)
-        (fleet_dir / "fleets.yaml").write_text(
-            "fleet1:\n  agents:\n    - name: nonexistent-role\n"
-        )
+    def test_unknown_role_flagged(self, service, monkeypatch, tmp_path):
+        """When TeamRegistry includes an agent not in AGENTS, warn."""
+        import harness.team.registry as reg_module
+        from harness.team.model import AgentTeam
+        class MockTeamRegistry:
+            def __init__(self, builtin=None):
+                pass
+            def list_teams(self):
+                return ["fake-team"]
+            def resolve(self, name):
+                return AgentTeam(name="fake-team", agents=["nonexistent-role"])
+        monkeypatch.setattr(reg_module, "TeamRegistry", MockTeamRegistry)
         result = service.check_agent_roles(tmp_path)
-        # 'nonexistent-role' is not in agent registry, so warning
         assert result.status == "warn"
         assert "nonexistent-role" in result.message
-
-    def test_fleets_with_agents_by_str(self, service, tmp_path):
-        fleet_dir = tmp_path / ".harness"
-        fleet_dir.mkdir(parents=True)
-        (fleet_dir / "fleets.yaml").write_text(
-            "fleet1:\n  agents:\n    - missing-role\n"
-        )
-        result = service.check_agent_roles(tmp_path)
-        assert result.status == "warn"
-        assert "missing-role" in result.message
 
     def test_exception_handling(self, service, monkeypatch):
         import builtins

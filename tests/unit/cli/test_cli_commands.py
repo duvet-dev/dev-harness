@@ -22,7 +22,7 @@ from harness.command.commands.misc import NextCommand, QueryStatusCommand, Query
 from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
 from harness.command.commands.session import ChatCommand, SessionCommand
 from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand, RunWaveCommand
-from harness.command.commands.mgmt import AgentListCommand, FleetListCommand, ConsultCommand
+from harness.command.commands.mgmt import AgentListCommand, TeamListCommand, ConsultCommand
 from harness.command.types import CommandResult
 from harness.errors import UnknownCommandError
 
@@ -92,7 +92,7 @@ class TestDispatchCliCommand:
 
 
 class TestWaveOCommandFactories:
-    """Tests for Wave O factory functions — agent_list, fleet_list, consult."""
+    """Tests for Wave O factory functions — agent_list, team_list, consult."""
 
     def test_agent_list_command(self):
         """agent_list_command() creates AgentListCommand."""
@@ -100,11 +100,11 @@ class TestWaveOCommandFactories:
         cmd = agent_list_command()
         assert isinstance(cmd, AgentListCommand)
 
-    def test_fleet_list_command(self):
-        """fleet_list_command() creates FleetListCommand."""
-        from harness.cli.commands import fleet_list_command
-        cmd = fleet_list_command()
-        assert isinstance(cmd, FleetListCommand)
+    def test_team_list_command(self):
+        """team_list_command() creates TeamListCommand."""
+        from harness.cli.commands import team_list_command
+        cmd = team_list_command()
+        assert isinstance(cmd, TeamListCommand)
 
     def test_consult_command(self):
         """consult_command() creates ConsultCommand with question."""

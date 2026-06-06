@@ -151,10 +151,10 @@ def agent_list_command() -> TypedCommand:
     return AgentListCommand(slug="")
 
 
-def fleet_list_command() -> TypedCommand:
-    """Create a FleetList command."""
-    from harness.command.commands.mgmt import FleetListCommand
-    return FleetListCommand(slug="")
+def team_list_command() -> TypedCommand:
+    """Create a TeamList command."""
+    from harness.command.commands.mgmt import TeamListCommand
+    return TeamListCommand(slug="")
 
 
 def consult_command(question: str = "") -> TypedCommand:

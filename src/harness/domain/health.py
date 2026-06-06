@@ -19,7 +19,7 @@ _CHECK_DESCRIPTIONS: dict[str, str] = {
     "branch-match": "Current git branch matches engagement's stored branch",
     "git-clean": "Git working tree has no uncommitted changes",
     "plan-consistency": "``plan.yaml`` is consistent with engagement state",
-    "agent-roles": "All agent roles referenced in fleet/phase configs exist in agent registry",
+    "agent-roles": "All agent roles referenced in team/phase configs exist in agent registry",
     "manifest-link": "Assessment manifest files referenced by engagement exist",
     "python-version": "Python version meets minimum requirements",
 }

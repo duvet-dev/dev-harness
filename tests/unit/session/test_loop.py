@@ -82,7 +82,7 @@ class TestBuildGetWellPhaseList:
         assert phases[2]["agent"] == "critical-analyser"
 
     def test_each_phase_has_required_keys(self):
-        required = {"name", "title", "agent", "fleets", "artifact", "prompt"}
+        required = {"name", "title", "agent", "teams", "artifact", "prompt"}
         for i, p in enumerate(build_get_well_phase_list()):
             missing = required - set(p.keys())
             assert not missing, f"Phase {i} ({p.get('name', '?')}) missing keys: {missing}"
@@ -321,9 +321,9 @@ class TestApplyFileBlocks:
 
 class TestParseConsultFlags:
     def test_parses_fleet_flag(self):
-        result = _parse_consult_flags("--fleet architecture check this")
+        result = _parse_consult_flags("--team architecture check this")
         assert result["question"] == "check this"
-        assert result["fleet_filter"] == "architecture"
+        assert result["team_filter"] == "architecture"
 
     def test_parses_mode_flag(self):
         result = _parse_consult_flags("--mode blocking test")
@@ -331,20 +331,20 @@ class TestParseConsultFlags:
         assert result["mode"] == "blocking"
 
     def test_parses_both_flags(self):
-        result = _parse_consult_flags("--fleet code --mode advisory check this")
+        result = _parse_consult_flags("--team code --mode advisory check this")
         assert result["question"] == "check this"
-        assert result["fleet_filter"] == "code"
+        assert result["team_filter"] == "code"
         assert result["mode"] == "advisory"
 
     def test_no_flags(self):
         result = _parse_consult_flags("just a question")
         assert result["question"] == "just a question"
-        assert result["fleet_filter"] is None
+        assert result["team_filter"] is None
         assert result["mode"] is None
 
     def test_flag_without_value(self):
-        result = _parse_consult_flags("--fleet")
-        assert "'--fleet'" not in result["question"]
+        result = _parse_consult_flags("--team")
+        assert "'--team'" not in result["question"]
 
 
 class TestFormatConsultResult:

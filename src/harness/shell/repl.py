@@ -232,10 +232,10 @@ COMMAND_MAP: dict[str, tuple[Callable[..., TypedCommand], Callable[[list[str]], 
     # Changelog
     "changelog annotate":            (lambda **kw: __import__("harness.cli.commands", fromlist=["annotate_changelog_command"]).annotate_changelog_command(**kw), lambda a: {"slug": a[0], "wave": "", "text": " ".join(a[1:])} if a else {}),
     # Governance
-    "fleet set-governance":          (lambda **kw: __import__("harness.cli.commands", fromlist=["set_governance_command"]).set_governance_command(**kw), lambda a: {"level": a[0]} if a else {"level": "standard"}),
-    # Agent / Fleet listing
+    "team set-governance":           (lambda **kw: __import__("harness.cli.commands", fromlist=["set_governance_command"]).set_governance_command(**kw), lambda a: {"level": a[0]} if a else {"level": "standard"}),
+    # Agent / Team listing
     "agent list":                    (lambda **kw: __import__("harness.cli.commands", fromlist=["agent_list_command"]).agent_list_command(**kw), _no_args),
-    "fleet list":                    (lambda **kw: __import__("harness.cli.commands", fromlist=["fleet_list_command"]).fleet_list_command(**kw), _no_args),
+    "team list":                     (lambda **kw: __import__("harness.cli.commands", fromlist=["team_list_command"]).team_list_command(**kw), _no_args),
     "consult":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["consult_command"]).consult_command(**kw), lambda a: {"question": " ".join(a)} if a else {"question": ""}),
     # Refresh agents
     "refresh-agents":                (lambda **kw: __import__("harness.cli.commands", fromlist=["refresh_agents_command"]).refresh_agents_command(**kw), _no_args),

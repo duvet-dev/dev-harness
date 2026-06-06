@@ -367,7 +367,7 @@ GLOSSARY: ClassVar[dict[str, dict]] = {
     "Consultation": {
         "definition": (
             "A mechanism for routing ad-hoc questions to the matching agent "
-            "fleet during an active phase. Used via /consult command. Can be "
+            "team during an active phase. Used via /consult command. Can be "
             "advisory (informational) or blocking (must be resolved before "
             "advancing)."
         ),

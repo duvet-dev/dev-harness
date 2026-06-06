@@ -62,7 +62,7 @@ class AgentListCommand(TypedCommand):
 
 
 @dataclass(frozen=True)
-class FleetListCommand(TypedCommand):
+class TeamListCommand(TypedCommand):
     """List all registered teams."""
 
     slug: str = ""
@@ -85,6 +85,6 @@ __all__ = [
     "RefreshAgentsCommand",
     "SetGovernanceCommand",
     "AgentListCommand",
-    "FleetListCommand",
+    "TeamListCommand",
     "ConsultCommand",
 ]

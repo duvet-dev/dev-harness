@@ -110,7 +110,8 @@ test-coverage:
 		--cov-report=term-missing:skip-covered \
 		--cov-report=html:coverage \
 		--cov-fail-under=70 \
-		--quiet 2>&1
+		--quiet \
+		--durations=10 2>&1
 	@echo "Tests: OK"
 	@echo "Coverage: open coverage/index.html in a browser"
 

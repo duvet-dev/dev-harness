@@ -380,24 +380,6 @@ AGENTS: list[AgentSpec] = [
         tags=["research", "exploration", "ideation"],
         tool_permissions=ToolPermissions.with_web_search(),
     ),
-    AgentSpec(
-        role="sync",
-        name="Sync Agent",
-        description=(
-            "Reads current OpenClaw agent configurations and generates "
-            "harness release templates. Runs at release time only — not "
-            "a developer workflow."
-        ),
-        sop_summary=[
-            "Discover OpenClaw source files (SOUL.md, AGENTS.md, etc.)",
-            "Extract identity, procedures, and standards from source",
-            "Map OpenClaw concepts to harness template format",
-            "Generate template files in target directory",
-            "Report changes from previous release",
-        ],
-        tags=["release", "sync", "infrastructure"],
-        tool_permissions=ToolPermissions.read_only(),
-    ),
     # ── Wave 16a: Refactoring / Brownfield Agents ──────────────────────
     AgentSpec(
         role="refactoring-agent",

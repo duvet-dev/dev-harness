@@ -1,6 +1,6 @@
 # Task 5 — Remove `harness agent run sync` CLI command
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 30-openclaw-sync-removal
 **Dependencies:** None
 **Effort:** 0.3h

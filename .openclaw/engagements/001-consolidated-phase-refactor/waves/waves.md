@@ -35,6 +35,7 @@
 | **23** | Template Format Alignment | ✅ 6/6 tasks. 3,826 tests. `ed86bae` |
 | **24** | Wire Refactoring-Analyser + Rename Constants | ✅ All P-constants renamed. Refactoring-analyser wired. 3,827 tests. `4e072e9` |
 | **28** | Command Bus & Presenter Consolidation | ✅ Single shared bus, all typed dispatch, presenters expanded, commands.py deleted, 3,827 tests. |
+| **30** | OpenClaw Sync Removal | ✅ Sync module deleted. Zero OpenClaw references in src/ or tests/. 3,757 tests. |
 
 ---
 
@@ -72,7 +73,7 @@ Milestone 2: Analysis Pipeline
 Milestone 3: Cleanup (independent of phase changes)
   Wave 28: Command Bus & Presenter Consolidation [5-8h] ✅
   Wave 29: Value Objects & Type Cleanup [2-3h]
-  Wave 30: OpenClaw Sync Removal [1.5h]
+  Wave 30: OpenClaw Sync Removal ✅ [1.5h]
 ```
 
 **Critical path:** 21 → 22 → [25, 26, 27] = ~27-38h

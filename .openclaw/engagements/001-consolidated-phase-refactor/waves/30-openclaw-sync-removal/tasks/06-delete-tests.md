@@ -1,6 +1,6 @@
 # Task 6 — Delete tests/unit/sync/ directory
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 30-openclaw-sync-removal
 **Dependencies:** None
 **Effort:** 0.2h

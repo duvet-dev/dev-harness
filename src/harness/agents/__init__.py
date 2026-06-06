@@ -25,7 +25,6 @@ from harness.agents.agent_registry import (
     list_agent_roles,
     registry_summary,
 )
-from harness.agents.builtin.sync_agent import SYNC_AGENT
 from harness.agents.consultation import (
     ConsultationOrchestrator,
     ConsultationResult,
@@ -43,7 +42,6 @@ __all__ = [
     "AgentTeam",
     "ConsultationOrchestrator",
     "ConsultationResult",
-    "SYNC_AGENT",
     "TeamRegistry",
     "get_agent",
     "get_agents_by_tag",

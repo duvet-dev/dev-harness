@@ -41,9 +41,6 @@ class TestAgentsExports:
         assert hasattr(agents, "LanguageDetector")
         assert hasattr(agents, "LanguagePatterns")
 
-    def test_sync_agent_export(self):
-        assert hasattr(agents, "SYNC_AGENT")
-
     def test_builtin_fleets_exported(self):
         """builtin_fleets() removed — use get_builtin_teams() from team.defaults."""
         from harness.team.defaults import get_builtin_teams

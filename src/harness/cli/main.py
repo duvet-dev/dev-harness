@@ -532,28 +532,6 @@ def show(agent_role):
                 click.echo(f"    {perm_name}: {perm_val}")
 
 
-@agent.command()
-@click.argument("agent_name")
-@click.option("--preview", is_flag=True, help="Preview without writing")
-@click.option("--output", type=click.Path(path_type=Path), help="Output directory")
-def run(agent_name, preview, output):
-    """Run a harness agent by name.
-
-    Currently supported: 'sync'
-
-    Usage:
-        harness agent run sync --preview
-        harness agent run sync --output ./src/harness/templates/
-    """
-    if agent_name == "sync":
-        from harness.sync.pipeline import run_sync
-        result = run_sync(output_dir=output, preview=preview)
-        click.echo(result)
-    else:
-        click.echo(f"Unknown agent: {agent_name}", err=True)
-        raise click.Abort()
-
-
 # ---------------------------------------------------------------------------
 # Team management commands
 # ---------------------------------------------------------------------------

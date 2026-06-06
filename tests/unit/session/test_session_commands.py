@@ -119,7 +119,8 @@ class TestRouteSessionCommand:
     """Tests for route_session_command() — session-loop command dispatch."""
 
     def make_state(self, **overrides) -> dict:
-        from harness.session.helpers import PHASES
+        from harness.session.phase_source import get_phases
+        phases_list = get_phases()
         state = {
             "root": "/tmp/test",
             "phase_def": {"name": "implementation", "title": "Implementation"},
@@ -133,8 +134,7 @@ class TestRouteSessionCommand:
             "phase_artifacts": [],
             "phase_name": "implementation",
             "current_phase_index": 3,
-            "PHASES": PHASES,
-            "_phase_list": PHASES,
+            "_phase_list": phases_list,
         }
         state.update(overrides)
         return state
@@ -215,15 +215,15 @@ class TestRouteSessionCommand:
     def test_navigate_blocked_by_limit(self):
         from harness.session.helpers import MAX_PHASE_JUMPS_PER_PHASE
         state = self.make_state(
-            jump_counts={"implementation→design": MAX_PHASE_JUMPS_PER_PHASE}
+            jump_counts={"build→design": MAX_PHASE_JUMPS_PER_PHASE}
         )
         result = route_session_command("navigate design", state)
         assert result.phase_jump_allowed is False
         assert any("blocked" in l for l in result.display_lines)
 
     def test_feedback_valid(self):
-        result = route_session_command("feedback requirements missing spec", self.make_state())
-        assert result.switch_to_phase == "requirements"
+        result = route_session_command("feedback discover missing spec", self.make_state())
+        assert result.switch_to_phase == "discover"
         assert result.phase_jump_allowed is True
 
     def test_feedback_missing_target(self):
@@ -269,7 +269,7 @@ class TestRouteSessionCommand:
         assert result.switch_to_phase_with_history == "architecture-design"
 
     def test_phase_switch_fallback_to_global(self):
-        """Test /phase falls back to global PHASES for standard names."""
+        """Test /phase falls back to phase list for standard names."""
         custom_phases = [
             {"name": "assessment-triage", "title": "Assessment Triage"},
         ]

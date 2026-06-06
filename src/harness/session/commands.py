@@ -279,18 +279,18 @@ def _handle_phase_switch(target: str, state: dict[str, Any]) -> CommandResult:
     have custom phases like "architecture-design"), then falls back to
     the global PHASES for standard names like "design".
     """
-    from harness.session.helpers import PHASES
+    from harness.session.phase_source import find_phase, get_phases
 
     if not target:
         return CommandResult(display_lines=["__show_phase_diagram__"])
 
     # Check effective phase list first (e.g. get-well phases)
-    effective_phases: list[dict] = state.get("_phase_list", PHASES)
+    effective_phases: list[dict] = state.get("_phase_list", get_phases())
     match = next((p for p in effective_phases if p["name"] == target), None)
 
-    # Fall back to global PHASES for standard phase names
+    # Fall back to global get_phases for standard phase names
     if match is None:
-        match = next((p for p in PHASES if p["name"] == target), None)
+        match = find_phase(target)
 
     if match is None:
         names = ", ".join(p["name"] for p in effective_phases)
@@ -388,10 +388,11 @@ def _handle_next_approve(cmd: str, state: dict[str, Any]) -> CommandResult:
 def _handle_changes(cmd: str, state: dict[str, Any]) -> CommandResult:
     """Handle /changes [reason] — request revisions from agent."""
     feedback_text = cmd[8:].strip() if len(cmd) > 8 else ""
-    from harness.session.helpers import PHASES
+    from harness.session.phase_source import get_phases
     current_name = state.get("phase_def", {}).get("name", "")
+    phases = get_phases()
     current_idx = next(
-        (i for i, p in enumerate(PHASES) if p["name"] == current_name),
+        (i for i, p in enumerate(phases) if p["name"] == current_name),
         0,
     )
 
@@ -399,7 +400,7 @@ def _handle_changes(cmd: str, state: dict[str, Any]) -> CommandResult:
     if feedback_text:
         lines.append(f"  Reason: {feedback_text}")
     # For revising: jump back to current phase
-    target = PHASES[current_idx]["name"]
+    target = phases[current_idx]["name"]
 
     return CommandResult(
         display_lines=lines,
@@ -410,16 +411,26 @@ def _handle_changes(cmd: str, state: dict[str, Any]) -> CommandResult:
 
 def _handle_navigate(target: str, state: dict[str, Any]) -> CommandResult:
     """Handle /navigate <phase> — jump to a phase with checkpoint."""
-    from harness.session.helpers import PHASES
-    match = next((p for p in PHASES if p["name"] == target), None)
+    from harness.session.helpers import get_phase_definition
+    match = get_phase_definition(target)
     if match is None:
-        names = ", ".join(p["name"] for p in PHASES)
+        from harness.session.phase_source import get_phases
+        names = ", ".join(p["name"] for p in get_phases())
         return CommandResult(display_lines=[
             f"Unknown phase: {target}. Available: {names}"
         ])
 
     current_name = state.get("phase_def", {}).get("name", "")
-    source = current_name
+    from harness.session.helpers import resolve_phase
+    source = resolve_phase(current_name)
+
+    # Check navigation rails
+    from harness.session.phase_source import is_transition_allowed
+    allowed, reason = is_transition_allowed(source, target)
+    if not allowed:
+        return CommandResult(display_lines=[
+            f"Navigation not allowed: {reason}"
+        ])
 
     # Check jump limits (pure logic)
     from harness.session.helpers import _check_phase_jump_limit
@@ -449,10 +460,11 @@ def _handle_feedback(arg: str, state: dict[str, Any]) -> CommandResult:
             "Usage: /feedback <target_phase> <reason>"
         ])
 
-    from harness.session.helpers import PHASES
-    match = next((p for p in PHASES if p["name"] == target), None)
+    from harness.session.helpers import get_phase_definition
+    match = get_phase_definition(target)
     if match is None:
-        names = ", ".join(p["name"] for p in PHASES)
+        from harness.session.phase_source import get_phases
+        names = ", ".join(p["name"] for p in get_phases())
         return CommandResult(display_lines=[
             f"Unknown target phase: {target}. Available: {names}"
         ])

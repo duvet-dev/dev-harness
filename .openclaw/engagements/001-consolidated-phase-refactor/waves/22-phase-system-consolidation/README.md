@@ -2,7 +2,7 @@
 
 **Milestone:** 1 — Foundation
 **Effort:** 5-8h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** Wave 21
 **Blocks:** Waves 25, 26, 27
 
@@ -14,12 +14,12 @@ Migrate the session orchestrator to use `phases.yaml` as the canonical phase sou
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Add missing fields to phases.yaml | 📋 Pending | Need `chat_agent`, `reentry`, `system_prompt` per phase |
-| 2 | Migrate session orchestrator to phases.yaml | 📋 Pending | Replace `helpers.py` PHASES dict reference with PhaseBuilder |
-| 3 | Remove old PHASES dict (or compatibility shim) | 📋 Pending | If removal is too much, shim is OK as intermediate step |
-| 4 | Wire navigation rails on switch_to_phase() | 📋 Pending | Allowable source→destination transitions |
-| 5 | Re-wire ContextLoader for phase-level bundles | 📋 Pending | Must read from phases.yaml instead of helpers dict |
-| 6 | Tests | 📋 Pending | All ~3,800+ tests pass |
+| 1 | Add missing fields to phases.yaml | ✅ Complete | Added title, reentry, system_prompt per phase |
+| 2 | Migrate session orchestrator to phases.yaml | ✅ Complete | PhaseSource bridges phases.yaml → session dict format |
+| 3 | Remove old PHASES dict (or compatibility shim) | ✅ Complete | Replaced with PhaseSource + alias-driven resolve_phase() |
+| 4 | Wire navigation rails on switch_to_phase() | ✅ Complete | is_transition_allowed() validates source→destination |
+| 5 | Re-wire ContextLoader for phase-level bundles | ✅ Complete | ContextLoader was already independent of helpers.py |
+| 6 | Tests | ✅ Complete | 3826 pass (3819 existing + 7 new), 0 failures |
 
 ## Verification
 

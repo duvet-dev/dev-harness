@@ -1,6 +1,6 @@
 # Task 2 — Migrate session orchestrator to phases.yaml
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 22-phase-system-consolidation
 **Dependencies:** Task 1
 **Effort:** 2-3h
@@ -11,10 +11,10 @@ Session orchestrator currently loads phase definitions from the old PHASES dict 
 
 ## Acceptance Criteria
 
-- [ ] Session orchestrator loads phase definitions from `phases.yaml`
-- [ ] Phase metadata (lead_agent, chat_agent, system_prompt) reads from YAML
-- [ ] Step definitions read from YAML
-- [ ] All session lifecycle commands work identically
+- [x] Session orchestrator loads phase definitions from `phases.yaml`
+- [x] Phase metadata (lead_agent, chat_agent, system_prompt) reads from YAML
+- [x] Step definitions read from YAML
+- [x] All session lifecycle commands work identically
 
 ## Files Affected
 

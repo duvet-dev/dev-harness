@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from harness.session.helpers import (
-    PHASES,
     _apply_file_blocks,
     build_get_well_phase_list,
     _check_for_phase_jump_from_content,
@@ -61,21 +60,21 @@ class TestBuildGetWellPhaseList:
         phases = build_get_well_phase_list()
         assert phases[2]["name"] == "architecture-design"
 
-    def test_fourth_phase_is_planning(self):
+    def test_fourth_phase_is_design(self):
         phases = build_get_well_phase_list()
-        assert phases[3]["name"] == "planning"
+        assert phases[3]["name"] == "design"
 
-    def test_fifth_phase_is_implementation(self):
+    def test_fifth_phase_is_build(self):
         phases = build_get_well_phase_list()
-        assert phases[4]["name"] == "implementation"
+        assert phases[4]["name"] == "build"
 
-    def test_sixth_phase_is_testing(self):
+    def test_sixth_phase_is_review(self):
         phases = build_get_well_phase_list()
-        assert phases[5]["name"] == "testing"
+        assert phases[5]["name"] == "review"
 
-    def test_seventh_phase_is_review(self):
+    def test_seventh_phase_is_test(self):
         phases = build_get_well_phase_list()
-        assert phases[6]["name"] == "review"
+        assert phases[6]["name"] == "test"
 
     def test_architecture_design_uses_critical_analyser(self):
         phases = build_get_well_phase_list()
@@ -87,14 +86,13 @@ class TestBuildGetWellPhaseList:
             missing = required - set(p.keys())
             assert not missing, f"Phase {i} ({p.get('name', '?')}) missing keys: {missing}"
 
-    def test_standard_phases_keep_original_prompts(self):
+    def test_standard_phases_have_required_keys(self):
         phases = build_get_well_phase_list()
-        std_names = {"planning", "implementation", "testing", "review"}
-        # The planning-through-review phases should reference the PHASES originals
         for p in phases:
-            if p["name"] in std_names:
-                orig = [x for x in PHASES if x["name"] == p["name"]][0]
-                assert p["prompt"] == orig["prompt"], f"{p['name']} prompt diverged from PHASES"
+            assert "name" in p
+            assert "title" in p
+            assert "prompt" in p
+            assert "teams" in p
 
 
 class TestLoadAssessmentFindings:

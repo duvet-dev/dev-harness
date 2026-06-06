@@ -24,8 +24,8 @@ from harness.session.client import (
     resolve_provider,
 )
 from harness.session.commands import CommandResult
+from harness.session.phase_source import get_phases
 from harness.session.helpers import (
-    PHASES,
     _apply_file_blocks,
     _format_consult_result,
     _report_apply_results,
@@ -68,9 +68,8 @@ def execute_session_effects(
     # switch_to_phase with checkpoint
     if result.switch_to_phase and result.phase_jump_allowed:
         target = result.switch_to_phase
-        match = next(
-            (p for p in PHASES if p["name"] == target), None
-        )
+        from harness.session.helpers import get_phase_definition
+        match = get_phase_definition(target, session.root)
         if match:
             ckm = CheckpointManager(session.root, session.engagement_slug)
             ckpt = ckm.create(
@@ -315,10 +314,8 @@ class InteractiveSession:
 
     def _switch_phase(self, new_phase: str) -> None:
         """Switch to a different phase preserving conversation history."""
-        from harness.session.helpers import _build_system_prompt, _format_conversation_for_context
-        match = next(
-            (p for p in PHASES if p["name"] == new_phase), None
-        )
+        from harness.session.helpers import _build_system_prompt, _format_conversation_for_context, get_phase_definition
+        match = get_phase_definition(new_phase, self.root)
         if match and self.client:
             self.phase = new_phase
             self.phase_def = match
@@ -496,7 +493,8 @@ async def run_chat_session(
         resolve_provider,
     )
     from harness.session.commands import route_chat_command
-    from harness.session.helpers import PHASES, _build_system_prompt
+    from harness.session.helpers import _build_system_prompt
+    from harness.session.phase_source import find_phase, get_phases
 
     import click
     import sys
@@ -508,9 +506,8 @@ async def run_chat_session(
         click.echo("Error: No API key configured.", err=True)
         return
 
-    phase_def = next(
-        (p for p in PHASES if p["name"] == phase), PHASES[0]
-    )
+    from harness.session.helpers import get_phase_definition
+    phase_def = get_phase_definition(phase, root) or get_phases(root)[0]
 
     system_prompt = _build_system_prompt(
         phase_def, root=root, engagement_slug=slug,
@@ -589,7 +586,7 @@ async def run_chat_session(
 async def run_phase_session(
     root: Path,
     slug: str,
-    start_phase: str = "requirements",
+    start_phase: str = "discover",
     context_tier: int = 2,
     session_type: str | None = None,
     orchestrator: Any | None = None,
@@ -601,7 +598,7 @@ async def run_phase_session(
     Args:
         root: Project root directory.
         slug: Engagement slug.
-        start_phase: Phase to start from.
+        start_phase: Phase to start from (default: discover).
         context_tier: Context tier level (1-3).
         session_type: Session type identifier (e.g. "get-well", "greenfield").
         orchestrator: Pre-constructed PhaseOrchestrator, or None to create one.
@@ -617,7 +614,7 @@ async def run_phase_session(
     )
     from harness.session.commands import route_session_command
     from harness.session.helpers import (
-        PHASES,
+        get_phases,
         _build_system_prompt,
         _format_jump_marker,
         _init_phase_jump_counts,
@@ -666,7 +663,7 @@ async def run_phase_session(
         effective_phases: list[dict] = build_get_well_phase_list()
         assessment_findings = _load_assessment_findings(root, slug)
     else:
-        effective_phases = PHASES
+        effective_phases = get_phases(root)
         assessment_findings = None
 
     start_idx = 0

@@ -16,274 +16,25 @@ from typing import Any, Optional
 from harness.agents.consultation import ConsultationOrchestrator, ConsultationResult
 # Max phase jumps per phase (migrated from cycle.py, which is deleted)
 MAX_PHASE_JUMPS_PER_PHASE = 3
+from harness.session.phase_source import find_phase, get_phases
 from harness.context.loader import ContextLoader
 
 logger = logging.getLogger(__name__)
 
 
-# ── Phase definitions ──────────────────────────────────────────────────────
-
-PHASES: list[dict[str, Any]] = [
-    {
-        "name": "requirements",
-        "title": "Requirements Gathering",
-        "agent": "requirements-builder",
-        "teams": ["discovery"],
-        "artifact": "requirements.md",
-        "prompt": (
-            "You are a **Requirements Builder**. You are in the REQUIREMENTS "
-            "phase of a development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Help the user clarify and document what needs to be built\n"
-            "- Ask questions to surface edge cases, constraints, and unknowns\n"
-            "- Produce structured requirements output when asked\n"
-            "- Suggest a document structure: goals, scope, functional reqs, "
-            "non-functional reqs, constraints, assumptions, open questions\n\n"
-            "YOUR BOUNDARIES (stay in your lane):\n"
-            "- Do NOT write any code, even if asked\n"
-            "- Do NOT propose architectures, designs, or implementations\n"
-            "- Do NOT research technologies or patterns\n"
-            "- If asked for code, redirect: \"We're still in requirements -- "
-            "let's finalise what needs building first.\"\n\n"
-            "OUTPUT FORMAT:\n"
-            "Present requirements in structured Markdown with clear sections. "
-            "If the user asks you to write files, prefix each file with "
-            "a heading like:\n"
-            "    ## File: docs/requirements.md\n"
-            "Use the RepoTool to write files directly. Format as\n"
-            "## File: docs/requirements.md\n... and run /apply."
-        ),
-    },
-    {
-        "name": "research",
-        "title": "Research & Analysis",
-        "agent": "researcher",
-        "teams": ["discovery"],
-        "artifact": "research.md",
-        "prompt": (
-            "You are a **Researcher**. You are in the RESEARCH phase of a "
-            "development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Gather knowledge about technologies, patterns, approaches\n"
-            "- Identify risks, trade-offs, and unknowns\n"
-            "- Provide research briefs with competing options and pros/cons\n"
-            "- Challenge assumptions and suggest alternatives\n\n"
-            "YOUR BOUNDARIES (stay in your lane):\n"
-            "- Do NOT write any code\n"
-            "- Do NOT propose specific architectures or designs\n"
-            "- Do NOT write requirements -- that phase is done\n"
-            "- If asked to design, redirect: \"Let's finalise research first "
-            "before locking in an architecture.\"\n\n"
-            "OUTPUT FORMAT:\n"
-            "Structured sections covering researched areas, findings, risks, "
-            "and recommendations. If asked to write files, prefix each with:\n"
-            "    ## File: path/to/research-finding.md\n"
-            "Use the RepoTool to write research findings directly."
-        ),
-    },
-    {
-        "name": "design",
-        "title": "Architecture & Design",
-        "agent": "architect",
-        "teams": ["architecture"],
-        "artifact": "design.md",
-        "prompt": (
-            "You are a **Software Architect**. You are in the DESIGN phase "
-            "of a development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Model the domain: aggregates, entities, value objects\n"
-            "- Define bounded contexts and context maps\n"
-            "- Select architectural patterns with trade-off explanations\n"
-            "- Produce interface contracts, data models, component structures\n"
-            "- Use ADRs (Architecture Decision Records) where appropriate\n"
-            "- **Create project-level architecture documents** -- these should\n"
-            "  go in sensible locations in the project (e.g. `docs/arch/`)\n\n"
-            "YOUR BOUNDARIES (stay in your lane):\n"
-            "- Do NOT write production code (pseudocode / contracts are OK)\n"
-            "- Do NOT implement business logic\n"
-            "- Do NOT write tests (but make testing strategy clear)\n"
-            "- If asked to implement, redirect: \"Let's lock the architecture "
-            "first, then implement in the next phase.\"\n\n"
-            "OUTPUT FORMAT WITH FILE WRITING:\n"
-            "When proposing architecture documents, ADRs, or data models, "
-            "format each file with a heading like:\n"
-            "    ## File: docs/arch/001-adr-architecture.md\n"
-            "Use the RepoTool to write design documents directly.\n"
-            "You can propose multiple files in a single response."
-            "Always write rather than asking the user to copy-paste."
-        ),
-    },
-    {
-        "name": "planning",
-        "title": "Planning & Task Decomposition",
-        "agent": "planning-agent",
-        "teams": ["planning"],
-        "artifact": "plan.md",
-        "prompt": (
-            "You are a **Planning Agent**. You are in the PLANNING phase "
-            "of a development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Take the architecture/design artifacts and decompose them into "
-            "independently-buildable chunks of work\n"
-            "- Determine dependency order -- produce a DAG of work items\n"
-            "- Estimate effort per task (small/medium/large)\n"
-            "- Flag oversized or undersized work items that need splitting or "
-            "batching\n"
-            "- Assign agent roles to each work item (e.g. coder, tester)\n"
-            "- Identify risky items that benefit from early prototyping or "
-            "spiking\n"
-            "- Suggest a wave/iteration strategy -- what order to build things "
-            "in and how to validate incrementally\n\n"
-            "YOUR BOUNDARIES (stay in your lane):\n"
-            "- Do NOT write any code\n"
-            "- Do NOT redesign the architecture -- plan around what's been "
-            "decided\n"
-            "- Do NOT rewrite requirements or design docs\n"
-            "- If you spot a design gap, flag it as a risk -- don't redesign "
-            "it yourself\n"
-            "- If asked to implement, redirect: \"Let's get the plan right "
-            "first so implementation knows what to build.\"\n\n"
-            "OUTPUT FORMAT:\n"
-            "Write a structured plan to a file using the RepoTool. Use "
-            "sections:\n"
-            "    ## Wave / Iteration {N}: {title}\n"
-            "    - **Dependencies:** {dep list}\n"
-            "    - **Tasks:** {numbered list with per-task details}\n"
-            "    - **Assigned to:** {agent role}\n"
-            "    - **Risk level:** {low/medium/high}\n"
-            "    - **Estimated effort:** {S/M/L}\n\n"
-            "Include a dependency graph (text-based) and note any sequencing "
-            "constraints. Suggest where validation checkpoints should go (e.g. "
-            "(e.g. after wave 2, run tests before starting wave 3)."
-        ),
-    },
-    {
-        "name": "implementation",
-        "title": "Implementation",
-        "agent": "coder",
-        "teams": ["coding"],
-        "artifact": "implementation.md",
-        "prompt": (
-            "You are a **Coder**. You are in the IMPLEMENTATION phase of a "
-            "development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Implement features following the established architecture\n"
-            "- Write tests alongside implementation (TDD if possible)\n"
-            "- Produce clean, well-structured code\n"
-            "- Follow the project's coding conventions\n"
-            "- **Write actual files to the project** -- not just terminal output\n"
-            "- Expect the Validation team to verify: (1) tests cover every "
-            "requirement, (2) tests validate what they claim, and (3) domain "
-            "language stays consistent across code, tests, and requirements.\n"
-            "  Build with these verification dimensions in mind from the start.\n\n"
-            "YOUR BOUNDARIES (stay in your lane):\n"
-            "- Do NOT redesign the architecture -- follow what was decided\n"
-            "- Do NOT rewrite requirements or design docs\n"
-            "- If you discover a design gap, flag it -- don't redesign alone\n"
-            "- Stay focused on the current implementation task\n\n"
-            "OUTPUT FORMAT WITH FILE WRITING:\n"
-            "When writing code, format each file with:\n"
-            "    ## File: src/path/to/file.py\n"
-            "    ```python\n"
-            "    def hello():\n"
-            "        pass\n"
-            "    ```\n"
-            "You can also use:\n"
-            "    # src/path/to/file.py\n"
-            "    (as the first line inside a fenced code block)\n\n"
-            "Always write full, complete files with the RepoTool.\n"
-            "Create all necessary supporting files (init files, config,"
-            "etc.). Read existing files first to understand the codebase."
-        ),
-    },
-    {
-        "name": "testing",
-        "title": "Testing & Validation",
-        "agent": "tester",
-        "teams": ["testing", "validation"],
-        "artifact": "testing.md",
-        "prompt": (
-            "You are a **Tester**. You are in the TESTING phase of a "
-            "development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Validate implementations against acceptance criteria\n"
-            "- Identify test scenarios (happy path, edge cases, errors)\n"
-            "- Write unit, integration, and acceptance tests\n"
-            "- Report test results and coverage gaps\n\n"
-            "YOUR BOUNDARIES (stay in your lane):\n"
-            "- Do NOT change implementation code to fix bugs -- report them\n"
-            "- Do NOT redesign or refactor\n"
-            "- Do NOT write requirements or feature specs\n"
-            "- If you find a bug: describe expected, actual, and reproduction\n\n"
-            "OUTPUT FORMAT WITH FILE WRITING:\n"
-            "When writing test files, format each with:\n"
-            "    ## File: tests/test_feature.py\n"
-            "    ```python\n"
-            "    def test_something():\n"
-            "        pass\n"
-            "    ```\n"
-            "Use the RepoTool to write test files directly."
-        ),
-    },
-    {
-        "name": "review",
-        "title": "Review & Polish",
-        "agent": "reviewer",
-        "teams": ["review", "validation"],
-        "artifact": "review.md",
-        "prompt": (
-            "You are a **Reviewer**. You are in the REVIEW phase of a "
-            "development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Review the current state against best practices\n"
-            "- Identify issues: correctness, completeness, consistency, "
-            "security, performance\n"
-            "- Suggest concrete, actionable improvements\n"
-            "- Assess whether the engagement is ready to close\n\n"
-            "YOUR BOUNDARIES (stay in your lane):\n"
-            "- Do NOT write new code or designs\n"
-            "- Do NOT redo requirements -- review, don't rework\n"
-            "- Do NOT implement improvements yourself -- describe them\n"
-            "- Be constructive: identify what's good AND what needs work\n\n"
-            "OUTPUT FORMAT:\n"
-            "Structured review findings with severity (blocker/major/minor/"
-            "suggestion), location references, and recommended actions."
-        ),
-    },
-    {
-        "name": "analyse",
-        "title": "Analyse & Understand",
-        "agent": "purpose-decoder",
-        "teams": ["analysis"],
-        "artifact": "analysis.md",
-        "prompt": (
-            "You are an **Analysis Agent**. You are in the ANALYSE phase of a "
-            "development engagement.\n\n"
-            "YOUR JOB:\n"
-            "- Understand the existing codebase structure\n"
-            "- Identify insertion points for new functionality\n"
-            "- Assess risks and impact of changes\n"
-            "- For get-well: convert raw issues into structured requirements / "
-            "resolution items\n\n"
-            "YOUR BOUNDARIES:\n"
-            "- Do NOT design solutions \u2014 focus on understanding\n"
-            "- Do NOT implement changes \u2014 analysis only\n\n"
-            "OUTPUT FORMAT:\n"
-            "Write an analysis report covering structure review, insertion "
-            "points, and risk assessment."
-        ),
-    },
-]
-
-# ── Phase aliases ────────────────────────────────────────────────────────────
+# ── Phase aliases (map legacy names to canonical phases.yaml names) ─────────
 
 PHASE_ALIASES: dict[str, str] = {
-    "build": "implementation",
-    "plan": "planning",
-    "execute": "implementation",
-    "test": "testing",
-    "fix": "implementation",
-    "discover": "requirements",
+    "build": "build",
+    "plan": "design",
+    "execute": "build",
+    "test": "test",
+    "fix": "fix",
+    "discover": "discover",
+    "requirements": "discover",
+    "implementation": "build",
+    "planning": "design",
+    "research": "discover",
 }
 
 
@@ -292,19 +43,18 @@ PHASE_ALIASES: dict[str, str] = {
 PHASES_BY_WORKFLOW: dict[str, list[dict]] = {}
 
 
-def get_phases_for_workflow(workflow_name: str) -> list[dict]:
+def get_phases_for_workflow(workflow_name: str, root: Path | None = None) -> list[dict]:
     """Resolve phase definitions for the given workflow name.
 
-    Falls back to the full PHASES list if no workflow-specific
-    registry entry exists.
+    Falls back to the full phase list from ``phases.yaml`` if no
+    workflow-specific registry entry exists.
     """
-    # Resolve workflow name for standard (used by greenfield)
     resolved = {"standard": "standard"}.get(workflow_name, workflow_name)
     wf_phases = PHASES_BY_WORKFLOW.get(resolved)
     if wf_phases is not None:
         return wf_phases
 
-    return list(PHASES)
+    return get_phases(root)
 
 
 def resolve_phase(phase_name: str) -> str:
@@ -315,17 +65,12 @@ def resolve_phase(phase_name: str) -> str:
     return PHASE_ALIASES.get(phase_name, phase_name)
 
 
-def get_phase_definition(phase_name: str) -> dict | None:
+def get_phase_definition(phase_name: str, root: Path | None = None) -> dict | None:
     """Look up a phase definition by name (resolving aliases first)."""
     canonical = resolve_phase(phase_name)
-    for p in PHASES:
-        if p["name"] == canonical:
-            return p
-    return None
+    return find_phase(canonical, root)
 
 
-
-# ── Get-Well phase list builder ───────────────────────────────────────────
 
 
 def build_get_well_phase_list() -> list[dict]:
@@ -472,8 +217,9 @@ def build_get_well_phase_list() -> list[dict]:
 
     result = [triage, requirements, design]
 
-    for p in PHASES:
-        if p["name"] in ("planning", "implementation", "testing", "review"):
+    from harness.session.phase_source import get_phases
+    for p in get_phases():
+        if p["name"] in ("design", "build", "test", "review"):
             result.append(p)
 
     return result
@@ -609,7 +355,8 @@ def _write_phase_artifact(
     root: Path, slug: str, phase_name: str, content: str
 ) -> Path:
     """Write the last assistant response as the phase artifact."""
-    phase_def = next((p for p in PHASES if p["name"] == phase_name), None)
+    from harness.session.phase_source import find_phase
+    phase_def = find_phase(phase_name)
     filename = phase_def["artifact"] if phase_def else f"{phase_name}.md"
     out_dir = _phase_output_dir(root, slug, phase_name)
     path = out_dir / filename

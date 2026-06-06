@@ -1,6 +1,6 @@
 # Task 4 — Wire navigation rails on switch_to_phase()
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 22-phase-system-consolidation
 **Dependencies:** Task 2
 **Effort:** 1h
@@ -11,9 +11,10 @@
 
 ## Acceptance Criteria
 
-- [ ] Navigation rails defined per phase (which phases can be jumped to from here)
-- [ ] Illegal transitions return a clear error message
-- [ ] Default rails follow phase order from phases.yaml
+- [x] Navigation rails defined via is_transition_allowed() in phase_source.py
+- [x] Illegal transitions return a clear error message
+- [x] Default rails follow phase order from phases.yaml
+- [x] _handle_navigate in commands.py validates through navigation rails
 
 ## Files Affected
 

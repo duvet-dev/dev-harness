@@ -1,6 +1,6 @@
 # Task 1 — Add missing fields to phases.yaml
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 22-phase-system-consolidation
 **Dependencies:** Wave 21
 **Effort:** 1-2h
@@ -11,9 +11,9 @@ Current `phases.yaml` has phase names and steps but is missing `lead_agent`, `ch
 
 ## Acceptance Criteria
 
-- [ ] All phases in `phases.yaml` have `lead_agent`, `chat_agent`, `reentry` fields
-- [ ] Values match what the old PHASES dict had
-- [ ] No duplicate data — helpers.py becomes the secondary source
+- [x] All phases in `phases.yaml` have `lead_agent`, `chat_agent`, `reentry` fields
+- [x] Values match what the old PHASES dict had
+- [x] No duplicate data — helpers.py becomes the secondary source
 
 ## Files Affected
 

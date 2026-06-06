@@ -1,6 +1,6 @@
 # Task 3 — Remove or shim old PHASES dict
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 22-phase-system-consolidation
 **Dependencies:** Task 2
 **Effort:** 1-2h
@@ -11,9 +11,9 @@ The old PHASES dict in `helpers.py` is now unused. Delete it entirely if the cha
 
 ## Acceptance Criteria
 
-- [ ] Old PHASES dict either deleted or replaced with a deprecation shim
-- [ ] If shim used, it has a `DeprecationWarning` noting removal target
-- [ ] Zero references to old PHASES dict from orchestrator or workflow code
+- [x] Old PHASES dict deleted from helpers.py
+- [x] Phase aliases updated to map legacy names to canonical phases.yaml names
+- [x] Zero references to old PHASES dict from orchestrator or workflow code
 
 ## Files Affected
 

@@ -32,6 +32,7 @@
 | **20** | Analysis Convergence (R27) | ✅ project-profiler→documentation-reviewer sequential, critical-reviewer+refactoring-analyser parallel, synthesis output. **Gap:** refactoring-analyser unwired (→ Wave 24). |
 | **21** | Fleet→Team Migration | ✅ 7/7 tasks. 3,812 tests. `b2e91df` |
 | **22** | Phase System Consolidation | ✅ 6/6 tasks. 3,826 tests + 7 new navigation rail tests. `2a6fca5` |
+| **23** | Template Format Alignment | ✅ 6/6 tasks. 3,826 tests. `ed86bae` |
 
 ---
 

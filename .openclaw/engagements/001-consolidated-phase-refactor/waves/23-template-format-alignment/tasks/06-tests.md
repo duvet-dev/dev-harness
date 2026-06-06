@@ -1,6 +1,6 @@
 # Task 6 — Tests for Wave 23
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 23-template-format-alignment
 **Dependencies:** Tasks 1-5
 **Effort:** 0.5h
@@ -11,4 +11,4 @@ Ensure all existing tests pass. Add tests for: critic loop expansion with proper
 
 ## Acceptance Criteria
 
-- [ ] All existing tests pass
+- [x] All existing tests pass

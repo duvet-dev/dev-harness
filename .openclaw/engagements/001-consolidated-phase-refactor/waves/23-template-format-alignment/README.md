@@ -2,7 +2,7 @@
 
 **Milestone:** 2 — Quick Wins
 **Effort:** 4-6h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** After Wave 21 (preferable)
 **Blocks:** Nothing
 
@@ -19,7 +19,7 @@ Fix 7 format gaps between `phases.yaml` inline steps and `step_templates.yaml`. 
 | 3 | FMT-2: Update Step.role docstring | ✅ Complete | Document loop-only semantics |
 | 4 | FMT-4: Add sub_steps to LoopConfig | ✅ Complete | Remove context-injection hack from template_registry and step_executor |
 | 5 | Deprecate input_artifact_names / output_artifact_name | ✅ Complete | Duplicates of input/output from Step |
-| 6 | Tests | 📋 Pending | |
+| 6 | Tests | ✅ Complete | |
 
 ## Verification
 

@@ -1,0 +1,41 @@
+# Findings Registry Template
+
+**Path:** `.harness/engagements/<slug>/findings/findings.yaml`
+**Status:** Pending implementation (Wave 31)
+
+## Schema
+
+```yaml
+findings:
+  - id: "F-001"
+    source: "architecture-critic"      # Which agent/loop raised it
+    scope: "observer"                  # observer / critic-loop / dev-test-loop / human
+    description: "Description of the issue"
+    severity: "critical"               # critical / high / medium / low / info
+    status: "open"                     # open / acknowledged / in_progress / resolved / wont_fix / regression
+    references:
+      file: "path/to/file.py"
+      line: 1
+    requires_human_signoff: false       # Whether closure needs human confirmation
+    resolution:
+      wave: "wave-28"
+      notes: "How it was resolved"
+    raised_at: "2026-06-06T19:00:00Z"
+    resolved_at: null
+```
+
+## Lifecycle
+
+```
+open → acknowledged → in_progress → resolved
+  ↓                                       ↓
+  └→ wont_fix                       regression (reappears on re-analysis)
+```
+
+## Delta Detection
+
+On each analysis run, compare registry against current state:
+- **New**: Not in registry → added as `open`
+- **Resolved**: Previously open, no longer detected → `resolved`
+- **Regression**: Previously resolved, detected again → `regression`
+- **Wont-fix regression**: Previously `wont_fix`, detected again → flag for human review

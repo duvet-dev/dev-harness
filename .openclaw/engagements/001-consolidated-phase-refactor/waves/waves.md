@@ -33,6 +33,17 @@
 
 ---
 
+## Task Tracking
+
+Each wave has its own directory with:
+- `README.md` — wave summary with task table and status
+- `tasks/` — individual task files with acceptance criteria and verification
+- `artifacts/` — build outputs, reports, design decisions
+
+When a build coordinator works on a wave, it must create and update task files as it progresses. Status per task: 📋 Pending → 🔧 In Progress → ✅ Complete.
+
+---
+
 ## Wave Plan: Path to Clean State
 
 11 new waves, ~46-66h total effort. Two foundation waves unblock everything.

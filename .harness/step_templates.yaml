@@ -12,28 +12,33 @@ step_templates:
   - name: comprehensive-arch-review
     description: "Full architectural review by the architecture team"
     team: architecture
+    input: [architectural-overview, implementation]
     output: consolidated-review
     parallel: true
 
   - name: quick-security-scan
     description: "Targeted security review by the security critic"
     agents: ["security-critic"]
+    input: [implementation]
     output: security-report
 
   - name: full-code-review
     description: "Complete code review by the review team"
     team: review
+    input: [implementation, test-results]
     output: full-review-report
     parallel: true
 
   - name: build-and-test
     description: "Full implementation with testing by the coding team"
     team: coding
+    input: [implementation]
     output: implementation-with-tests
 
   - name: validate-requirements
     description: "Validate implementation against requirements"
     team: validation
+    input: [implementation, test-results]
     output: validation-report
 
   - name: validation-review
@@ -68,22 +73,26 @@ step_templates:
   - name: research-and-discovery
     description: "Research phase using discovery team"
     team: discovery
+    input: null
     output: research-findings
     parallel: true
 
   - name: boundary-test
     description: "Generate boundary tests for existing interfaces"
     agents: ["boundary-test-agent"]
+    input: [implementation]
     output: boundary-tests
 
   - name: dead-code-analysis
     description: "Analyse codebase for dead code"
     agents: ["dead-code-analyser"]
+    input: [implementation]
     output: dead-code-report
 
   - name: component-analysis
     description: "Analyse component dependencies and structure"
     agents: ["component-analyser"]
+    input: [implementation]
     output: component-report
 
 # ── Critic Loop Templates (V7 §12 — Wave 18 Migration) ─────────────────

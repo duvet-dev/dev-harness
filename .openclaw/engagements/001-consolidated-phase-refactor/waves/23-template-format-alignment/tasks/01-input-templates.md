@@ -1,6 +1,6 @@
 # Task 1 — Add input: to all simple templates
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 23-template-format-alignment
 **Dependencies:** None
 **Effort:** 0.5h
@@ -11,8 +11,8 @@ All 9 simple templates in `step_templates.yaml` lack `input:` declarations. Add 
 
 ## Acceptance Criteria
 
-- [ ] All simple templates have declared `input:` dependencies
-- [ ] Templates that produce from scratch have `input: null`
+- [x] All simple templates have declared `input:` dependencies
+- [x] Templates that produce from scratch have `input: null`
 
 ## Files Affected
 

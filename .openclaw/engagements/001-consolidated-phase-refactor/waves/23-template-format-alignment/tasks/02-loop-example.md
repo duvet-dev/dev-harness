@@ -1,6 +1,6 @@
 # Task 2 — Add loop: example to phases.yaml
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 23-template-format-alignment
 **Dependencies:** None
 **Effort:** 0.5h
@@ -11,8 +11,8 @@ No inline phase step uses `loop:` — the critic loop code path is untested. Add
 
 ## Acceptance Criteria
 
-- [ ] One phase in `phases.yaml` has a `loop:` step with convergence config
-- [ ] The model supports it but the YAML doesn't exercise it — now it does
+- [x] One phase in `phases.yaml` has a `loop:` step with convergence config
+- [x] The model supports it but the YAML doesn't exercise it — now it does
 
 ## Files Affected
 

@@ -214,7 +214,19 @@ phases:
       verification dimensions assessed, and a clear sign-off
       recommendation (approved / conditional / rejected).
     steps:
+      - loop:
+          convergence:
+            strategy: gate_judgment
+            gate_agent: validation-agent
+            max_iterations: 3
+            on_timeout: best_effort
+            convergence_keywords:
+              - "converged"
+              - "all dimensions verified"
+              - "sign-off ready"
+        output: validation-loop-result
       - team: validation
+        input: validation-loop-result
         output: validation-report
       - team: architecture
         input: validation-report

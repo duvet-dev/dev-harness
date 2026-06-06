@@ -10,11 +10,11 @@ import pytest
 from harness.analysis.agents import (
     AnalysisAgent,
     AnalysisAgentRegistry,
-    P1_PROJECT_PROFILER,
-    P2_RESPONSIBILITY_DECODER,
-    P3_ARCHITECTURE_CRITIC,
-    P4_CODE_CRITIC,
-    P5_TEST_AUDITOR,
+    PROJECT_PROFILER,
+    RESPONSIBILITY_DECODER,
+    ARCHITECTURE_CRITIC,
+    CODE_CRITIC,
+    TEST_AUDITOR,
 )
 
 
@@ -57,67 +57,67 @@ class TestAnalysisAgent:
 
 
 class TestP1ProjectProfiler:
-    """Tests for P1_PROJECT_PROFILER."""
+    """Tests for PROJECT_PROFILER."""
 
     def test_config(self):
-        assert P1_PROJECT_PROFILER.name == "project-profiler"
-        assert P1_PROJECT_PROFILER.model == "deepseek-v4-pro"
-        assert "project profiler" in P1_PROJECT_PROFILER.system_prompt.lower()
-        assert "projects" in P1_PROJECT_PROFILER.output_schema.get("properties", {})
+        assert PROJECT_PROFILER.name == "project-profiler"
+        assert PROJECT_PROFILER.model == "deepseek-v4-pro"
+        assert "project profiler" in PROJECT_PROFILER.system_prompt.lower()
+        assert "projects" in PROJECT_PROFILER.output_schema.get("properties", {})
 
     def test_output_schema_has_projects(self):
-        props = P1_PROJECT_PROFILER.output_schema.get("properties", {})
+        props = PROJECT_PROFILER.output_schema.get("properties", {})
         assert "projects" in props
         assert "overview" in props
 
 
 class TestP2ResponsibilityDecoder:
-    """Tests for P2_RESPONSIBILITY_DECODER."""
+    """Tests for RESPONSIBILITY_DECODER."""
 
     def test_config(self):
-        assert P2_RESPONSIBILITY_DECODER.name == "responsibility-decoder"
-        assert "responsibility decoder" in P2_RESPONSIBILITY_DECODER.system_prompt.lower()
+        assert RESPONSIBILITY_DECODER.name == "responsibility-decoder"
+        assert "responsibility decoder" in RESPONSIBILITY_DECODER.system_prompt.lower()
 
     def test_output_schema(self):
-        props = P2_RESPONSIBILITY_DECODER.output_schema.get("properties", {})
+        props = RESPONSIBILITY_DECODER.output_schema.get("properties", {})
         assert "projects" in props
 
 
 class TestP3ArchitectureCritic:
-    """Tests for P3_ARCHITECTURE_CRITIC."""
+    """Tests for ARCHITECTURE_CRITIC."""
 
     def test_config(self):
-        assert P3_ARCHITECTURE_CRITIC.name == "architecture-critic"
-        assert "architecture critic" in P3_ARCHITECTURE_CRITIC.system_prompt.lower()
+        assert ARCHITECTURE_CRITIC.name == "architecture-critic"
+        assert "architecture critic" in ARCHITECTURE_CRITIC.system_prompt.lower()
 
     def test_output_schema(self):
-        props = P3_ARCHITECTURE_CRITIC.output_schema.get("properties", {})
+        props = ARCHITECTURE_CRITIC.output_schema.get("properties", {})
         assert "architecture" in props
         assert "score" in props
 
 
 class TestP4CodeCritic:
-    """Tests for P4_CODE_CRITIC."""
+    """Tests for CODE_CRITIC."""
 
     def test_config(self):
-        assert P4_CODE_CRITIC.name == "code-critic"
-        assert "code critic" in P4_CODE_CRITIC.system_prompt.lower()
+        assert CODE_CRITIC.name == "code-critic"
+        assert "code critic" in CODE_CRITIC.system_prompt.lower()
 
     def test_output_schema(self):
-        props = P4_CODE_CRITIC.output_schema.get("properties", {})
+        props = CODE_CRITIC.output_schema.get("properties", {})
         assert "dimensions" in props
         assert "overall_rating" in props
 
 
 class TestP5TestAuditor:
-    """Tests for P5_TEST_AUDITOR."""
+    """Tests for TEST_AUDITOR."""
 
     def test_config(self):
-        assert P5_TEST_AUDITOR.name == "test-auditor"
-        assert "test auditor" in P5_TEST_AUDITOR.system_prompt.lower()
+        assert TEST_AUDITOR.name == "test-auditor"
+        assert "test auditor" in TEST_AUDITOR.system_prompt.lower()
 
     def test_output_schema(self):
-        props = P5_TEST_AUDITOR.output_schema.get("properties", {})
+        props = TEST_AUDITOR.output_schema.get("properties", {})
         assert "overview" in props
         assert "coverage_assessment" in props
 

@@ -5,11 +5,11 @@ and LLM-based independent assessment (R22).
 """
 
 from harness.analysis.agents import (
-    P1_PROJECT_PROFILER,
-    P2_RESPONSIBILITY_DECODER,
-    P3_ARCHITECTURE_CRITIC,
-    P4_CODE_CRITIC,
-    P5_TEST_AUDITOR,
+    PROJECT_PROFILER,
+    RESPONSIBILITY_DECODER,
+    ARCHITECTURE_CRITIC,
+    CODE_CRITIC,
+    TEST_AUDITOR,
     AnalysisAgent,
     AnalysisAgentRegistry,
 )
@@ -30,11 +30,11 @@ __all__ = [
     "Finding",
     "ScanResult",
     "VALID_CATEGORIES",
-    "P1_PROJECT_PROFILER",
-    "P2_RESPONSIBILITY_DECODER",
-    "P3_ARCHITECTURE_CRITIC",
-    "P4_CODE_CRITIC",
-    "P5_TEST_AUDITOR",
+    "PROJECT_PROFILER",
+    "RESPONSIBILITY_DECODER",
+    "ARCHITECTURE_CRITIC",
+    "CODE_CRITIC",
+    "TEST_AUDITOR",
     "assess",
     "analyse",
     "analyse_async",

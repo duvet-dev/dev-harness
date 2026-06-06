@@ -444,6 +444,63 @@ class TestMergeAgentOutput:
         assert len(report.findings) >= 1
         assert len(report.recommendations) >= 1
 
+    def test_refactoring_analyser(self):
+        report = AssessmentReport(path="/test")
+        data = {
+            "refactorings": [
+                {
+                    "type": "missing_abstraction",
+                    "concept_name": "CommandRunner",
+                    "concept_definition": "A generic runner pattern present in 3 modules",
+                    "instances": [
+                        {"file": "src/runner1.py", "lines": "10-45",
+                         "location": "WaveCycleRunner.run()",
+                         "description": "Cycles through waves"},
+                        {"file": "src/runner2.py", "lines": "12-48",
+                         "location": "ConsultationCycleRunner.run()",
+                         "description": "Cycles through consultations"},
+                    ],
+                    "refactoring_proposal": {
+                        "type": "extract_interface",
+                        "name": "CycleRunner",
+                        "location": "src/core/cycle_runner.py",
+                        "interface": "class CycleRunner(ABC): def run(self, ctx)",
+                        "description": "Extract shared cycle execution into ABC",
+                    },
+                    "impact": {
+                        "lines_removed": 30,
+                        "duplication_eliminated": True,
+                        "reusability_gain": "high",
+                        "complexity_reduction": "moderate",
+                    },
+                    "effort_hours": 4.0,
+                    "risk": "medium",
+                    "recommendation": "Refactor in next milestone",
+                },
+            ],
+            "target_architecture": {
+                "description": "Extract shared abstractions into a core module",
+                "module_structure": ["src/core/cycle_runner.py"],
+                "key_interfaces": ["CycleRunner"],
+                "expected_improvements": ["Reduce duplication by 30%"],
+            },
+            "summary": {
+                "total_refactorings": 1,
+                "total_effort_hours": 4.0,
+                "estimated_lines_removed": 30,
+                "quick_wins": [],
+                "high_impact": ["CommandRunner extraction"],
+                "architectural_change": [],
+            },
+        }
+        _merge_agent_output(report, "refactoring-analyser", data)
+        assert len(report.findings) >= 1
+        assert len(report.recommendations) >= 1
+        assert any("refactoring" in f.get("category", "") for f in report.findings)
+        # Target architecture finding should exist
+        assert any("target_architecture" in f.get("category", "")
+                   for f in report.findings)
+
 
 class TestFormatAssessmentReport:
     """Tests for format_assessment_report()."""

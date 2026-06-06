@@ -2,7 +2,7 @@
 
 > **Purpose:** Single view of all waves - completed and planned.
 > **Engagement:** consolidated-phase-refactor
-> **Updated:** 2026-06-06
+> **Updated:** 2026-06-07
 > **Principle:** Zero legacy/compatibility shims in target state.
 > **Source:** Crichton Design Convergence (2026-06-06)
 
@@ -19,7 +19,7 @@
 | **5** | Quality Gate | ✅ 93.74% coverage gate, .gitignore generation, venv |
 | **6** | Temporal State Infrastructure | ✅ ~972 lines. Adapter, server, worker, store, freshness, reconciliation. Wired for gate reviews. Narrow scope - not "sole runtime source." |
 | **7** | Agent Runner & Backends | ✅ 4 backends (API 877, CLI 271, Editor 163, Formatters 524). AgentRunner dispatches correctly. |
-| **8** | Analysis Suite | ✅ All 8 modules (3,770 lines). 10 analysis agents. Deep/fast pipelines. **Gap:** refactoring-analyser unwired (→ Wave 24). |
+| **8** | Analysis Suite | ✅ All 8 modules (3,770 lines). 10 analysis agents. Deep/fast pipelines. Refactoring-analyser wired. |
 | **9** | Branch Management (SCM) | ✅ git.py (504 lines). Full branch ops, merge detection. Used by 15+ modules. **Genuinely complete.** |
 | **10** | Workflow Orchestration Model | ✅ Model (260), orchestrator (526), ripple_engine (633). Workflow registry and phase advancement. **Gap:** Ripple engine unwired (→ Wave 25). |
 | **11** | Independent Assessment (R22) | ✅ P1-P5 agents, parallel dispatch, JSON extraction, 476 tests |
@@ -29,10 +29,11 @@
 | **16c** | Engagement Rename & Generate-Docs | ✅ `harness engagement rename`, `harness generate-docs` |
 | **18** | Consultation System (Option G) | ✅ CycleRunner, ConsultationOrchestrator, `/consult`, 1767 tests |
 | **19** | Tools and Agents | ✅ Web Search Tool, Self-Test Loop, 1852 tests |
-| **20** | Analysis Convergence (R27) | ✅ project-profiler→documentation-reviewer sequential, critical-reviewer+refactoring-analyser parallel, synthesis output. **Gap:** refactoring-analyser unwired (→ Wave 24). |
+| **20** | Analysis Convergence (R27) | ✅ project-profiler→documentation-reviewer sequential, critical-reviewer+refactoring-analyser parallel, synthesis output. |
 | **21** | Fleet→Team Migration | ✅ 7/7 tasks. 3,812 tests. `b2e91df` |
 | **22** | Phase System Consolidation | ✅ 6/6 tasks. 3,826 tests + 7 new navigation rail tests. `2a6fca5` |
 | **23** | Template Format Alignment | ✅ 6/6 tasks. 3,826 tests. `ed86bae` |
+| **24** | Wire Refactoring-Analyser + Rename Constants | ✅ All P-constants renamed. Refactoring-analyser wired. 3,827 tests. `[0ctopus-hash]` |
 
 ---
 
@@ -64,7 +65,7 @@ Milestone 1: Foundation
     └──→ Wave 27: Phase-Specific Agents [5-8h]
 
 Milestone 2: Analysis Pipeline
-  Wave 24: Wire refactoring-analyser + rename constants [3-5h]
+  Wave 24: Wire refactoring-analyser + rename constants [3-5h] ✅
   Wave 31: Findings Registry [3-5h]
 
 Milestone 3: Cleanup (independent of phase changes)
@@ -132,18 +133,16 @@ Fix 7 format gaps between `phases.yaml` inline steps and `step_templates.yaml`.
 
 ### Milestone 3: Analysis Pipeline
 
-#### Wave 24 - Wire refactoring-analyser into Pipeline
-**Effort:** 3-5h | **Depends on:** None | **Independent**
+#### Wave 24 - Wire Refactoring-Analyser + Rename Constants ✅
+**Effort:** 1.5h (tasks 1-4 already done) | **Status:** ✅ Complete
 
-The refactoring-analyser is fully defined at `analysis/agents.py:792-987` but never called. Dead code.
+The refactoring-analyser (`P11_REFACTORING_ANALYSER`) was already wired in `assessment.py` — `_run_refactoring_analysis()` existed, scheduled parallel with P10, merged via `_merge_agent_output()`, included in synthesis. All opaque P1/P2/.../P11 constant prefixes renamed to descriptive names throughout the codebase.
 
-**Tasks:**
-1. Add `_run_refactoring_analysis()` in `analysis/deep.py`
-2. Schedule refactoring-analyser parallel with critical-reviewer (after project-profiler→documentation-reviewer, before synthesis)
-3. Add refactoring-analyser findings merger in `_merge_agent_output()`
-4. Include refactoring proposals in synthesis output
-5. **Rename all P1/P2/P3/P4/P5/P6/P7/P8/P10/P11 constant prefixes** to descriptive names in `analysis/agents.py` and all imports
-6. Tests for integrated pipeline
+**Completed:**
+- Tasks 1-4: Already done in assessment.py — verified
+- Task 5: All P-constants renamed: `P1_PROJECT_PROFILER`→`PROJECT_PROFILER`, etc. across `agents.py`, `assessment.py`, `__init__.py`, `test_analysis_agents.py`
+- Task 6: 1 new refactoring-analyser merge test. All 3,827 tests pass.
+- Zero `P1_`/`P2_`/etc. remain in `src/` or `tests/`
 
 #### Wave 31 - Findings Registry
 **Effort:** 3-5h | **Depends on:** None | **Independent**
@@ -302,7 +301,7 @@ No OpenClaw references anywhere in harness source
 | `dispatch_cli_command()` | All through `bus.dispatch()` |
 | Multiple `create_bus()` calls | Single shared instance |
 | Legacy `Command` + `CommandResult` | `TypedCommand` + `TypedResult` only |
-| Dead code: P11 unwired, ripple engine unwired | Both wired |
+| Dead code: P11 unwired, ripple engine unwired | Both wired (Wave 24 + Wave 25) |
 
 ### Zero Legacy/Compatibility Shims
 

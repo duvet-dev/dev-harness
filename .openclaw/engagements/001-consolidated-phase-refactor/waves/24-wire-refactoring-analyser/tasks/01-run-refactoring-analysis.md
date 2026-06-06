@@ -1,6 +1,6 @@
 # Task 1 — Add _run_refactoring_analysis() in analysis/deep.py
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 24-wire-refactoring-analyser
 **Dependencies:** None
 **Effort:** 0.5-1h

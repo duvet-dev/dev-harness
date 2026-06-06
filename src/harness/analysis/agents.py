@@ -49,7 +49,7 @@ class AnalysisAgent:
 
 
 # P1 — Project Profiler
-P1_PROJECT_PROFILER = AnalysisAgent(
+PROJECT_PROFILER = AnalysisAgent(
     name="project-profiler",
     description=(
         "Scans the filesystem to detect languages, build systems, "
@@ -117,7 +117,7 @@ P1_PROJECT_PROFILER = AnalysisAgent(
 )
 
 # P2 — Responsibility Decoder
-P2_RESPONSIBILITY_DECODER = AnalysisAgent(
+RESPONSIBILITY_DECODER = AnalysisAgent(
     name="responsibility-decoder",
     description=(
         "Infers the purpose of each project from README files, entry "
@@ -170,7 +170,7 @@ P2_RESPONSIBILITY_DECODER = AnalysisAgent(
 )
 
 # P3 — Architecture Critic
-P3_ARCHITECTURE_CRITIC = AnalysisAgent(
+ARCHITECTURE_CRITIC = AnalysisAgent(
     name="architecture-critic",
     description=(
         "Assesses design quality, architectural coherence, dependency "
@@ -261,7 +261,7 @@ P3_ARCHITECTURE_CRITIC = AnalysisAgent(
 )
 
 # P4 — Code Critic
-P4_CODE_CRITIC = AnalysisAgent(
+CODE_CRITIC = AnalysisAgent(
     name="code-critic",
     description=(
         "Assesses code quality: SOLID adherence, naming, error handling, "
@@ -337,7 +337,7 @@ P4_CODE_CRITIC = AnalysisAgent(
 )
 
 # P5 — Test Auditor
-P5_TEST_AUDITOR = AnalysisAgent(
+TEST_AUDITOR = AnalysisAgent(
     name="test-auditor",
     description=(
         "Analyses the testing posture: test categories, coverage depth, "
@@ -425,7 +425,7 @@ P5_TEST_AUDITOR = AnalysisAgent(
 
 
 # P6 — Security Auditor
-P6_SECURITY_AUDITOR = AnalysisAgent(
+SECURITY_AUDITOR = AnalysisAgent(
     name="security-auditor",
     description=(
         "Scans the codebase for security vulnerabilities: hardcoded secrets, "
@@ -495,7 +495,7 @@ P6_SECURITY_AUDITOR = AnalysisAgent(
 )
 
 # P7 — Dependency Analyser
-P7_DEPENDENCY_ANALYSER = AnalysisAgent(
+DEPENDENCY_ANALYSER = AnalysisAgent(
     name="dependency-analyser",
     description=(
         "Analyses the dependency structure: import graph, circular dependencies, "
@@ -563,7 +563,7 @@ P7_DEPENDENCY_ANALYSER = AnalysisAgent(
 )
 
 # P8 — Documentation Reviewer
-P8_DOCUMENTATION_REVIEWER = AnalysisAgent(
+DOCUMENTATION_REVIEWER = AnalysisAgent(
     name="documentation-reviewer",
     description=(
         "Reviews documentation quality: README completeness, docstring coverage, "
@@ -625,7 +625,7 @@ P8_DOCUMENTATION_REVIEWER = AnalysisAgent(
 # P10 — Critical Reviewer (Embedded Crichton)
 # Runs after P1-P8, reads their outputs, uses RepoTool for deep file access.
 # Catches cross-cutting issues that specialised agents miss.
-P10_CRITICAL_REVIEWER = AnalysisAgent(
+CRITICAL_REVIEWER = AnalysisAgent(
     name="critical-reviewer",
     description=(
         "Cross-cutting critical reviewer. Reads all other agent outputs, "
@@ -742,14 +742,14 @@ class AnalysisAgentRegistry:
     """
 
     DEFAULT_AGENTS: list[AnalysisAgent] = [
-        P1_PROJECT_PROFILER,
-        P2_RESPONSIBILITY_DECODER,
-        P3_ARCHITECTURE_CRITIC,
-        P4_CODE_CRITIC,
-        P5_TEST_AUDITOR,
-        P6_SECURITY_AUDITOR,
-        P7_DEPENDENCY_ANALYSER,
-        P8_DOCUMENTATION_REVIEWER,
+        PROJECT_PROFILER,
+        RESPONSIBILITY_DECODER,
+        ARCHITECTURE_CRITIC,
+        CODE_CRITIC,
+        TEST_AUDITOR,
+        SECURITY_AUDITOR,
+        DEPENDENCY_ANALYSER,
+        DOCUMENTATION_REVIEWER,
     ]
 
     _custom_agents: dict[str, AnalysisAgent] = {}
@@ -789,7 +789,7 @@ class AnalysisAgentRegistry:
 # Runs after P1-P8 (parallel with P10), reads their outputs, uses RepoTool.
 # Philosophy: duplication signals a missing concept. Extract the concept,
 # implement once, use everywhere.
-P11_REFACTORING_ANALYSER = AnalysisAgent(
+REFACTORING_ANALYSER = AnalysisAgent(
     name="refactoring-analyser",
     description=(
         "Refactoring and abstraction analyser. Reads all P1-P8 outputs, "
@@ -991,5 +991,5 @@ P11_REFACTORING_ANALYSER = AnalysisAgent(
 
 # P10 and P11 are NOT registered in DEFAULT_AGENTS or as custom — they run
 # after P1-P8 complete and are wired directly into assess(). Use the
-# P10_CRITICAL_REVIEWER / P11_REFACTORING_ANALYSER constants for imports;
+# CRITICAL_REVIEWER / REFACTORING_ANALYSER constants for imports;
 # registry.get_all() intentionally excludes them.

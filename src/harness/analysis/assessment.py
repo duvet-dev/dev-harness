@@ -454,7 +454,7 @@ async def _run_critical_review(
     Returns:
         Critical review text, or ``None`` on failure.
     """
-    from harness.analysis.agents import P10_CRITICAL_REVIEWER
+    from harness.analysis.agents import CRITICAL_REVIEWER
     import json as _json
 
     # Build summary of all agent results to feed into P10
@@ -483,7 +483,7 @@ async def _run_critical_review(
     ) if hasattr(report, 'files') else "Fast scan results embedded in report."
 
     spec = _build_agent_prompt(
-        P10_CRITICAL_REVIEWER,
+        CRITICAL_REVIEWER,
         context=(
             f"## Agent Outputs\n\n{agent_summary}\n\n"
             f"---\n\n"
@@ -542,7 +542,7 @@ async def _run_refactoring_analysis(
     Returns:
         Refactoring analysis text, or ``None`` on failure.
     """
-    from harness.analysis.agents import P11_REFACTORING_ANALYSER
+    from harness.analysis.agents import REFACTORING_ANALYSER
     import json as _json
 
     agent_outputs: list[str] = []
@@ -570,7 +570,7 @@ async def _run_refactoring_analysis(
     ) if hasattr(report, 'files') else "Fast scan results embedded in report."
 
     spec = _build_agent_prompt(
-        P11_REFACTORING_ANALYSER,
+        REFACTORING_ANALYSER,
         context=(
             f"## Agent Outputs\n\n{agent_summary}\n\n"
             f"---\n\n"

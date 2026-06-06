@@ -61,11 +61,10 @@ class TestCoreInfrastructure:
         assert callable(run_phase_session)
 
     def test_commandbus_dispatch_importable(self):
-        """CLI commands route through CommandBus."""
-        from harness.cli.commands import (
-            dispatch_cli_command,
-        )
-        assert callable(dispatch_cli_command)
+        """CLI commands route through shared CommandBus."""
+        from harness.command.setup import get_shared_bus
+        bus = get_shared_bus()
+        assert bus is not None
 
     def test_legacy_runner_deleted(self):
         """agents/runner.py (legacy AgentRunner) is fully removed."""

@@ -2,7 +2,7 @@
 
 **Milestone:** 3 — Cleanup
 **Effort:** 5-8h
-**Status:** 📋 Pending
+**Status:** 🔧 In Progress
 **Depends on:** None (independent of phase changes)
 **Blocks:** Nothing
 
@@ -14,7 +14,7 @@ The typed command architecture was built bottom-up (types, bus, handlers) but to
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Single shared CommandBus | 📋 Pending | One per app lifetime, remove 13 create_bus() calls |
+| 1 | Single shared CommandBus | ✅ Complete | One per app lifetime, remove 13 create_bus() calls |
 | 2 | Move factory functions to typed commands | 📋 Pending | All 32 remaining from cli/commands.py |
 | 3 | Remove dispatch_cli_command() | 📋 Pending | All 45 commands through bus.dispatch() |
 | 4 | Expand CliPresenter | 📋 Pending | Type-specific formatting for all result types |

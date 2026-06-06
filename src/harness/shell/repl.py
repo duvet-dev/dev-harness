@@ -17,8 +17,9 @@ from typing import Any, Callable, Optional
 import click
 import click.shell_completion
 
-from harness.command.setup import create_bus
+from harness.command.setup import get_shared_bus, create_bus
 from harness.command.bus import CommandBus
+
 from harness.command.types import CommandResult, TypedCommand
 from harness.command.commands.engagement import (
     AbortEngagementCommand,
@@ -50,7 +51,7 @@ GROUP_MAP = {
 
 def _build_command_bus() -> CommandBus:
     """Create a fresh CommandBus with all handlers registered."""
-    return create_bus()
+    return get_shared_bus()
 
 
 def _dispatch_via_bus(command: TypedCommand) -> CommandResult:

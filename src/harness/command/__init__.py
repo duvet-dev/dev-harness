@@ -6,7 +6,7 @@ pattern for the Dev Harness engagement lifecycle.
 
 from harness.command.bus import CommandBus
 from harness.command.errors import HandlerError
-from harness.command.setup import create_bus
+from harness.command.setup import create_bus, get_shared_bus, reset_shared_bus
 from harness.command.types import (
     CommandHandler,
     CommandPresenter,
@@ -34,6 +34,8 @@ __all__ = [
     "TypedHandler",
     "HandlerError",
     "create_bus",
+    "get_shared_bus",
+    "reset_shared_bus",
     # Values
     "PhaseName",
     "SessionType",

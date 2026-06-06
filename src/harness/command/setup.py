@@ -1,8 +1,8 @@
 """Command subsystem setup — bus factory and handler registration.
 
-Provides a single ``create_bus()`` factory function that creates a fully
-configured CommandBus with all typed handlers registered. This is the entry
-point for CLI, REPL, and session integration.
+Provides ``create_bus()``, ``get_shared_bus()``, and ``reset_shared_bus()``
+functions that create a fully configured CommandBus with all typed handlers
+registered. This is the entry point for CLI, REPL, and session integration.
 
 All handlers are registered via ``bus.register_type()`` for typed dispatch.
 """
@@ -11,9 +11,12 @@ from __future__ import annotations
 
 from harness.command.bus import CommandBus
 
+# Module-level singleton shared bus.
+_SHARED_BUS: CommandBus | None = None
 
-def create_bus() -> CommandBus:
-    """Create a fully configured CommandBus with all typed handlers.
+
+def _build_bus() -> CommandBus:
+    """Build a fully configured CommandBus with all typed handlers.
 
     Returns:
         A CommandBus instance with all typed handlers registered.
@@ -158,7 +161,38 @@ def create_bus() -> CommandBus:
     return bus
 
 
+def create_bus() -> CommandBus:
+    """Create a fresh fully configured CommandBus with all typed handlers.
+
+    Returns:
+        A CommandBus instance with all typed handlers registered.
+    """
+    return _build_bus()
+
+
+def get_shared_bus() -> CommandBus:
+    """Return (or create) the module-level shared CommandBus singleton.
+
+    The shared bus is created once and reused for the lifetime of the
+    process. All CLI commands and REPL dispatches share this single bus.
+
+    Returns:
+        The shared CommandBus instance.
+    """
+    global _SHARED_BUS
+    if _SHARED_BUS is None:
+        _SHARED_BUS = _build_bus()
+    return _SHARED_BUS
+
+
+def reset_shared_bus() -> None:
+    """Reset the shared bus singleton. Useful in tests."""
+    global _SHARED_BUS
+    _SHARED_BUS = None
+
 
 __all__ = [
     "create_bus",
+    "get_shared_bus",
+    "reset_shared_bus",
 ]

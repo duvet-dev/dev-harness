@@ -1,6 +1,6 @@
 # Task 1 — Single shared CommandBus
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 28-command-bus-consolidation
 **Dependencies:** None
 **Effort:** 1h

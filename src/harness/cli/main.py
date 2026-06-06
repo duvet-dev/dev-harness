@@ -34,7 +34,7 @@ from harness.cli.commands import (
     refresh_agents_command,
     set_governance_command,
 )
-from harness.command.setup import create_bus
+from harness.command.setup import get_shared_bus
 from harness.command.commands.engagement import (
     AbortEngagementCommand,
     CreateEngagementCommand,
@@ -168,7 +168,7 @@ def whatsnext(slug):
         harness whatsnext my-engagement
     """
     try:
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = QueryWhatsNextCommand(slug=slug)
         result = bus.dispatch(cmd)
 
@@ -221,7 +221,7 @@ def enter_phase(slug, phase):
         harness enter-phase my-engagement requirements
     """
     try:
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = EnterPhaseCommand(slug=slug, phase=phase)
         result = bus.dispatch(cmd)
 
@@ -270,7 +270,7 @@ def init(project_dir, template, seed, no_git, force):
         harness init --force                 # re-init (overwrites state)
     """
     try:
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = InitProjectCommand(
             project_dir=project_dir,
             template=template,
@@ -367,7 +367,7 @@ def work(description, mode, backend, max_iterations, partial_approval):
         slug = re.sub(r"[^a-z0-9-]", "-", description.lower().strip())
         slug = re.sub(r"-+", "-", slug).strip("-")
 
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = CreateEngagementCommand(
             slug=slug,
             workflow_name="standard",
@@ -923,7 +923,7 @@ def run_wave(wave_id, no_test, backend, slug):
             )
             raise click.Abort()
 
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = RunWaveCommand(slug=slug, wave_id=wave_id, no_test=no_test, backend=backend)
         result = bus.dispatch(cmd)
 
@@ -1061,7 +1061,7 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
             click.echo(f"Engagement '{slug}' not found.", err=True)
             raise click.Abort()
 
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = ChatCommand(slug=slug, prompt=prompt_text, phase=phase, context_tier=context_tier)
         result = bus.dispatch(cmd)
         if not result.success:
@@ -1127,7 +1127,7 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
         if get_well and effective_phase == "requirements":
             effective_phase = "assessment-triage"
 
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = SessionCommand(
             slug=slug,
             phase=effective_phase,
@@ -1192,7 +1192,7 @@ def review(engagement_id, approve, reject, request_changes,
 
     try:
         root = require_project_root(command_name="review")
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = ReviewEngagementCommand(
             slug=engagement_id,
             decision=decision,
@@ -1228,7 +1228,7 @@ def status(slug, force):
         harness status my-engagement
     """
     try:
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = QueryStatusCommand(slug=slug or "")
         result = bus.dispatch(cmd)
         if result.success:
@@ -1338,7 +1338,7 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
             return
 
         root = require_project_root(command_name='phase')
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = ManagePhaseCommand(
             slug=engagement_id or '',
             action=action,
@@ -1560,7 +1560,7 @@ def finish(re_assess):
     try:
         root = require_project_root(command_name="finish")
 
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = FinishEngagementCommand(slug="", root=str(root), re_assess=re_assess)
         result = bus.dispatch(cmd)
 
@@ -2140,7 +2140,7 @@ def close(slug):
             raise click.Abort()
 
         # Dispatch through CommandBus
-        bus = create_bus()
+        bus = get_shared_bus()
         cmd = AbortEngagementCommand(slug=slug, mode="graceful")
         result = bus.dispatch(cmd)
 

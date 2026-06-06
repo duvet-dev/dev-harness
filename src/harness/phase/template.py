@@ -54,10 +54,12 @@ class StepTemplate:
             the template expands to a loop step with convergence config.
         steps: Sub-steps for the critic loop. Only valid when ``loop``
             is also set.
-        input_artifact_names: List of artifact names consumed from the
-            parent context when the template is expanded.
-        output_artifact_name: The "final" artifact name produced by
-            this template, for use by calling phases.
+        input_artifact_names: [DEPRECATED] Use ``input`` instead.
+            Retained for backward compatibility only - will be
+            removed in a future wave.
+        output_artifact_name: [DEPRECATED] Use ``output`` instead.
+            Retained for backward compatibility only - will be
+            removed in a future wave.
     """
 
     name: str

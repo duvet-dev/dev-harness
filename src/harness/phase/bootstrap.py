@@ -409,8 +409,6 @@ def _load_templates_yaml(
             description=entry.get("description"),
             loop=loop,
             steps=sub_steps,
-            input_artifact_names=entry.get("input_artifact_names"),
-            output_artifact_name=entry.get("output_artifact_name"),
         )
         templates.append(template)
 

@@ -151,7 +151,7 @@ class StepTemplateRegistry:
                 phase=None,
                 parallel=False,
                 input=template.input,
-                output=template.output_artifact_name or template.output,
+                output=template.output,  # Canonical field (output_artifact_name deprecated)
                 role=None,
                 auto=None,
                 max_retries=1,

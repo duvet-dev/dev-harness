@@ -63,7 +63,7 @@ class TestConstruction:
                 PhaseStep(agents=["architect"], role="produce"),
                 PhaseStep(agents=["architecture-analyser"], role="critique"),
             ],
-            output_artifact_name="final-design",
+            output="final-design",
         )
         assert template.name == "design-cycle"
         assert template.template_type == "critic_loop"
@@ -84,8 +84,8 @@ class TestConstruction:
                 ),
             ),
             steps=[],
-            input_artifact_names=[],
-            output_artifact_name="final-design",
+            input=None,
+            output="final-design",
         )
         assert template.name == "design-cycle"
         assert template.template_type == "critic_loop"

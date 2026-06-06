@@ -1,6 +1,6 @@
 # Task 5 — Deprecate input_artifact_names / output_artifact_name
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 23-template-format-alignment
 **Dependencies:** None
 **Effort:** 1h
@@ -11,9 +11,9 @@
 
 ## Acceptance Criteria
 
-- [ ] `input_artifact_names`/`output_artifact_name` marked deprecated
-- [ ] Any code using them uses the canonical `input`/`output` instead
-- [ ] Tests updated
+- [x] `input_artifact_names`/`output_artifact_name` marked deprecated
+- [x] Any code using them uses the canonical `input`/`output` instead
+- [x] Tests updated
 
 ## Files Affected
 

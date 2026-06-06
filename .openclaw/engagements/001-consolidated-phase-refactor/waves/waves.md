@@ -33,7 +33,7 @@
 | **21** | Fleet→Team Migration | ✅ 7/7 tasks. 3,812 tests. `b2e91df` |
 | **22** | Phase System Consolidation | ✅ 6/6 tasks. 3,826 tests + 7 new navigation rail tests. `2a6fca5` |
 | **23** | Template Format Alignment | ✅ 6/6 tasks. 3,826 tests. `ed86bae` |
-| **24** | Wire Refactoring-Analyser + Rename Constants | ✅ All P-constants renamed. Refactoring-analyser wired. 3,827 tests. `[0ctopus-hash]` |
+| **24** | Wire Refactoring-Analyser + Rename Constants | ✅ All P-constants renamed. Refactoring-analyser wired. 3,827 tests. `4e072e9` |
 
 ---
 

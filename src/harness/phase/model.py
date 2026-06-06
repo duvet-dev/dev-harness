@@ -72,11 +72,16 @@ class LoopConfig:
             iteration count is determined by
             convergence.max_iterations.
         description: Human-readable description of the loop.
+        sub_steps: Ordered list of sub-steps executed each iteration.
+            Populated during template expansion for critic loop
+            templates. Used directly by StepExecutor instead of
+            context-injection side-channel.
     """
 
     count: int = 1
     convergence: ConvergenceConfig | None = None
     description: str = ""
+    sub_steps: list[Step] = field(default_factory=list)
 
 
 @dataclass

@@ -1,6 +1,6 @@
 # Task 4 — Add sub_steps to LoopConfig + remove context hack
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 23-template-format-alignment
 **Dependencies:** None
 **Effort:** 2-3h
@@ -11,10 +11,10 @@ Critic loop sub-steps are currently smuggled via context injection in `template_
 
 ## Acceptance Criteria
 
-- [ ] `LoopConfig` has `sub_steps: list[Step]` field
-- [ ] Context-injection code removed from template_registry and step_executor
-- [ ] Critic loop templates in step_templates.yaml still expand correctly
-- [ ] All tests pass
+- [x] `LoopConfig` has `sub_steps: list[Step]` field
+- [x] Context-injection code removed from template_registry and step_executor
+- [x] Critic loop templates in step_templates.yaml still expand correctly
+- [x] All tests pass
 
 ## Files Affected
 

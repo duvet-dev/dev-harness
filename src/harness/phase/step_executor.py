@@ -175,24 +175,11 @@ class StepExecutor:
             )
 
         try:
-            # Expand template — returns a Step instance
+            # Expand template — returns a Step instance with sub_steps
+            # embedded in the LoopConfig directly
             expanded_step = self._template_registry.expand(
                 template_name, context={}
             )
-
-            # If this is a critic loop template, inject sub-steps
-            # into the context so _dispatch_loop_step can find them
-            if expanded_step.loop is not None:
-                sub_steps = (
-                    self._template_registry.get_template_sub_steps(
-                        template_name
-                    )
-                )
-                if sub_steps:
-                    if isinstance(context, dict):
-                        context["steps"] = sub_steps
-                    elif hasattr(context, "steps"):
-                        context.steps = sub_steps
 
             # Recursively dispatch the expanded step
             return await self.execute(expanded_step, context)
@@ -315,9 +302,8 @@ class StepExecutor:
                     },
                 )
 
-        # Extract sub-steps from context or default to an empty list
-        # Loop steps reference sub-steps via context.steps
-        sub_steps = getattr(context, "steps", []) or []
+        # Extract sub-steps from LoopConfig directly (model-driven path)
+        sub_steps = step.loop.sub_steps or []
         reentry = getattr(context, "reentry", None)
 
         try:

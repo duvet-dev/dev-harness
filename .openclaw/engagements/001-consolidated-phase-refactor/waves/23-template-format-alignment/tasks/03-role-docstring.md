@@ -1,6 +1,6 @@
 # Task 3 — Update Step.role docstring
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 23-template-format-alignment
 **Dependencies:** None
 **Effort:** 0.1h
@@ -11,7 +11,7 @@
 
 ## Acceptance Criteria
 
-- [ ] Docstring updated to reflect loop-only usage
+- [x] Docstring updated to reflect loop-only usage
 
 ## Files Affected
 

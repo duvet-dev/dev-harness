@@ -145,7 +145,9 @@ class Step:
         serial_lead: Lead agent for serial dispatch.
         input: Required input artifact types.
         output: Output artifact names produced (free-form strings).
-        role: Agent role override for this step.
+        role: Agent role override for this step. Loop-only semantics —
+            only meaningful in critic loop sub-steps ("produce",
+            "critique", "gate", "consult"). Ignored for non-loop steps.
         action: Action description for the step.
         auto: If True, step runs automatically without user prompt.
         max_retries: Per-step retry on agent dispatch failure.

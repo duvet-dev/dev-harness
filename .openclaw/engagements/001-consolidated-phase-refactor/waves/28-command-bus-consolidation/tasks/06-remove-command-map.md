@@ -1,6 +1,6 @@
 # Task 6 — Remove COMMAND_MAP and Click fallback
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 28-command-bus-consolidation
 **Dependencies:** Tasks 1-2
 **Effort:** 1h

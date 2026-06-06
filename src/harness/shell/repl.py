@@ -17,19 +17,38 @@ from typing import Any, Callable, Optional
 import click
 import click.shell_completion
 
-from harness.command.setup import get_shared_bus, create_bus
+from harness.command.setup import get_shared_bus
 from harness.command.bus import CommandBus
 
 from harness.command.types import CommandResult, TypedCommand
+from harness.command.commands.analysis import AssessCommand, InspectCommand, SummaryCommand
+from harness.command.commands.batch import (
+    AnnotateChangelogCommand,
+    CreateWaveFromFindingCommand,
+    CreateWavesFromAssessmentCommand,
+    GenerateDocsCommand,
+    ListWavesCommand,
+    WaveStatusCommand,
+)
 from harness.command.commands.engagement import (
     AbortEngagementCommand,
     CreateEngagementCommand,
 )
+from harness.command.commands.mgmt import (
+    AgentListCommand,
+    ConsultCommand,
+    FixEngagementCommand,
+    RefreshAgentsCommand,
+    RenameEngagementCommand,
+    SetBranchCommand,
+    SetGovernanceCommand,
+    TeamListCommand,
+)
 from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
 from harness.command.commands.project import InitProjectCommand
-from harness.command.commands.session import ChatCommand, SessionCommand
 from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
 from harness.command.commands.misc import QueryStatusCommand, QueryWhatsNextCommand
+from harness.command.commands.session import ChatCommand, SessionCommand
 from harness.command.commands.wave import RunWaveCommand
 
 
@@ -55,9 +74,8 @@ def _build_command_bus() -> CommandBus:
 
 
 def _dispatch_via_bus(command: TypedCommand) -> CommandResult:
-    """Dispatch a command through the CommandBus and return the result."""
-    bus = _build_command_bus()
-    return bus.dispatch(command)
+    """Dispatch a command through the shared CommandBus and return the result."""
+    return get_shared_bus().dispatch(command)
 
 
 # ── Command name → factory map ────────────────────────────────────────────
@@ -200,46 +218,48 @@ def _create_wave_from_finding_args(args: list[str]) -> dict[str, Any]:
     return {"finding_id": finding_id, "slug": ""}
 
 
-# Factory map: command_name -> (factory_fn, arg_parser)
-COMMAND_MAP: dict[str, tuple[Callable[..., TypedCommand], Callable[[list[str]], dict[str, Any]]]] = {
+# Command name -> (command_class, arg_parser)
+# All commands are constructed directly from parsed kwargs and dispatched
+# via the shared CommandBus. No factory functions, no Click fallback.
+COMMAND_TYPES: dict[str, tuple[type, Callable[[list[str]], dict[str, Any]]]] = {
     # Engagement lifecycle
-    "engagement create":             (lambda **kw: CreateEngagementCommand(**kw), _engagement_create_args),
-    "engagement close":              (lambda **kw: AbortEngagementCommand(**kw), _single_arg),
-    "engagement rename":             (lambda **kw: __import__("harness.cli.commands", fromlist=["rename_engagement_command"]).rename_engagement_command(**kw), lambda a: {"old_slug": a[0], "new_slug": a[1]} if len(a) >= 2 else {}),
-    "engagement set-branch":         (lambda **kw: __import__("harness.cli.commands", fromlist=["set_branch_command"]).set_branch_command(**kw), lambda a: {"slug": a[0], "branch": a[1]} if len(a) >= 2 else {"slug": a[0] if a else ""}),
-    "engagement fix":                (lambda **kw: __import__("harness.cli.commands", fromlist=["fix_engagement_command"]).fix_engagement_command(**kw), lambda a: {"slug": a[0] if a else ""}),
+    "engagement create":             (CreateEngagementCommand, _engagement_create_args),
+    "engagement close":              (AbortEngagementCommand, _single_arg),
+    "engagement rename":             (RenameEngagementCommand, lambda a: {"slug": a[0], "new_slug": a[1]} if len(a) >= 2 else {}),
+    "engagement set-branch":         (SetBranchCommand, lambda a: {"slug": a[0], "branch": a[1]} if len(a) >= 2 else {"slug": a[0] if a else ""}),
+    "engagement fix":                (FixEngagementCommand, lambda a: {"slug": a[0] if a else ""}),
     # Phase management
-    "enter-phase":                    (lambda **kw: EnterPhaseCommand(**kw), lambda a: {"slug": a[0], "phase": a[1]} if len(a) >= 2 else {}),
-    "phase":                         (lambda **kw: ManagePhaseCommand(**kw), _phase_args),
+    "enter-phase":                    (EnterPhaseCommand, lambda a: {"slug": a[0], "phase": a[1]} if len(a) >= 2 else {}),
+    "phase":                         (ManagePhaseCommand, _phase_args),
     # Session / chat
-    "session":                       (lambda **kw: SessionCommand(**kw), _session_args),
-    "chat":                          (lambda **kw: ChatCommand(**kw), _chat_args),
-    "work":                          (lambda **kw: CreateEngagementCommand(**kw), _work_args),
-    "init":                          (lambda **kw: InitProjectCommand(**kw), _init_args),
-    "finish":                        (lambda **kw: FinishEngagementCommand(**kw), _finish_args),
-    "review":                        (lambda **kw: ReviewEngagementCommand(**kw), _review_args),
-    "summary":                       (lambda **kw: __import__("harness.cli.commands", fromlist=["summary_command"]).summary_command(**kw), _summary_args),
-    "inspect":                       (lambda **kw: __import__("harness.cli.commands", fromlist=["inspect_command"]).inspect_command(**kw), _inspect_args),
-    "assess":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["assess_command"]).assess_command(**kw), _assess_args),
-    "status":                        (lambda **kw: QueryStatusCommand(**kw), _single_arg),
-    "whatsnext":                     (lambda **kw: QueryWhatsNextCommand(**kw), _single_arg),
-    "generate-docs":                 (lambda **kw: __import__("harness.cli.commands", fromlist=["generate_docs_command"]).generate_docs_command(**kw), lambda a: {"root": a[0] if a else "."}),
+    "session":                       (SessionCommand, _session_args),
+    "chat":                          (ChatCommand, _chat_args),
+    "work":                          (CreateEngagementCommand, _work_args),
+    "init":                          (InitProjectCommand, lambda a: {k: v for k, v in _init_args(a).items() if k != "root"}),
+    "finish":                        (FinishEngagementCommand, _finish_args),
+    "review":                        (ReviewEngagementCommand, _review_args),
+    "summary":                       (SummaryCommand, lambda a: {"slug": a[0] if a else "", "deep": "--deep" in a, "assess_flag": "--assess" in a, "json_flag": "--json" in a, "reconcile": "--reconcile" in a}),
+    "inspect":                       (InspectCommand, lambda a: {"slug": "", "root": a[0] if a else "."}),
+    "assess":                        (AssessCommand, lambda a: {"slug": "", "root": a[0] if a else ".", "deep_flag": True}),
+    "status":                        (QueryStatusCommand, _single_arg),
+    "whatsnext":                     (QueryWhatsNextCommand, _single_arg),
+    "generate-docs":                 (GenerateDocsCommand, lambda a: {"slug": "", "root": a[0] if a else "."}),
     # Wave management
-    "wave list":                     (lambda **kw: __import__("harness.cli.commands", fromlist=["list_waves_command"]).list_waves_command(**kw), _no_args),
-    "wave run":                      (lambda **kw: RunWaveCommand(**kw), _run_wave_args),
-    "wave status":                   (lambda **kw: __import__("harness.cli.commands", fromlist=["wave_status_command"]).wave_status_command(**kw), _no_args),
-    "wave create-from-assessment":   (lambda **kw: __import__("harness.cli.commands", fromlist=["create_waves_from_assessment_command"]).create_waves_from_assessment_command(**kw), _create_wave_from_assessment_args),
-    "wave create-from-finding":      (lambda **kw: __import__("harness.cli.commands", fromlist=["create_wave_from_finding_command"]).create_wave_from_finding_command(**kw), _create_wave_from_finding_args),
+    "wave list":                     (ListWavesCommand, lambda a: {"slug": a[0] if a else ""}),
+    "wave run":                      (RunWaveCommand, _run_wave_args),
+    "wave status":                   (WaveStatusCommand, lambda a: {"slug": a[0] if a else ""}),
+    "wave create-from-assessment":   (CreateWavesFromAssessmentCommand, _create_wave_from_assessment_args),
+    "wave create-from-finding":      (CreateWaveFromFindingCommand, _create_wave_from_finding_args),
     # Changelog
-    "changelog annotate":            (lambda **kw: __import__("harness.cli.commands", fromlist=["annotate_changelog_command"]).annotate_changelog_command(**kw), lambda a: {"slug": a[0], "wave": "", "text": " ".join(a[1:])} if a else {}),
+    "changelog annotate":            (AnnotateChangelogCommand, lambda a: {"slug": a[0], "wave": "", "text": " ".join(a[1:])} if a else {}),
     # Governance
-    "team set-governance":           (lambda **kw: __import__("harness.cli.commands", fromlist=["set_governance_command"]).set_governance_command(**kw), lambda a: {"level": a[0]} if a else {"level": "standard"}),
+    "team set-governance":           (SetGovernanceCommand, lambda a: {"slug": "", "level": a[0]} if a else {"slug": "", "level": "standard"}),
     # Agent / Team listing
-    "agent list":                    (lambda **kw: __import__("harness.cli.commands", fromlist=["agent_list_command"]).agent_list_command(**kw), _no_args),
-    "team list":                     (lambda **kw: __import__("harness.cli.commands", fromlist=["team_list_command"]).team_list_command(**kw), _no_args),
-    "consult":                        (lambda **kw: __import__("harness.cli.commands", fromlist=["consult_command"]).consult_command(**kw), lambda a: {"question": " ".join(a)} if a else {"question": ""}),
+    "agent list":                    (AgentListCommand, lambda a: {"slug": ""}),
+    "team list":                     (TeamListCommand, lambda a: {"slug": ""}),
+    "consult":                        (ConsultCommand, lambda a: {"slug": "", "question": " ".join(a)} if a else {"slug": "", "question": ""}),
     # Refresh agents
-    "refresh-agents":                (lambda **kw: __import__("harness.cli.commands", fromlist=["refresh_agents_command"]).refresh_agents_command(**kw), _no_args),
+    "refresh-agents":                (RefreshAgentsCommand, lambda a: {"slug": "", "project_dir": None, "force": "--force" in a}),
 }
 
 
@@ -567,19 +587,19 @@ class HarnessREPL:
             return True
 
         # ── CommandBus dispatch ──────────────────────────────────────────
-        # Look up the command in COMMAND_MAP. Support both top-level names
-        # ("session") and group sub-commands ("engagement create").
+        # Look up the command in COMMAND_TYPES. Support both top-level names
+        # and group sub-commands ("engagement create").
         candidates = [cmd_name]
         if len(parts) >= 2:
             candidates.insert(0, f"{parts[0]} {parts[1]}")
 
         dispatched = False
         for candidate in candidates:
-            if candidate in COMMAND_MAP:
-                factory, arg_parser = COMMAND_MAP[candidate]
+            if candidate in COMMAND_TYPES:
+                cmd_cls, arg_parser = COMMAND_TYPES[candidate]
                 try:
                     kwargs = arg_parser(list(cmd_args))
-                    command = factory(**kwargs)
+                    command = cmd_cls(**kwargs)
                     result = _dispatch_via_bus(command)
                     if result.success:
                         if result.message:
@@ -594,16 +614,7 @@ class HarnessREPL:
                     break
 
         if not dispatched:
-            # ── Fallback to Click dispatch ──────────────────────────────
-            try:
-                from harness.cli import main as cli_main
-                cli_main.main(args=[cmd_name] + cmd_args, standalone_mode=False)
-            except SystemExit:
-                pass  # Click may call sys.exit even in standalone_mode=False
-            except click.Abort:
-                pass
-            except Exception as exc:
-                click.echo(f"Error: {exc}", err=True)
+            click.echo(f"Unknown command: /{cmd_name}. Type /help for available commands.", err=True)
 
         return True
 

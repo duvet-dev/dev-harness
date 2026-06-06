@@ -14,12 +14,12 @@ The typed command architecture was built bottom-up (types, bus, handlers) but to
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Single shared CommandBus | ✅ Complete | One per app lifetime, remove 13 create_bus() calls |
-| 2 | Move factory functions to typed commands | 🔧 In Progress | All 32 remaining from cli/commands.py |
-| 3 | Remove dispatch_cli_command() | 🔧 In Progress | All 45 commands through bus.dispatch() |
+| 1 | Single shared CommandBus | ✅ Complete | One per app lifetime |
+| 2 | Move factory functions to typed commands | ✅ Complete | All 32 converted in cli/main.py |
+| 3 | Remove dispatch_cli_command() | 🔧 In Progress | From cli/main.py (REPL refs remain) |
 | 4 | Expand CliPresenter | 📋 Pending | Type-specific formatting for all result types |
 | 5 | Expand ReplPresenter | 📋 Pending | ANSI formatting, not just emoji |
-| 6 | Remove COMMAND_MAP and Click fallback | 📋 Pending | From repl.py |
+| 6 | Remove COMMAND_MAP and Click fallback | ✅ Complete | From repl.py |
 | 7 | Delete cli/commands.py | 📋 Pending | |
 | 8 | Tests | 📋 Pending | All pass, coverage maintained |
 

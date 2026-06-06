@@ -480,7 +480,7 @@ class TestREPLCommandBusDispatch:
 
     @patch("harness.shell.repl.click.echo")
     def test_known_command_dispatches(self, mock_echo, tmp_path):
-        """Known COMMAND_MAP entries should dispatch via bus."""
+        """Known COMMAND_TYPES entries should dispatch via bus."""
         with patch("harness.shell.repl._dispatch_via_bus") as mock_bus:
             mock_bus.return_value = CommandResult(
                 success=True, message="Command successful", data={}
@@ -514,14 +514,14 @@ class TestREPLCommandBusDispatch:
         assert result is True
 
     @patch("harness.shell.repl.click.echo")
-    def test_unknown_command_falls_back_to_click(self, mock_echo, tmp_path):
-        """Unknown commands should fall back to Click dispatch."""
+    def test_unknown_command_shows_error(self, mock_echo, tmp_path):
+        """Unknown commands should show an error message instead of Click fallback."""
         repl = HarnessREPL(root=tmp_path)
-        # Patch harness.cli.main.main since that's what gets called
-        with patch("harness.cli.main.main") as mock_main:
-            result = repl._run_command("/nonexistent-command")
+        result = repl._run_command("/nonexistent-command")
         assert result is True
-        mock_main.assert_called_once()
+        # Should show unknown command message
+        error_msg = mock_echo.call_args[0][0]
+        assert "Unknown command" in error_msg
 
 
 class TestREPLGetWellEdgeCases:

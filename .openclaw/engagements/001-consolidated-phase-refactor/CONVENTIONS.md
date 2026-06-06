@@ -20,7 +20,7 @@
         design.md                    # Evolving design document
       waves/
         waves.md                     # Wave overview plan
-        TASK-TEMPLATE.md             # Standard task file format
+        (task template in `.openclaw/templates/wave-task.md`)
         <nnn>-<wave-name>/
           README.md                  # Wave summary + task table
           tasks/
@@ -42,7 +42,7 @@ This makes `ls` show engagements in logical order regardless of when they were c
 ## Document Conventions
 
 ### Task Files
-Each task file follows `TASK-TEMPLATE.md` with: Status, Description, Acceptance Criteria, Files Affected, Verification.
+Each task file follows `.openclaw/templates/wave-task.md` with: Status, Description, Acceptance Criteria, Files Affected, Verification.
 
 ### Status Values
 - **Waves:** ✅ Complete | 🔧 In Progress | 📋 Pending | ❌ Blocked

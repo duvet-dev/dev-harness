@@ -30,6 +30,8 @@
 | **18** | Consultation System (Option G) | ✅ CycleRunner, ConsultationOrchestrator, `/consult`, 1767 tests |
 | **19** | Tools and Agents | ✅ Web Search Tool, Self-Test Loop, 1852 tests |
 | **20** | Analysis Convergence (R27) | ✅ project-profiler→documentation-reviewer sequential, critical-reviewer+refactoring-analyser parallel, synthesis output. **Gap:** refactoring-analyser unwired (→ Wave 24). |
+| **21** | Fleet→Team Migration | ✅ 7/7 tasks. 3,812 tests. `b2e91df` |
+| **22** | Phase System Consolidation | ✅ 6/6 tasks. 3,826 tests + 7 new navigation rail tests. `2a6fca5` |
 
 ---
 

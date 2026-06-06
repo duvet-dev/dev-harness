@@ -385,7 +385,7 @@ class ReplPresenter:
         if isinstance(result, RunWaveResult):
             return self._format_run_wave(result)
         if isinstance(result, ExecuteStepResult):
-            return f"\u2705 Step executed"
+            return "\u2705 Step executed"
         # Misc
         if isinstance(result, NextResult):
             return f"\u2705 {result.message}"
@@ -412,7 +412,7 @@ class ReplPresenter:
         if isinstance(result, GenerateDocsResult):
             return f"\u2705 Generated {len(result.generated)} document(s)"
         if isinstance(result, AnnotateChangelogResult):
-            return f"\u2705 Annotation added"
+            return "\u2705 Annotation added"
         # Mgmt
         if isinstance(result, RenameEngagementResult):
             return f"\u2705 {result.message}"
@@ -444,7 +444,7 @@ class ReplPresenter:
         if result.target_branch:
             lines.append(f"  \x1b[36mBranch:\x1b[0m {result.target_branch}")
         if result.branch_created:
-            lines.append(f"  \x1b[32mBranch created: yes\x1b[0m")
+            lines.append("  \x1b[32mBranch created: yes\x1b[0m")
         for w in result.warnings:
             lines.append(f"  \u26a0\ufe0f {w.get('message', w)}")
         return "\n".join(lines)
@@ -477,11 +477,11 @@ class ReplPresenter:
         lines.append(f"  \x1b[36mProject:\x1b[0m  {result.project}")
         lines.append(f"  \x1b[36mPath:\x1b[0m     {result.path}")
         if result.git_initted:
-            lines.append(f"  \x1b[32mGit initted\x1b[0m")
+            lines.append("  \x1b[32mGit initted\x1b[0m")
         return "\n".join(lines)
 
     def _format_session(self, result: SessionResult) -> str:
-        lines = [f"\u2705 Session started"]
+        lines = ["\u2705 Session started"]
         lines.append(f"  \x1b[36mPhase:\x1b[0m {result.phase}")
         if result.session_type:
             lines.append(f"  \x1b[36mType:\x1b[0m  {result.session_type}")
@@ -522,7 +522,7 @@ class ReplPresenter:
     def _format_list_waves(self, result: ListWavesResult) -> str:
         if not result.waves:
             return "\u2705 No waves defined"
-        lines = [f"\u2705 Waves:"]
+        lines = ["\u2705 Waves:"]
         for w in result.waves:
             active = w.get("is_modifiable", False) and not w.get("is_committed", False)
             marker = "\u25c9" if active else "\u25cb"

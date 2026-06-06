@@ -1,6 +1,6 @@
 # Task 7 — Delete cli/commands.py
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 28-command-bus-consolidation
 **Dependencies:** Tasks 1-3
 **Effort:** 0.5h

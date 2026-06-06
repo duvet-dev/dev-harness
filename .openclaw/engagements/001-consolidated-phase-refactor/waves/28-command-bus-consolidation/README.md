@@ -16,12 +16,12 @@ The typed command architecture was built bottom-up (types, bus, handlers) but to
 |---|------|--------|-------|
 | 1 | Single shared CommandBus | ✅ Complete | One per app lifetime |
 | 2 | Move factory functions to typed commands | ✅ Complete | All 32 converted in cli/main.py |
-| 3 | Remove dispatch_cli_command() | 🔧 In Progress | From cli/main.py (REPL refs remain) |
-| 4 | Expand CliPresenter | 📋 Pending | Type-specific formatting for all result types |
-| 5 | Expand ReplPresenter | 📋 Pending | ANSI formatting, not just emoji |
+| 3 | Remove dispatch_cli_command() | ✅ Complete | Zero hits in src/ |
+| 4 | Expand CliPresenter | ✅ Complete | All result types formatted |
+| 5 | Expand ReplPresenter | ✅ Complete | ANSI formatting with type-specific logic |
 | 6 | Remove COMMAND_MAP and Click fallback | ✅ Complete | From repl.py |
-| 7 | Delete cli/commands.py | 📋 Pending | |
-| 8 | Tests | 📋 Pending | All pass, coverage maintained |
+| 7 | Delete cli/commands.py | ✅ Complete | File deleted |
+| 8 | Tests | ✅ Complete | All 3827 pass |
 
 ## Verification
 

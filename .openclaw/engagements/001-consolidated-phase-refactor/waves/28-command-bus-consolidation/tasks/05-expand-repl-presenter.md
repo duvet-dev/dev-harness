@@ -1,6 +1,6 @@
 # Task 5 — Expand ReplPresenter
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 28-command-bus-consolidation
 **Dependencies:** None
 **Effort:** 1h

@@ -1,6 +1,6 @@
 # Task 8 — Tests for Wave 28
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 28-command-bus-consolidation
 **Dependencies:** Tasks 1-7
 **Effort:** 1h

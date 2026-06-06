@@ -1,6 +1,6 @@
 # Task 2 — Move factory functions to typed commands
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 28-command-bus-consolidation
 **Dependencies:** None
 **Effort:** 1-2h

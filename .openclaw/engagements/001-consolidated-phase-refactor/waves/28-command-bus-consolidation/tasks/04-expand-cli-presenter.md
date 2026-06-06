@@ -1,6 +1,6 @@
 # Task 4 — Expand CliPresenter
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 28-command-bus-consolidation
 **Dependencies:** None
 **Effort:** 1h

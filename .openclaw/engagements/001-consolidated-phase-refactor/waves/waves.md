@@ -8,7 +8,7 @@
 
 ---
 
-## Completed (18 waves)
+## Completed (19 waves)
 
 | Wave | Name | Notes |
 |------|------|-------|
@@ -34,6 +34,7 @@
 | **22** | Phase System Consolidation | ✅ 6/6 tasks. 3,826 tests + 7 new navigation rail tests. `2a6fca5` |
 | **23** | Template Format Alignment | ✅ 6/6 tasks. 3,826 tests. `ed86bae` |
 | **24** | Wire Refactoring-Analyser + Rename Constants | ✅ All P-constants renamed. Refactoring-analyser wired. 3,827 tests. `4e072e9` |
+| **28** | Command Bus & Presenter Consolidation | ✅ Single shared bus, all typed dispatch, presenters expanded, commands.py deleted, 3,827 tests. |
 
 ---
 
@@ -69,7 +70,7 @@ Milestone 2: Analysis Pipeline
   Wave 31: Findings Registry [3-5h]
 
 Milestone 3: Cleanup (independent of phase changes)
-  Wave 28: Command Bus & Presenter Consolidation [5-8h]
+  Wave 28: Command Bus & Presenter Consolidation [5-8h] ✅
   Wave 29: Value Objects & Type Cleanup [2-3h]
   Wave 30: OpenClaw Sync Removal [1.5h]
 ```

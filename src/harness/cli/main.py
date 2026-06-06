@@ -17,35 +17,38 @@ from typing import Optional
 import click
 
 from harness._version import __version__, __build__, __build_date__, __commit__
-from harness.cli.commands import (
-    dispatch_cli_command,
-    summary_command,
-    inspect_command,
-    assess_command,
-    create_waves_from_assessment_command,
-    create_wave_from_finding_command,
-    list_waves_command,
-    wave_status_command,
-    generate_docs_command,
-    annotate_changelog_command,
-    rename_engagement_command,
-    set_branch_command,
-    fix_engagement_command,
-    refresh_agents_command,
-    set_governance_command,
+from harness.command.commands.analysis import (
+    AssessCommand,
+    InspectCommand,
+    SummaryCommand,
 )
-from harness.command.setup import get_shared_bus
+from harness.command.commands.batch import (
+    AnnotateChangelogCommand,
+    CreateWaveFromFindingCommand,
+    CreateWavesFromAssessmentCommand,
+    GenerateDocsCommand,
+    ListWavesCommand,
+    WaveStatusCommand,
+)
 from harness.command.commands.engagement import (
     AbortEngagementCommand,
     CreateEngagementCommand,
     ResumeEngagementCommand,
 )
+from harness.command.commands.mgmt import (
+    FixEngagementCommand,
+    RefreshAgentsCommand,
+    RenameEngagementCommand,
+    SetBranchCommand,
+    SetGovernanceCommand,
+)
+from harness.command.commands.misc import NextCommand, QueryStatusCommand, QueryWhatsNextCommand
 from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
 from harness.command.commands.project import InitProjectCommand
-from harness.command.commands.misc import NextCommand, QueryStatusCommand, QueryWhatsNextCommand
 from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
 from harness.command.commands.session import ChatCommand, SessionCommand
 from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand, RunWaveCommand
+from harness.command.setup import get_shared_bus
 from harness.cli.helpers import (
     bold,
     find_project_root,
@@ -314,12 +317,8 @@ def init(project_dir, template, seed, no_git, force):
 def refresh_agents(project_dir, force):
     """Refresh agent profiles from the harness's current agent registry."""
     try:
-        from harness.cli.commands import dispatch_cli_command, refresh_agents_command
-        cmd = refresh_agents_command(
-            project_dir=project_dir,
-            force=force,
-        )
-        result = dispatch_cli_command(cmd)
+        cmd = RefreshAgentsCommand(slug="", project_dir=project_dir, force=force)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -412,16 +411,15 @@ def work(description, mode, backend, max_iterations, partial_approval):
 def summary(deep, assess_flag, engagement, json_flag, reconcile):
     """Show project status summary."""
     try:
-        from harness.cli.commands import dispatch_cli_command, summary_command
         from pathlib import Path
-        cmd = summary_command(
+        cmd = SummaryCommand(
+            slug=engagement or "",
             deep=deep,
             assess_flag=assess_flag,
-            engagement=engagement,
             json_flag=json_flag,
             reconcile=reconcile,
         )
-        result = dispatch_cli_command(cmd)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Summary failed: {result.error}", err=True)
             raise click.Abort()
@@ -778,9 +776,8 @@ def team_consult(team_name, no_truncate):
 def set_governance(level, slug):
     """Set the governance level for the project or an engagement."""
     try:
-        from harness.cli.commands import dispatch_cli_command, set_governance_command
-        cmd = set_governance_command(level=level, slug=slug)
-        result = dispatch_cli_command(cmd)
+        cmd = SetGovernanceCommand(slug=slug or "", level=level)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -867,10 +864,8 @@ def wave():
 def list_waves(slug):
     """List waves from the engagement plan."""
     try:
-        from harness.cli.commands import dispatch_cli_command, list_waves_command
-
-        cmd = list_waves_command(slug=slug or "")
-        result = dispatch_cli_command(cmd)
+        cmd = ListWavesCommand(slug=slug or "")
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -908,7 +903,7 @@ def run_wave(wave_id, no_test, backend, slug):
         harness wave run wave-01 --backend claude
     """
     try:
-        from harness.cli.commands import dispatch_cli_command, run_wave_command
+
 
         if not slug:
             from harness.domain.engagement.resolver import resolve_active_engagement
@@ -947,10 +942,8 @@ def run_wave(wave_id, no_test, backend, slug):
 def wave_status(slug):
     """Show detailed wave status from the engagement plan."""
     try:
-        from harness.cli.commands import dispatch_cli_command, wave_status_command
-
-        cmd = wave_status_command(slug=slug or "")
-        result = dispatch_cli_command(cmd)
+        cmd = WaveStatusCommand(slug=slug or "")
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -968,10 +961,8 @@ def wave_status(slug):
 def create_wave_from_finding(finding_id, slug):
     """Create a wave from an assessment finding."""
     try:
-        from harness.cli.commands import dispatch_cli_command, create_wave_from_finding_command
-
-        cmd = create_wave_from_finding_command(finding_id=finding_id, slug=slug or "")
-        result = dispatch_cli_command(cmd)
+        cmd = CreateWaveFromFindingCommand(slug=slug or "", finding_id=finding_id)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -1004,12 +995,10 @@ def create_wave_from_finding(finding_id, slug):
 def create_waves_from_assessment(focus, limit, slug, refactoring):
     """Create waves from all matching assessment findings."""
     try:
-        from harness.cli.commands import dispatch_cli_command, create_waves_from_assessment_command
-
-        cmd = create_waves_from_assessment_command(
-            focus=focus, limit=limit, slug=slug or "", refactoring=refactoring,
+        cmd = CreateWavesFromAssessmentCommand(
+            slug=slug or "", focus=focus, limit=limit, refactoring=refactoring,
         )
-        result = dispatch_cli_command(cmd)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -1038,7 +1027,6 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
 def chat(prompt_text, engagement_slug, phase, context_tier):
     """Interactive LLM chat session within an engagement."""
     try:
-        from harness.cli.commands import dispatch_cli_command, chat_command
         from harness.domain.engagement.resolver import resolve_active_engagement
         from harness.paths import get_engagement_dir
         from pathlib import Path
@@ -1097,7 +1085,6 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
 def session(engagement_slug, phase, context_tier, session_type, get_well):
     """Run a full phase-by-phase session."""
     try:
-        from harness.cli.commands import dispatch_cli_command, session_command
         from harness.domain.engagement.resolver import resolve_active_engagement
         from harness.paths import get_engagement_dir
         from harness.cli.helpers import resolve_session_type_flag
@@ -1413,11 +1400,10 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
 def inspect(repo_path, report_file, deep, verbose, project_type):
     """Analyse a codebase as an external observer."""
     try:
-        from harness.cli.commands import dispatch_cli_command, inspect_command
         from harness.cli.helpers import write_assessment_report
 
-        cmd = inspect_command(root=repo_path)
-        result = dispatch_cli_command(cmd)
+        cmd = InspectCommand(slug="", root=repo_path)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -1445,11 +1431,10 @@ def inspect(repo_path, report_file, deep, verbose, project_type):
 def assess(repo_path, report_file, verbose):
     """Run the full assessment on the current project."""
     try:
-        from harness.cli.commands import dispatch_cli_command, assess_command
         from harness.cli.helpers import write_assessment_report
 
-        cmd = assess_command(root=repo_path, deep_flag=True)
-        result = dispatch_cli_command(cmd)
+        cmd = AssessCommand(slug="", root=repo_path, deep_flag=True)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -2051,15 +2036,13 @@ def engagement_status(engagement_slug):
 def rename(old_slug, new_slug, branch_strategy, dry_run):
     """Rename an existing engagement."""
     try:
-        from harness.cli.commands import dispatch_cli_command, rename_engagement_command
-
-        cmd = rename_engagement_command(
-            old_slug=old_slug,
+        cmd = RenameEngagementCommand(
+            slug=old_slug,
             new_slug=new_slug,
             branch_strategy=branch_strategy,
             dry_run=dry_run,
         )
-        result = dispatch_cli_command(cmd)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             for err in result.data.get("errors", [result.error]):
                 click.echo(f"Error: {err}", err=True)
@@ -2313,10 +2296,8 @@ def diff(slug):
 def set_branch(slug, branch):
     """Set the branch for an engagement (explicit repoint)."""
     try:
-        from harness.cli.commands import dispatch_cli_command, set_branch_command
-
-        cmd = set_branch_command(slug=slug, branch=branch)
-        result = dispatch_cli_command(cmd)
+        cmd = SetBranchCommand(slug=slug, branch=branch)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -2335,10 +2316,8 @@ def set_branch(slug, branch):
 def fix(slug):
     """Fix missing engagement metadata and state issues."""
     try:
-        from harness.cli.commands import dispatch_cli_command, fix_engagement_command
-
-        cmd = fix_engagement_command(slug=slug or "")
-        result = dispatch_cli_command(cmd)
+        cmd = FixEngagementCommand(slug=slug or "")
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -2363,11 +2342,10 @@ def fix(slug):
 def generate_docs(output_dir, overwrite, doc_type, source_tier):
     """Generate project documentation from harness analysis data."""
     try:
-        from harness.cli.commands import dispatch_cli_command, generate_docs_command
         from pathlib import Path
 
-        cmd = generate_docs_command(root=str(Path.cwd()))
-        result = dispatch_cli_command(cmd)
+        cmd = GenerateDocsCommand(slug="", root=str(Path.cwd()))
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()
@@ -2392,10 +2370,8 @@ def changelog():
 def annotate(engagement_slug, text):
     """Append a human annotation to the latest changelog entry."""
     try:
-        from harness.cli.commands import dispatch_cli_command, annotate_changelog_command
-
-        cmd = annotate_changelog_command(slug=engagement_slug, wave="", text=text)
-        result = dispatch_cli_command(cmd)
+        cmd = AnnotateChangelogCommand(slug=engagement_slug, wave="", text=text)
+        result = get_shared_bus().dispatch(cmd)
         if not result.success:
             click.echo(f"Error: {result.error}", err=True)
             raise click.Abort()

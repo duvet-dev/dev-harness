@@ -43,15 +43,19 @@ The CLI (`src/harness/cli/main.py`) is a thin dispatch layer. Business logic liv
 
 Zero failures after implementation. Tests may fail before implementation (TDD red) but never after. Commit fixes same commit as code change. Suite regression = priority fix before any other work.
 
-### 3.4 Test Order Independence
+### 3.4 Validate With `make ci`, Not Just `make test`
+
+Before committing or declaring a task complete, run **`make ci`** not just `make test`. `make ci` runs ruff linting, pytest, and coverage checks (`--cov-fail-under=70`). A `make test` pass is necessary but not sufficient — linting failures or coverage regressions will break CI.
+
+### 3.5 Test Order Independence
 
 Tests must work in any order. Multi-tenant isolation for shared-database integration tests.
 
-### 3.5 Coverage
+### 3.6 Coverage
 
 - All new `src/` code must target 100% test coverage
 - The `make ci` target enforces `--cov-fail-under=70`
-- Run `make test` before committing to verify the full suite
+- Run `make ci` before committing to verify the full suite (lint + test + coverage)
 
 ## 4. Project Structure
 

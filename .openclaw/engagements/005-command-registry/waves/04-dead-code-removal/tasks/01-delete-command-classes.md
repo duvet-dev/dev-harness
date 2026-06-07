@@ -1,6 +1,6 @@
 # Task 1 — Delete dead command classes + update import chains
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 04-dead-code-removal
 **Dependencies:** Wave 03
 **Effort:** 0.5h
@@ -17,13 +17,13 @@ Remove the 3 dead command dataclass definitions and their exports. These command
 
 ## Acceptance Criteria
 
-- [ ] `ResumeEngagementCommand` dataclass removed from `engagement.py`
-- [ ] `CreateWaveCommand` dataclass removed from `wave.py`
-- [ ] `ExecuteStepCommand` dataclass removed from `wave.py`
-- [ ] Their corresponding `TypedResult` dataclasses also removed if they're unique to these commands (check: `ResumeEngagementResult`, `CreateWaveResult`, `ExecuteStepResult`)
-- [ ] `__init__.py` exports updated (if these classes were exported from `harness.command.commands`)
-- [ ] No import errors when importing main.py after removal
-- [ ] `test_cli_commands.py` import lines updated (line 22 currently imports CreateWaveCommand + ExecuteStepCommand)
+- [x] `ResumeEngagementCommand` dataclass removed from `engagement.py`
+- [x] `CreateWaveCommand` dataclass removed from `wave.py`
+- [x] `ExecuteStepCommand` dataclass removed from `wave.py`
+- [x] Their corresponding `TypedResult` dataclasses also removed if they're unique to these commands (check: `ResumeEngagementResult`, `CreateWaveResult`, `ExecuteStepResult`)
+- [x] `__init__.py` exports updated (if these classes were exported from `harness.command.commands`)
+- [x] No import errors when importing main.py after removal
+- [x] `test_cli_commands.py` import lines updated (line 22 currently imports CreateWaveCommand + ExecuteStepCommand)
 
 ## Files Affected
 

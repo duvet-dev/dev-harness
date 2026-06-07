@@ -2,7 +2,7 @@
 
 **Milestone:** 4 — Cleanup
 **Effort:** 1.5h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** Wave 03
 **Blocks:** None (final wave)
 
@@ -19,10 +19,10 @@ The 3 dead pieces (already unregistered from the bus in Wave 02, now remove the 
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Delete dead command classes + update import chains | 📋 Pending | ResumeEngagementCommand, CreateWaveCommand, ExecuteStepCommand |
-| 2 | Delete dead handler classes + update import chains | 📋 Pending | ResumeEngagementHandler, CreateWaveTypedHandler, ExecuteStepTypedHandler |
-| 3 | Remove/update stale test references | 📋 Pending | `test_typed_command_dispatch.py`, `test_handler_integration.py`, `test_cli_commands.py` |
-| 4 | Final cleanup grep + full test suite | 📋 Pending | Verify no dead references remain |
+| 1 | Delete dead command classes + update import chains | ✅ Complete | ResumeEngagementCommand, CreateWaveCommand, ExecuteStepCommand |
+| 2 | Delete dead handler classes + update import chains | ✅ Complete | ResumeEngagementHandler, CreateWaveTypedHandler, ExecuteStepTypedHandler |
+| 3 | Remove/update stale test references | ✅ Complete | `test_typed_command_dispatch.py`, `test_handler_integration.py`, `test_cli_commands.py` |
+| 4 | Final cleanup grep + full test suite | ✅ Complete | Verify no dead references remain |
 
 ## Verification
 

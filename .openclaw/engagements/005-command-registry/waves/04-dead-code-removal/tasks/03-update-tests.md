@@ -1,6 +1,6 @@
 # Task 3 — Remove/update stale test references
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 04-dead-code-removal
 **Dependencies:** Tasks 1-2
 **Effort:** 0.5h
@@ -35,14 +35,14 @@ Line 22 imports `CreateWaveCommand, ExecuteStepCommand` — neither is used in t
 
 ## Acceptance Criteria
 
-- [ ] `TestResumeEngagementCommand` class deleted from `test_typed_command_dispatch.py`
-- [ ] `TestCreateWaveCommand` class deleted from `test_typed_command_dispatch.py`
-- [ ] `TestExecuteStepCommand` class deleted from `test_typed_command_dispatch.py`
-- [ ] `test_create_wave_dispatches` method deleted from `test_handler_integration.py`
-- [ ] `test_execute_step_dispatches` method deleted from `test_handler_integration.py`
-- [ ] Unused `CreateWaveCommand, ExecuteStepCommand` removed from import in `test_cli_commands.py`
-- [ ] No import errors across test suite
-- [ ] Full test suite passes: `python -m pytest -q`
+- [x] `TestResumeEngagementCommand` class deleted from `test_typed_command_dispatch.py`
+- [x] `TestCreateWaveCommand` class deleted from `test_typed_command_dispatch.py`
+- [x] `TestExecuteStepCommand` class deleted from `test_typed_command_dispatch.py`
+- [x] `test_create_wave_dispatches` method deleted from `test_handler_integration.py`
+- [x] `test_execute_step_dispatches` method deleted from `test_handler_integration.py`
+- [x] Unused `CreateWaveCommand, ExecuteStepCommand` removed from import in `test_cli_commands.py`
+- [x] No import errors across test suite
+- [x] Full test suite passes: `python -m pytest -q`
 
 ## Files Affected
 

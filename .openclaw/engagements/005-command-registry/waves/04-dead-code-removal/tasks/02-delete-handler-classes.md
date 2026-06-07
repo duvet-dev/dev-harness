@@ -1,6 +1,6 @@
 # Task 2 — Delete dead handler classes + update import chains
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 04-dead-code-removal
 **Dependencies:** Task 1
 **Effort:** 0.5h
@@ -23,13 +23,13 @@ Remove the 3 dead handler classes and their result models. These handlers were r
 
 ## Acceptance Criteria
 
-- [ ] `ResumeEngagementHandler` class removed from `engagement_handlers.py`
-- [ ] `ResumeEngagementResult` dataclass removed from `engagement_handlers.py`
-- [ ] `CreateWaveTypedHandler` and `CreateWaveResult` removed from `wave_handlers.py`
-- [ ] `ExecuteStepTypedHandler` and `ExecuteStepResult` removed from `wave_handlers.py`
-- [ ] Module exports updated (if these were exported from `__init__.py`)
-- [ ] All dead-code-related imports removed from `setup.py` (already commented out in Wave 02, now fully delete)
-- [ ] No import errors after removal
+- [x] `ResumeEngagementHandler` class removed from `engagement_handlers.py`
+- [x] `ResumeEngagementResult` dataclass removed from `engagement_handlers.py`
+- [x] `CreateWaveTypedHandler` and `CreateWaveResult` removed from `wave_handlers.py`
+- [x] `ExecuteStepTypedHandler` and `ExecuteStepResult` removed from `wave_handlers.py`
+- [x] Module exports updated (if these were exported from `__init__.py`)
+- [x] All dead-code-related imports removed from `setup.py` (already commented out in Wave 02, now fully delete)
+- [x] No import errors after removal
 
 ## Files Affected
 

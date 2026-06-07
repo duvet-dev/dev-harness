@@ -8,7 +8,6 @@ from __future__ import annotations
 from harness.command.results.engagement import (
     AbortEngagementResult,
     CreateEngagementResult,
-    ResumeEngagementResult,
 )
 from harness.command.results.phase import EnterPhaseResult, ManagePhaseResult
 from harness.command.results.project import InitProjectResult
@@ -23,8 +22,6 @@ from harness.command.results.review import (
 )
 from harness.command.results.session import ChatResult, SessionResult
 from harness.command.results.wave import (
-    CreateWaveResult,
-    ExecuteStepResult,
     RunWaveResult,
 )
 from harness.command.results.analysis import (
@@ -83,8 +80,6 @@ class CliPresenter:
         # Engagement lifecycle
         if isinstance(result, CreateEngagementResult):
             return self._format_create_engagement(result)
-        if isinstance(result, ResumeEngagementResult):
-            return self._format_simple(result, "Engagement resumed")
         if isinstance(result, AbortEngagementResult):
             return self._format_abort_engagement(result)
         # Phase
@@ -106,12 +101,8 @@ class CliPresenter:
         if isinstance(result, FinishEngagementResult):
             return self._format_finish(result)
         # Wave
-        if isinstance(result, CreateWaveResult):
-            return self._format_simple(result, f"Wave created: {result.wave_title}")
         if isinstance(result, RunWaveResult):
             return self._format_run_wave(result)
-        if isinstance(result, ExecuteStepResult):
-            return self._format_simple(result, "Step executed")
         # Misc
         if isinstance(result, NextResult):
             return self._format_simple(result, "Advanced")
@@ -357,8 +348,6 @@ class ReplPresenter:
         # Engagement lifecycle
         if isinstance(result, CreateEngagementResult):
             return self._format_create_engagement(result)
-        if isinstance(result, ResumeEngagementResult):
-            return f"\u2705 {result.message}"
         if isinstance(result, AbortEngagementResult):
             return self._format_abort_engagement(result)
         # Phase
@@ -380,12 +369,8 @@ class ReplPresenter:
         if isinstance(result, FinishEngagementResult):
             return self._format_finish(result)
         # Wave
-        if isinstance(result, CreateWaveResult):
-            return f"\u2705 Wave created: {result.wave_title} (ID: {result.wave_id})"
         if isinstance(result, RunWaveResult):
             return self._format_run_wave(result)
-        if isinstance(result, ExecuteStepResult):
-            return "\u2705 Step executed"
         # Misc
         if isinstance(result, NextResult):
             return f"\u2705 {result.message}"
@@ -533,16 +518,6 @@ class ReplPresenter:
             )
         return "\n".join(lines)
 
-    def _format_resume_engagement(self, result: ResumeEngagementResult) -> str:
-        lines = [f"\u2705 {result.message}"]
-        lines.append(f"  \x1b[36mSlug:\x1b[0m   {result.slug}")
-        lines.append(f"  \x1b[36mStatus:\x1b[0m {result.status}")
-        if result.current_phase:
-            lines.append(f"  \x1b[36mPhase:\x1b[0m  {result.current_phase}")
-        for w in result.warnings:
-            lines.append(f"  \u26a0\ufe0f {w.get('message', w)}")
-        return "\n".join(lines)
-
     def _format_enter_phase(self, result: EnterPhaseResult) -> str:
         lines = [f"\u2705 Entered phase: {result.phase}"]
         lines.append(f"  \x1b[36mSlug:\x1b[0m    {result.slug}")
@@ -553,20 +528,6 @@ class ReplPresenter:
         lines = ["\u2705 Chat opened"]
         lines.append(f"  \x1b[36mSlug:\x1b[0m  {result.slug}")
         lines.append(f"  \x1b[36mPhase:\x1b[0m {result.phase}")
-        return "\n".join(lines)
-
-    def _format_create_wave(self, result: CreateWaveResult) -> str:
-        lines = ["\u2705 Wave created"]
-        lines.append(f"  \x1b[36mTitle:\x1b[0m {result.wave_title}")
-        lines.append(f"  \x1b[36mID:\x1b[0m    {result.wave_id}")
-        return "\n".join(lines)
-
-    def _format_execute_step(self, result: ExecuteStepResult) -> str:
-        lines = ["\u2705 Step executed"]
-        if hasattr(result, 'slug') and result.slug:
-            lines.append(f"  \x1b[36mSlug:\x1b[0m {result.slug}")
-        if result.step:
-            lines.append(f"  \x1b[36mStep:\x1b[0m {result.step}")
         return "\n".join(lines)
 
     def _format_review(self, result: ReviewEngagementResult) -> str:

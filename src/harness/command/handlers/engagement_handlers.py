@@ -1,6 +1,6 @@
 """Typed handlers for engagement lifecycle.
 
-Covers: CreateEngagementHandler, ResumeEngagementHandler, AbortEngagementHandler.
+Covers: CreateEngagementHandler, AbortEngagementTypedHandler.
 """
 
 from __future__ import annotations
@@ -11,12 +11,10 @@ from harness.command.types import TypedHandler
 from harness.command.commands.engagement import (
     AbortEngagementCommand,
     CreateEngagementCommand,
-    ResumeEngagementCommand,
 )
 from harness.command.results.engagement import (
     AbortEngagementResult,
     CreateEngagementResult,
-    ResumeEngagementResult,
 )
 
 
@@ -71,52 +69,6 @@ class CreateEngagementHandler(TypedHandler[CreateEngagementCommand, CreateEngage
                 success=False,
                 error=str(exc),
                 message=f"Failed to create engagement: {exc}",
-            )
-
-
-class ResumeEngagementHandler(TypedHandler[ResumeEngagementCommand, ResumeEngagementResult]):
-    """Resume an engagement via StartupResumeFlow.resume()."""
-
-    def handle(self, command: ResumeEngagementCommand) -> ResumeEngagementResult:
-        try:
-            from pathlib import Path
-            from harness.domain.engagement.startup import StartupResumeFlow
-
-            root = Path.cwd()
-            flow = StartupResumeFlow(root=root)
-
-            result = flow.resume(slug=command.slug, mode=command.mode)
-
-            if not result.success:
-                return ResumeEngagementResult(
-                    success=False,
-                    error=result.error,
-                    message=f"Failed to resume engagement '{command.slug}': {result.error}",
-                    slug=command.slug,
-                )
-
-            engagement = result.engagement
-            return ResumeEngagementResult(
-                success=True,
-                message=(
-                    f"Engagement '{engagement.slug}' resumed "
-                    f"(phase: {engagement.current_phase})"
-                ),
-                slug=engagement.slug,
-                status=engagement.status.value,
-                current_phase=engagement.current_phase,
-                workflow_name=engagement.workflow_name,
-                warnings=[
-                    {"type": w.type, "message": w.message}
-                    for w in result.warnings
-                ],
-            )
-
-        except Exception as exc:
-            return ResumeEngagementResult(
-                success=False,
-                error=str(exc),
-                message=f"Failed to resume engagement: {exc}",
             )
 
 

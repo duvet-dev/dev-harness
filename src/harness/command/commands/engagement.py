@@ -23,14 +23,6 @@ class CreateEngagementCommand(TypedCommand):
 
 
 @dataclass(frozen=True)
-class ResumeEngagementCommand(TypedCommand):
-    """Resume an existing engagement."""
-
-    slug: str
-    mode: str = "auto"
-
-
-@dataclass(frozen=True)
 class AbortEngagementCommand(TypedCommand):
     """Abort an engagement."""
 
@@ -40,6 +32,5 @@ class AbortEngagementCommand(TypedCommand):
 
 __all__ = [
     "CreateEngagementCommand",
-    "ResumeEngagementCommand",
     "AbortEngagementCommand",
 ]

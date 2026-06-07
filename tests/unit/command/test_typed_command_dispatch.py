@@ -122,33 +122,6 @@ class TestCreateEngagementCommand:
         assert "test" in output
 
 
-class TestResumeEngagementCommand:
-    """Tests for ResumeEngagementCommand."""
-
-    def test_constructor(self):
-        from harness.command.commands.engagement import ResumeEngagementCommand
-        cmd = ResumeEngagementCommand(slug="my-eng")
-        assert cmd.slug == "my-eng"
-
-    def test_positive(self, bus):
-        from harness.command.commands.engagement import ResumeEngagementCommand
-        _register_ok(bus, ResumeEngagementCommand)
-        result = bus.dispatch(ResumeEngagementCommand(slug="test"))
-        assert result.success is True
-
-    def test_negative_empty_slug(self, bus):
-        from harness.command.commands.engagement import ResumeEngagementCommand
-        _register_fail(bus, ResumeEngagementCommand)
-        result = bus.dispatch(ResumeEngagementCommand(slug=""))
-        assert result.success is False
-
-    def test_presenter(self, repl_presenter):
-        from harness.command.results.engagement import ResumeEngagementResult
-        result = ResumeEngagementResult(success=True, message="Resumed", slug="test")
-        output = repl_presenter.present(result)
-        assert "Resumed" in output
-
-
 class TestAbortEngagementCommand:
     """Tests for AbortEngagementCommand."""
 
@@ -332,48 +305,6 @@ class TestQueryWhatsNextCommand:
 # ═══════════════════════════════════════════════════════════════════════════
 # Wave Commands (3)
 # ═══════════════════════════════════════════════════════════════════════════
-
-
-class TestCreateWaveCommand:
-    """Tests for CreateWaveCommand."""
-
-    def test_constructor(self):
-        from harness.command.commands.wave import CreateWaveCommand
-        cmd = CreateWaveCommand(slug="eng", title="My Wave")
-        assert cmd.title == "My Wave"
-
-    def test_positive(self, bus):
-        from harness.command.commands.wave import CreateWaveCommand
-        _register_ok(bus, CreateWaveCommand)
-        result = bus.dispatch(CreateWaveCommand(slug="test"))
-        assert result.success is True
-
-    def test_presenter(self, cli_presenter):
-        from harness.command.results.wave import CreateWaveResult
-        result = CreateWaveResult(success=True, message="Wave created")
-        output = cli_presenter.present(result)
-        assert output is not None
-
-
-class TestExecuteStepCommand:
-    """Tests for ExecuteStepCommand."""
-
-    def test_constructor(self):
-        from harness.command.commands.wave import ExecuteStepCommand
-        cmd = ExecuteStepCommand(slug="eng", step="test")
-        assert cmd.step == "test"
-
-    def test_positive(self, bus):
-        from harness.command.commands.wave import ExecuteStepCommand
-        _register_ok(bus, ExecuteStepCommand)
-        result = bus.dispatch(ExecuteStepCommand(slug="test"))
-        assert result.success is True
-
-    def test_presenter(self, repl_presenter):
-        from harness.command.results.wave import ExecuteStepResult
-        result = ExecuteStepResult(success=True, message="Step executed")
-        output = repl_presenter.present(result)
-        assert output is not None
 
 
 class TestRunWaveCommand:

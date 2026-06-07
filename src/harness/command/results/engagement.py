@@ -29,21 +29,6 @@ class CreateEngagementResult(TypedResult):
 
 
 @dataclass(frozen=True)
-class ResumeEngagementResult(TypedResult):
-    """Result of resuming an engagement."""
-
-    success: bool = True
-    message: str = ""
-    error_code: str | None = None
-    slug: str = ""
-    status: str = ""
-    current_phase: str | None = None
-    workflow_name: str | None = None
-    warnings: list[dict[str, str]] = field(default_factory=list)
-    error: str = ""
-
-
-@dataclass(frozen=True)
 class AbortEngagementResult(TypedResult):
     """Result of aborting an engagement."""
 
@@ -60,6 +45,5 @@ class AbortEngagementResult(TypedResult):
 
 __all__ = [
     "CreateEngagementResult",
-    "ResumeEngagementResult",
     "AbortEngagementResult",
 ]

@@ -19,7 +19,7 @@ from harness.command.commands.phase import EnterPhaseCommand
 from harness.command.commands.misc import NextCommand, QueryStatusCommand, QueryWhatsNextCommand
 from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
 from harness.command.commands.session import ChatCommand, SessionCommand
-from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand, RunWaveCommand
+from harness.command.commands.wave import RunWaveCommand
 from harness.command.commands.mgmt import AgentListCommand, TeamListCommand, ConsultCommand
 from harness.command.types import CommandResult
 from harness.errors import UnknownCommandError

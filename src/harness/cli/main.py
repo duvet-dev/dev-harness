@@ -33,7 +33,6 @@ from harness.command.commands.batch import (
 from harness.command.commands.engagement import (
     AbortEngagementCommand,
     CreateEngagementCommand,
-    ResumeEngagementCommand,
 )
 from harness.command.commands.mgmt import (
     AgentListCommand,
@@ -50,7 +49,7 @@ from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
 from harness.command.commands.project import InitProjectCommand
 from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
 from harness.command.commands.session import ChatCommand, SessionCommand
-from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand, RunWaveCommand
+from harness.command.commands.wave import RunWaveCommand
 from harness.command._registration import register
 from harness.command.setup import get_shared_bus
 from harness.command.handlers.analysis_handlers import (

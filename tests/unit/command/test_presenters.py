@@ -80,16 +80,4 @@ class TestReplPresenter:
         output = repl.present(r)
         assert "Boom" in output
 
-    def test_present_typed_result(self, repl):
-        """Typed result with success shows checkmark."""
-        from harness.command.results.engagement import ResumeEngagementResult
-        r = ResumeEngagementResult(success=True, message="Resumed", slug="test")
-        output = repl.present(r)
-        assert "Resumed" in output
 
-    def test_present_typed_result_error(self, repl):
-        """Typed result with error shows cross."""
-        from harness.command.results.engagement import ResumeEngagementResult
-        r = ResumeEngagementResult(success=False, error="Not found", slug="test")
-        output = repl.present(r)
-        assert "Not found" in output

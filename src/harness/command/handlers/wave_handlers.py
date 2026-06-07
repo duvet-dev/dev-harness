@@ -1,70 +1,17 @@
 """Typed handlers for wave operations.
 
-Covers: CreateWaveHandler, ExecuteStepHandler, RunWaveHandler.
+Covers: RunWaveTypedHandler.
 """
 
 from __future__ import annotations
 
 from harness.command.types import TypedHandler
 from harness.command.commands.wave import (
-    CreateWaveCommand,
-    ExecuteStepCommand,
     RunWaveCommand,
 )
 from harness.command.results.wave import (
-    CreateWaveResult,
-    ExecuteStepResult,
     RunWaveResult,
 )
-
-
-class CreateWaveTypedHandler(TypedHandler[CreateWaveCommand, CreateWaveResult]):
-    """Create a wave via PlanManager."""
-
-    def handle(self, command: CreateWaveCommand) -> CreateWaveResult:
-        try:
-            from pathlib import Path
-            from harness.plan.plan_manager import PlanManager
-
-            root = Path.cwd()
-            pm = PlanManager(root, command.slug)
-
-            wave = pm.add_wave(command.title)
-
-            return CreateWaveResult(
-                success=True,
-                message=f"Wave '{command.title}' created for '{command.slug}'",
-                slug=command.slug,
-                wave_title=command.title,
-                wave_id=wave.id,
-            )
-
-        except Exception as exc:
-            return CreateWaveResult(
-                success=False,
-                error=str(exc),
-                message=f"Failed to create wave: {exc}",
-            )
-
-
-class ExecuteStepTypedHandler(TypedHandler[ExecuteStepCommand, ExecuteStepResult]):
-    """Execute a step via StepDispatcher."""
-
-    def handle(self, command: ExecuteStepCommand) -> ExecuteStepResult:
-        try:
-            return ExecuteStepResult(
-                success=True,
-                message=f"Step execution dispatched for '{command.slug}'",
-                slug=command.slug,
-                step=command.step,
-            )
-
-        except Exception as exc:
-            return ExecuteStepResult(
-                success=False,
-                error=str(exc),
-                message=f"Failed to execute step: {exc}",
-            )
 
 
 class RunWaveTypedHandler(TypedHandler[RunWaveCommand, RunWaveResult]):

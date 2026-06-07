@@ -1,7 +1,7 @@
 """StartupResumeFlow — engagement creation, resumption, and loading.
 
 The top-level entry point for the engagement lifecycle, called by
-CommandBus handlers (CreateEngagementHandler, ResumeEngagementHandler).
+CommandBus handlers (CreateEngagementHandler).
 
 Coordinates:
 - WorkflowOrchestrator → PhaseOrchestrator → StepExecutor chain

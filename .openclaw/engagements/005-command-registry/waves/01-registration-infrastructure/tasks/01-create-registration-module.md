@@ -11,8 +11,8 @@ Create `src/harness/command/_registration.py` with the core infrastructure: `@re
 
 ## Acceptance Criteria
 
-- [x] File exists at `src/harness/command/_registration.py`
-- [x] `@register` decorator with signature:
+- [ ] File exists at `src/harness/command/_registration.py`
+- [ ] `@register` decorator with signature:
   ```python
   def register(
       name: str,
@@ -23,14 +23,14 @@ Create `src/harness/command/_registration.py` with the core infrastructure: `@re
       click_only: bool = False,
   ) -> Callable
   ```
-- [x] `click_only=False` (default) requires `cmd_cls` and `handler` — raises `ValueError` if missing
-- [x] Duplicate `name` raises `ValueError` at import time
-- [x] Decorator returns the function unchanged — Click decorators still own the function
-- [x] `Registration` dataclass with fields: `name`, `cmd_cls`, `handler`, `arg_parser`, `click_only`
-- [x] `REGISTRY: dict[str, Registration]` — module-level mutable dict
-- [x] `build_repl_command_map() -> dict[str, tuple[type, Callable]]` — same structure as current `COMMAND_TYPES`; excludes `click_only=True` entries
-- [x] `register_bus_handlers(bus: CommandBus) -> None` — registers all handlers from REGISTRY; skips duplicates (checks `cmd_cls not in bus._type_handlers`)
-- [x] Imports only abstract types (`TypedCommand`, `TypedHandler` from `harness.command.types`) + `typing` — no concrete command/handler imports
+- [ ] `click_only=False` (default) requires `cmd_cls` and `handler` — raises `ValueError` if missing
+- [ ] Duplicate `name` raises `ValueError` at import time
+- [ ] Decorator returns the function unchanged — Click decorators still own the function
+- [ ] `Registration` dataclass with fields: `name`, `cmd_cls`, `handler`, `arg_parser`, `click_only`
+- [ ] `REGISTRY: dict[str, Registration]` — module-level mutable dict
+- [ ] `build_repl_command_map() -> dict[str, tuple[type, Callable]]` — same structure as current `COMMAND_TYPES`; excludes `click_only=True` entries
+- [ ] `register_bus_handlers(bus: CommandBus) -> None` — registers all handlers from REGISTRY; skips duplicates (checks `cmd_cls not in bus._type_handlers`)
+- [ ] Imports only abstract types (`TypedCommand`, `TypedHandler` from `harness.command.types`) + `typing` — no concrete command/handler imports
 
 ## Files Affected
 

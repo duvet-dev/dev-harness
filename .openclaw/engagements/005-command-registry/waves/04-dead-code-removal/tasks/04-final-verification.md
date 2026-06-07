@@ -11,17 +11,17 @@ Final sweep: verify no stale references remain anywhere in the codebase, full te
 
 ## Acceptance Criteria
 
-- [x] `grep -rn "ResumeEngagement" src/` → zero hits
-- [x] `grep -rn "CreateWaveCommand\|CreateWaveTypedHandler" src/` → zero hits (excluding CreateWaveFrom*, CreateWavesFrom* which are valid)
-- [x] `grep -rn "ExecuteStepCommand\|ExecuteStepTypedHandler" src/` → zero hits
-- [x] `grep -rn "COMMAND_TYPES" src/` → zero hits (old static dict)
-- [x] `grep -rn "CreateWaveResult\|ExecuteStepResult\|ResumeEngagementResult" src/` → zero hits
-- [x] Full test suite passes: `python -m pytest -q`
-- [x] All 4 sync tests pass: `python -m pytest tests/unit/command/test_registration.py -v`
-- [x] REPL can start and handle dispatch: `echo "/help" | python -m harness shell`
-- [x] CLI `--help` still works: `python -m harness --help`
-- [x] Click-only commands show "CLI only" message: `echo "/engagement list" | python -m harness shell 2>&1 | grep "CLI only"`
-- [x] Bus-dispatchable commands still work: `echo "/status" | python -m harness shell`
+- [ ] `grep -rn "ResumeEngagement" src/` → zero hits
+- [ ] `grep -rn "CreateWaveCommand\|CreateWaveTypedHandler" src/` → zero hits (excluding CreateWaveFrom*, CreateWavesFrom* which are valid)
+- [ ] `grep -rn "ExecuteStepCommand\|ExecuteStepTypedHandler" src/` → zero hits
+- [ ] `grep -rn "COMMAND_TYPES" src/` → zero hits (old static dict)
+- [ ] `grep -rn "CreateWaveResult\|ExecuteStepResult\|ResumeEngagementResult" src/` → zero hits
+- [ ] Full test suite passes: `python -m pytest -q`
+- [ ] All 4 sync tests pass: `python -m pytest tests/unit/command/test_registration.py -v`
+- [ ] REPL can start and handle dispatch: `echo "/help" | python -m harness shell`
+- [ ] CLI `--help` still works: `python -m harness --help`
+- [ ] Click-only commands show "CLI only" message: `echo "/engagement list" | python -m harness shell 2>&1 | grep "CLI only"`
+- [ ] Bus-dispatchable commands still work: `echo "/status" | python -m harness shell`
 
 ## Files Affected
 

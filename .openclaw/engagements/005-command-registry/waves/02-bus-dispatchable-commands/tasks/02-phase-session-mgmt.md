@@ -24,11 +24,11 @@ Commands to annotate:
 
 ## Acceptance Criteria
 
-- [x] All 8 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
-- [x] `work` uses `CreateEngagementCommand` / `CreateEngagementHandler()` — maps to same handler as `engagement create` (confirmed: `register_bus_handlers` skips duplicates)
-- [x] Each `handler` argument matches current setup.py instantiation pattern
-- [x] Each `arg_parser` matches the existing parser from `COMMAND_TYPES`
-- [x] All imports added to `main.py`
+- [ ] All 8 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
+- [ ] `work` uses `CreateEngagementCommand` / `CreateEngagementHandler()` — maps to same handler as `engagement create` (confirmed: `register_bus_handlers` skips duplicates)
+- [ ] Each `handler` argument matches current setup.py instantiation pattern
+- [ ] Each `arg_parser` matches the existing parser from `COMMAND_TYPES`
+- [ ] All imports added to `main.py`
 
 ## Files Affected
 

@@ -26,11 +26,11 @@ if not dispatched:
 
 ## Acceptance Criteria
 
-- [x] Typing a `click_only=True` command in the REPL shows: `"CLI only — use the CLI: \`harness <command>\`"`
-- [x] Typing a truly unknown command still shows: `"Unknown command: /<cmd_name>"`
-- [x] Typing a bus-dispatchable command still dispatches normally
-- [x] The fallback is after the main dispatch loop (so bus-dispatchable commands take priority)
-- [x] ~5 lines of code
+- [ ] Typing a `click_only=True` command in the REPL shows: `"CLI only — use the CLI: \`harness <command>\`"`
+- [ ] Typing a truly unknown command still shows: `"Unknown command: /<cmd_name>"`
+- [ ] Typing a bus-dispatchable command still dispatches normally
+- [ ] The fallback is after the main dispatch loop (so bus-dispatchable commands take priority)
+- [ ] ~5 lines of code
 
 ## Files Affected
 

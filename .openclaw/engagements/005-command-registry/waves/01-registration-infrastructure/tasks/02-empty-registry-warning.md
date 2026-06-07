@@ -13,11 +13,11 @@ Add a `import warnings` check in both `build_repl_command_map()` and `register_b
 
 ## Acceptance Criteria
 
-- [x] `build_repl_command_map()` emits a warning when REGISTRY is empty
-- [x] `register_bus_handlers()` emits a warning when REGISTRY is empty
-- [x] Warning message is informative: mentions the import ordering constraint (`main.py` must be imported first)
-- [x] Warning uses `warnings.warn()` (not print), so it's controllable via pytest `-W` flag
-- [x] Functions still return/execute normally (warning, not raise) — retains backward compatibility during migration
+- [ ] `build_repl_command_map()` emits a warning when REGISTRY is empty
+- [ ] `register_bus_handlers()` emits a warning when REGISTRY is empty
+- [ ] Warning message is informative: mentions the import ordering constraint (`main.py` must be imported first)
+- [ ] Warning uses `warnings.warn()` (not print), so it's controllable via pytest `-W` flag
+- [ ] Functions still return/execute normally (warning, not raise) — retains backward compatibility during migration
 
 ## Files Affected
 

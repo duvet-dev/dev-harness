@@ -23,10 +23,10 @@ Commands to annotate:
 
 ## Acceptance Criteria
 
-- [x] All 7 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
-- [x] Each `handler` argument matches current setup.py instantiation pattern
-- [x] Each `arg_parser` matches the existing parser from `COMMAND_TYPES`
-- [x] All imports added to `main.py`
+- [ ] All 7 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
+- [ ] Each `handler` argument matches current setup.py instantiation pattern
+- [ ] Each `arg_parser` matches the existing parser from `COMMAND_TYPES`
+- [ ] All imports added to `main.py`
 
 ## Files Affected
 

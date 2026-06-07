@@ -2,7 +2,7 @@
 
 **Milestone:** 1 — Foundation
 **Effort:** 1.5h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** None
 **Blocks:** Wave 02
 
@@ -18,9 +18,9 @@ This wave is purely additive — nothing is deleted. All existing tests continue
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Create `_registration.py` — decorator + REGISTRY + builder functions | 📋 Pending | ~60 lines |
-| 2 | Add empty-REGISTRY warning to builder functions | 📋 Pending | Crichton note #4, ~5 lines |
-| 3 | Create `test_registration.py` — 4 sync tests | 📋 Pending | ~80 lines |
+| 1 | Create `_registration.py` — decorator + REGISTRY + builder functions | ✅ Complete | ~60 lines |
+| 2 | Add empty-REGISTRY warning to builder functions | ✅ Complete | Crichton note #4, ~5 lines |
+| 3 | Create `test_registration.py` — 4 sync tests | ✅ Complete | ~80 lines |
 
 ## Verification
 

@@ -1,6 +1,6 @@
 # Task 2 — Add empty-REGISTRY warning to builder functions
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 01-registration-infrastructure
 **Dependencies:** Task 1
 **Effort:** 0.25h

@@ -40,7 +40,7 @@ Wave 4: Dead Code Removal + Final Verification
 
 | Wave | Name | Effort | Depends On | Crichton Notes |
 |------|------|--------|------------|----------------|
-| 01 | Registration Infrastructure + Sync Tests | 1.5h | — | Note #4 (empty REGISTRY warning) |
+| 01 | Registration Infrastructure + Sync Tests | 1.5h | — | Note #4 (empty REGISTRY warning) ✅ |
 | 02 | Bus-Dispatchable Commands + setup.py | 2h | W1 | — |
 | 03 | REPL Rewiring + Click-Only Commands | 2h | W2 | Notes #1, #2, #3 |
 | 04 | Dead Code Removal + Final Verification | 1.5h | W3 | — |

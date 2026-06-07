@@ -1,6 +1,6 @@
 # Task 1 — Create `_registration.py`
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 01-registration-infrastructure
 **Dependencies:** None
 **Effort:** 0.75h

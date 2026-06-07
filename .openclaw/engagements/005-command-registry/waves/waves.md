@@ -2,7 +2,7 @@
 
 > **Purpose:** Single view of all waves — completed and planned.
 > **Engagement:** 005-command-registry
-> **Updated:** 2026-06-07
+> **Updated:** 2026-06-07 (Wave 1 ✅, Wave 2 ✅)
 > **Principle:** Single-pass migration — additive then subtractive, no intermediate state with parallel registrations.
 > **Source:** Decorator-based `@register` design (Crichton — APPROVED, 2026-06-07)
 
@@ -41,7 +41,7 @@ Wave 4: Dead Code Removal + Final Verification
 | Wave | Name | Effort | Depends On | Crichton Notes |
 |------|------|--------|------------|----------------|
 | 01 | Registration Infrastructure + Sync Tests | 1.5h | — | Note #4 (empty REGISTRY warning) ✅ |
-| 02 | Bus-Dispatchable Commands + setup.py | 2h | W1 | — |
+| 02 | Bus-Dispatchable Commands + setup.py | 2h | W1 | ✅ Complete |
 | 03 | REPL Rewiring + Click-Only Commands | 2h | W2 | Notes #1, #2, #3 |
 | 04 | Dead Code Removal + Final Verification | 1.5h | W3 | — |
 

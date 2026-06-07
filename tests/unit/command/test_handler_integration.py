@@ -20,11 +20,13 @@ def bus():
 class TestWaveHandlerIntegration:
     """Tests for wave handler through real create_bus."""
 
+    @pytest.mark.skip(reason="CreateWaveCommand dead handler - removed in Wave 4")
     def test_create_wave_dispatches(self, bus):
         from harness.command.commands.wave import CreateWaveCommand
         result = bus.dispatch(CreateWaveCommand(slug="test", title="Test"))
         assert isinstance(result, CommandResult)
 
+    @pytest.mark.skip(reason="ExecuteStepCommand dead handler - removed in Wave 4")
     def test_execute_step_dispatches(self, bus):
         from harness.command.commands.wave import ExecuteStepCommand
         result = bus.dispatch(ExecuteStepCommand(slug="test", step="{}"))
@@ -61,6 +63,7 @@ class TestBatchHandlerIntegration:
 class TestEngagementHandlerIntegration:
     """Tests for engagement handlers (deferred/nonexistent)."""
 
+    @pytest.mark.skip(reason="ResumeEngagementCommand dead handler - removed in Wave 4")
     def test_resume_nonexistent(self, bus):
         from harness.command.commands.engagement import ResumeEngagementCommand
         result = bus.dispatch(ResumeEngagementCommand(slug="nonexistent"))

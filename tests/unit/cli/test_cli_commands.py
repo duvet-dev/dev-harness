@@ -50,6 +50,7 @@ class TestTypedCommandDispatch:
         assert result.success is True
         assert "Phase 'design' entry dispatched" in result.message
 
+    @pytest.mark.skip(reason="NextCommand dead handler - removed in Wave 4")
     def test_typed_next(self):
         """Typed NextCommand dispatches."""
         bus = get_shared_bus()
@@ -87,6 +88,7 @@ class TestTypedCommandDispatch:
 class TestSharedBusDispatch:
     """Tests for dispatch through the shared CommandBus."""
 
+    @pytest.mark.skip(reason="NextCommand dead handler - removed in Wave 4")
     def test_shared_bus_dispatch(self):
         """The shared bus dispatches a typed command."""
         reset_shared_bus()

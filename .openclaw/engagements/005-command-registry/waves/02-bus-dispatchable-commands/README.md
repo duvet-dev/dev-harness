@@ -2,7 +2,7 @@
 
 **Milestone:** 2 — Wiring
 **Effort:** 2h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** Wave 01
 **Blocks:** Wave 03
 
@@ -20,11 +20,11 @@ The 3 dead handler registrations (ResumeEngagementHandler, CreateWaveTypedHandle
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Add `@register` to engagement lifecycle commands | 📋 Pending | ~8 commands |
-| 2 | Add `@register` to phase/session/management commands | 📋 Pending | ~8 commands |
-| 3 | Add `@register` to wave/changelog/governance commands | 📋 Pending | ~8 commands |
-| 4 | Add `@register` to agent/team/consult/remaining commands | 📋 Pending | ~6 commands |
-| 5 | Replace setup.py registrations with `register_bus_handlers(bus)` | 📋 Pending | ~40 lines → 1 line |
+| 1 | Add `@register` to engagement lifecycle commands | ✅ Complete | ~8 commands |
+| 2 | Add `@register` to phase/session/management commands | ✅ Complete | ~8 commands |
+| 3 | Add `@register` to wave/changelog/governance commands | ✅ Complete | ~8 commands |
+| 4 | Add `@register` to agent/team/consult/remaining commands | ✅ Complete | ~6 commands |
+| 5 | Replace setup.py registrations with `register_bus_handlers(bus)` | ✅ Complete | ~40 lines → 1 line |
 
 ## Verification
 

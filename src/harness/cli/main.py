@@ -36,11 +36,14 @@ from harness.command.commands.engagement import (
     ResumeEngagementCommand,
 )
 from harness.command.commands.mgmt import (
+    AgentListCommand,
+    ConsultCommand,
     FixEngagementCommand,
     RefreshAgentsCommand,
     RenameEngagementCommand,
     SetBranchCommand,
     SetGovernanceCommand,
+    TeamListCommand,
 )
 from harness.command.commands.misc import NextCommand, QueryStatusCommand, QueryWhatsNextCommand
 from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
@@ -48,7 +51,70 @@ from harness.command.commands.project import InitProjectCommand
 from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
 from harness.command.commands.session import ChatCommand, SessionCommand
 from harness.command.commands.wave import CreateWaveCommand, ExecuteStepCommand, RunWaveCommand
+from harness.command._registration import register
 from harness.command.setup import get_shared_bus
+from harness.command.handlers.analysis_handlers import (
+    AssessTypedHandler,
+    InspectTypedHandler,
+    SummaryTypedHandler,
+)
+from harness.command.handlers.batch_handlers import (
+    AnnotateChangelogTypedHandler,
+    CreateWaveFromFindingTypedHandler,
+    CreateWavesFromAssessmentTypedHandler,
+    GenerateDocsTypedHandler,
+    ListWavesTypedHandler,
+    WaveStatusTypedHandler,
+)
+from harness.command.handlers.engagement_handlers import (
+    AbortEngagementTypedHandler,
+    CreateEngagementHandler,
+)
+from harness.command.handlers.mgmt_handlers import (
+    AgentListTypedHandler,
+    ConsultTypedHandler,
+    FixEngagementTypedHandler,
+    RefreshAgentsTypedHandler,
+    RenameEngagementTypedHandler,
+    SetBranchTypedHandler,
+    SetGovernanceTypedHandler,
+    TeamListTypedHandler,
+)
+from harness.command.handlers.misc_handlers import (
+    QueryStatusTypedHandler,
+    QueryWhatsNextTypedHandler,
+)
+from harness.command.handlers.phase_handlers import (
+    EnterPhaseTypedHandler,
+    PhaseManagementTypedHandler,
+)
+from harness.command.handlers.project_handlers import InitProjectTypedHandler
+from harness.command.handlers.review_handlers import (
+    FinishEngagementTypedHandler,
+    ReviewEngagementTypedHandler,
+)
+from harness.command.handlers.session_handlers import (
+    ChatTypedHandler,
+    SessionTypedHandler,
+)
+from harness.command.handlers.wave_handlers import RunWaveTypedHandler
+from harness.shell.repl import (
+    _assess_args,
+    _chat_args,
+    _create_wave_from_assessment_args,
+    _create_wave_from_finding_args,
+    _engagement_create_args,
+    _finish_args,
+    _init_args,
+    _inspect_args,
+    _phase_args,
+    _review_args,
+    _run_wave_args,
+    _session_args,
+    _single_arg,
+    _summary_args,
+    _work_args,
+)
 from harness.cli.helpers import (
     bold,
     find_project_root,
@@ -159,6 +225,12 @@ def workflows():
 
 @main.command()
 @click.argument("slug")
+@register(
+    name="whatsnext",
+    cmd_cls=QueryWhatsNextCommand,
+    handler=QueryWhatsNextTypedHandler(),
+    arg_parser=_single_arg,
+)
 def whatsnext(slug):
     """Show available next actions for an engagement.
 
@@ -210,6 +282,12 @@ def whatsnext(slug):
 @main.command()
 @click.argument("slug")
 @click.argument("phase")
+@register(
+    name="enter-phase",
+    cmd_cls=EnterPhaseCommand,
+    handler=EnterPhaseTypedHandler(),
+    arg_parser=lambda a: {"slug": a[0], "phase": a[1]} if len(a) >= 2 else {},
+)
 def enter_phase(slug, phase):
     """Dispatch an EnterPhase command through the CommandBus.
 
@@ -255,6 +333,12 @@ def enter_phase(slug, phase):
     "--force",
     is_flag=True,
     help="Re-initialise even if already initialised (overwrites state)",
+)
+@register(
+    name="init",
+    cmd_cls=InitProjectCommand,
+    handler=InitProjectTypedHandler(),
+    arg_parser=lambda a: {k: v for k, v in _init_args(a).items() if k != "root"},
 )
 def init(project_dir, template, seed, no_git, force):
     """Initialise a harness project in the current or specified directory.
@@ -314,6 +398,12 @@ def init(project_dir, template, seed, no_git, force):
     is_flag=True,
     help="Overwrite existing agent profile files (not just missing ones).",
 )
+@register(
+    name="refresh-agents",
+    cmd_cls=RefreshAgentsCommand,
+    handler=RefreshAgentsTypedHandler(),
+    arg_parser=lambda a: {"slug": "", "project_dir": None, "force": "--force" in a},
+)
 def refresh_agents(project_dir, force):
     """Refresh agent profiles from the harness's current agent registry."""
     try:
@@ -345,6 +435,12 @@ def refresh_agents(project_dir, force):
               help="Maximum edit-feedback cycles per wave (default: 5)")
 @click.option("--partial-approval/--no-partial-approval", default=True,
               help="Enable partial approval (default: enabled)")
+@register(
+    name="work",
+    cmd_cls=CreateEngagementCommand,
+    handler=CreateEngagementHandler(),
+    arg_parser=_work_args,
+)
 def work(description, mode, backend, max_iterations, partial_approval):
     """Start a new engagement.
 
@@ -408,6 +504,18 @@ def work(description, mode, backend, max_iterations, partial_approval):
 @click.option("--assess", "assess_flag", is_flag=True, help="Run LLM-based independent assessment (P1-P5)")
 @click.option("--json", "json_flag", is_flag=True, help="Output as JSON")
 @click.option("--reconcile", is_flag=True, help="Refresh state before summary")
+@register(
+    name="summary",
+    cmd_cls=SummaryCommand,
+    handler=SummaryTypedHandler(),
+    arg_parser=lambda a: {
+        "slug": a[0] if a else "",
+        "deep": "--deep" in a,
+        "assess_flag": "--assess" in a,
+        "json_flag": "--json" in a,
+        "reconcile": "--reconcile" in a,
+    },
+)
 def summary(deep, assess_flag, engagement, json_flag, reconcile):
     """Show project status summary."""
     try:
@@ -435,6 +543,12 @@ def agent():
 
 
 @agent.command(name="list")
+@register(
+    name="agent list",
+    cmd_cls=AgentListCommand,
+    handler=AgentListTypedHandler(),
+    arg_parser=lambda a: {"slug": ""},
+)
 def list_agents():
     """List all registered harness agent roles.
 
@@ -554,6 +668,12 @@ def team():
 
 @team.command(name="list")
 @click.option("--consults", is_flag=True, help="Show consultation capabilities for each team")
+@register(
+    name="team list",
+    cmd_cls=TeamListCommand,
+    handler=TeamListTypedHandler(),
+    arg_parser=lambda a: {"slug": ""},
+)
 def list_teams(consults):
     """List all registered teams with their agents.
 
@@ -751,6 +871,12 @@ def team_consult(team_name, no_truncate):
 @team.command(name="set-governance")
 @click.argument("level", type=click.Choice(["exploration", "standard", "strict"]))
 @click.option("--engagement", "slug", help="Apply to a specific engagement instead of project")
+@register(
+    name="team set-governance",
+    cmd_cls=SetGovernanceCommand,
+    handler=SetGovernanceTypedHandler(),
+    arg_parser=lambda a: {"slug": "", "level": a[0]} if a else {"slug": "", "level": "standard"},
+)
 def set_governance(level, slug):
     """Set the governance level for the project or an engagement."""
     try:
@@ -772,6 +898,12 @@ def set_governance(level, slug):
               default="advisory",
               help="Consultation mode (advisory by default)")
 @click.option("--engagement", help="Engagement context (optional)")
+@register(
+    name="consult",
+    cmd_cls=ConsultCommand,
+    handler=ConsultTypedHandler(),
+    arg_parser=lambda a: {"slug": "", "question": " ".join(a)} if a else {"slug": "", "question": ""},
+)
 def consult(question, team, mode, engagement):
     """Ask a cross-team consultation question.
 
@@ -839,6 +971,12 @@ def wave():
 
 @wave.command(name="list")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
+@register(
+    name="wave list",
+    cmd_cls=ListWavesCommand,
+    handler=ListWavesTypedHandler(),
+    arg_parser=lambda a: {"slug": a[0] if a else ""},
+)
 def list_waves(slug):
     """List waves from the engagement plan."""
     try:
@@ -867,11 +1005,17 @@ def list_waves(slug):
     except Exception as exc:
         click.echo(f"List waves failed: {exc}", err=True)
         raise click.Abort()
-@wave.command()
+@wave.command(name="run")
 @click.argument("wave_id")
 @click.option("--no-test", is_flag=True, help="Skip automated test suite execution")
 @click.option("--backend", help="Agent backend name")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
+@register(
+    name="wave run",
+    cmd_cls=RunWaveCommand,
+    handler=RunWaveTypedHandler(),
+    arg_parser=_run_wave_args,
+)
 def run_wave(wave_id, no_test, backend, slug):
     """Run a wave through the implement-test-verify-commit cycle.
 
@@ -915,8 +1059,14 @@ def run_wave(wave_id, no_test, backend, slug):
     except Exception as exc:
         click.echo(f"Error running wave cycle: {exc}", err=True)
         raise click.Abort()
-@wave.command()
+@wave.command(name="status")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
+@register(
+    name="wave status",
+    cmd_cls=WaveStatusCommand,
+    handler=WaveStatusTypedHandler(),
+    arg_parser=lambda a: {"slug": a[0] if a else ""},
+)
 def wave_status(slug):
     """Show detailed wave status from the engagement plan."""
     try:
@@ -936,6 +1086,12 @@ def wave_status(slug):
 @wave.command(name="create-from-finding")
 @click.argument("finding_id")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
+@register(
+    name="wave create-from-finding",
+    cmd_cls=CreateWaveFromFindingCommand,
+    handler=CreateWaveFromFindingTypedHandler(),
+    arg_parser=_create_wave_from_finding_args,
+)
 def create_wave_from_finding(finding_id, slug):
     """Create a wave from an assessment finding."""
     try:
@@ -970,6 +1126,12 @@ def create_wave_from_finding(finding_id, slug):
 @click.option("--refactoring", is_flag=True,
               help="Mark the engagement as a refactoring engagement")
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
+@register(
+    name="wave create-from-assessment",
+    cmd_cls=CreateWavesFromAssessmentCommand,
+    handler=CreateWavesFromAssessmentTypedHandler(),
+    arg_parser=_create_wave_from_assessment_args,
+)
 def create_waves_from_assessment(focus, limit, slug, refactoring):
     """Create waves from all matching assessment findings."""
     try:
@@ -1001,6 +1163,12 @@ def create_waves_from_assessment(focus, limit, slug, refactoring):
     default=2,
     show_default=True,
     help="Context load tier: 1=inventory only, 2=+summaries, 3=+snippets",
+)
+@register(
+    name="chat",
+    cmd_cls=ChatCommand,
+    handler=ChatTypedHandler(),
+    arg_parser=_chat_args,
 )
 def chat(prompt_text, engagement_slug, phase, context_tier):
     """Interactive LLM chat session within an engagement."""
@@ -1060,6 +1228,12 @@ def chat(prompt_text, engagement_slug, phase, context_tier):
               help="Refactoring session (restructure existing code)")
 @click.option("--get-well", "get_well", is_flag=True,
               help="Get-well remediation session (assessment-driven)")
+@register(
+    name="session",
+    cmd_cls=SessionCommand,
+    handler=SessionTypedHandler(),
+    arg_parser=_session_args,
+)
 def session(engagement_slug, phase, context_tier, session_type, get_well):
     """Run a full phase-by-phase session."""
     try:
@@ -1124,6 +1298,12 @@ def session(engagement_slug, phase, context_tier, session_type, get_well):
               default="blocker", help="Severity for findings (default: blocker)")
 @click.option("--artifact-ref", multiple=True, default=None, help="Artifact reference per finding (repeatable)")
 @click.option("--notes", default="", help="Free-form notes")
+@register(
+    name="review",
+    cmd_cls=ReviewEngagementCommand,
+    handler=ReviewEngagementTypedHandler(),
+    arg_parser=_review_args,
+)
 def review(engagement_id, approve, reject, request_changes,
            finding, severity, artifact_ref, notes):
     """Review an engagement at a gate checkpoint.
@@ -1181,6 +1361,12 @@ def review(engagement_id, approve, reject, request_changes,
 @main.command()
 @click.argument("slug", required=False, default=None)
 @click.option("--force", is_flag=True)
+@register(
+    name="status",
+    cmd_cls=QueryStatusCommand,
+    handler=QueryStatusTypedHandler(),
+    arg_parser=_single_arg,
+)
 def status(slug, force):
     """Quick view of active engagement.
 
@@ -1254,6 +1440,12 @@ def status(slug, force):
 @click.option("--force", "force_flag", is_flag=True, help="Bypass checkpoint staleness checks on resume")
 @click.option("--status", "status_flag", is_flag=True, help="Show phase state diagram")
 @click.option("--feedback-list", "fb_list_flag", is_flag=True, help="List feedback history")
+@register(
+    name="phase",
+    cmd_cls=ManagePhaseCommand,
+    handler=PhaseManagementTypedHandler(),
+    arg_parser=_phase_args,
+)
 def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
           resume_flag, force_flag, status_flag, fb_list_flag):
     """Manage engagement phases.
@@ -1375,7 +1567,19 @@ def phase(engagement_id, list_flag, advance, nav_target, fb_target, fb_reason,
     except Exception as exc:
         click.echo(f"Phase command failed: {exc}", err=True)
         raise click.Abort()
-def inspect(repo_path, report_file, deep, verbose, project_type):
+
+
+@main.command()
+@click.argument("repo_path", default=".")
+@click.option("--report", "report_file", default=None, help="Write report to file")
+@click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
+@register(
+    name="inspect",
+    cmd_cls=InspectCommand,
+    handler=InspectTypedHandler(),
+    arg_parser=_inspect_args,
+)
+def inspect(repo_path, report_file, verbose):
     """Analyse a codebase as an external observer."""
     try:
         from harness.cli.helpers import write_assessment_report
@@ -1406,6 +1610,12 @@ def inspect(repo_path, report_file, deep, verbose, project_type):
 @click.argument("repo_path", default=".")
 @click.option("--report", "report_file", default=None, help="Write report to file")
 @click.option("--verbose", "verbose", is_flag=True, help="Print full report to terminal")
+@register(
+    name="assess",
+    cmd_cls=AssessCommand,
+    handler=AssessTypedHandler(),
+    arg_parser=_assess_args,
+)
 def assess(repo_path, report_file, verbose):
     """Run the full assessment on the current project."""
     try:
@@ -1509,6 +1719,12 @@ def health(verbose, fix):
 @main.command()
 @click.option("--re-assess", is_flag=True,
               help="Re-run assessment and compare to baseline on finish")
+@register(
+    name="finish",
+    cmd_cls=FinishEngagementCommand,
+    handler=FinishEngagementTypedHandler(),
+    arg_parser=_finish_args,
+)
 def finish(re_assess):
     """Complete the current engagement with a commit.
 
@@ -1602,6 +1818,12 @@ def engagement():
               help="Filter findings by severity when --refactoring (default: all)")
 @click.option("--allow-refactoring-suggestions", type=bool, default=None,
               help="Allow refactoring suggestions for this engagement (overrides project config)")
+@register(
+    name="engagement create",
+    cmd_cls=CreateEngagementCommand,
+    handler=CreateEngagementHandler(),
+    arg_parser=_engagement_create_args,
+)
 def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
     """Create a new engagement.
 
@@ -2011,6 +2233,12 @@ def engagement_status(engagement_slug):
     help="How to handle the git branch (keep, rename, new)",
 )
 @click.option("--dry-run", is_flag=True, help="Show what would change without making changes")
+@register(
+    name="engagement rename",
+    cmd_cls=RenameEngagementCommand,
+    handler=RenameEngagementTypedHandler(),
+    arg_parser=lambda a: {"slug": a[0], "new_slug": a[1]} if len(a) >= 2 else {},
+)
 def rename(old_slug, new_slug, branch_strategy, dry_run):
     """Rename an existing engagement."""
     try:
@@ -2046,6 +2274,12 @@ def rename(old_slug, new_slug, branch_strategy, dry_run):
         raise click.Abort()
 @engagement.command()
 @click.argument("slug")
+@register(
+    name="engagement close",
+    cmd_cls=AbortEngagementCommand,
+    handler=AbortEngagementTypedHandler(),
+    arg_parser=_single_arg,
+)
 def close(slug):
     """Close an engagement by setting its status to completed.
 
@@ -2271,6 +2505,12 @@ def diff(slug):
 @engagement.command()
 @click.argument("slug")
 @click.argument("branch")
+@register(
+    name="engagement set-branch",
+    cmd_cls=SetBranchCommand,
+    handler=SetBranchTypedHandler(),
+    arg_parser=lambda a: {"slug": a[0], "branch": a[1]} if len(a) >= 2 else {"slug": a[0] if a else ""},
+)
 def set_branch(slug, branch):
     """Set the branch for an engagement (explicit repoint)."""
     try:
@@ -2291,6 +2531,12 @@ def set_branch(slug, branch):
         raise click.Abort()
 @engagement.command()
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
+@register(
+    name="engagement fix",
+    cmd_cls=FixEngagementCommand,
+    handler=FixEngagementTypedHandler(),
+    arg_parser=lambda a: {"slug": a[0] if a else ""},
+)
 def fix(slug):
     """Fix missing engagement metadata and state issues."""
     try:
@@ -2317,6 +2563,12 @@ def fix(slug):
               default="full", help="Document type to generate")
 @click.option("--source-tier", type=int, default=3,
               help="Source material tier (1-5, higher = richer)")
+@register(
+    name="generate-docs",
+    cmd_cls=GenerateDocsCommand,
+    handler=GenerateDocsTypedHandler(),
+    arg_parser=lambda a: {"slug": "", "root": a[0] if a else "."},
+)
 def generate_docs(output_dir, overwrite, doc_type, source_tier):
     """Generate project documentation from harness analysis data."""
     try:
@@ -2345,6 +2597,12 @@ def changelog():
 @changelog.command()
 @click.argument("engagement_slug")
 @click.argument("text")
+@register(
+    name="changelog annotate",
+    cmd_cls=AnnotateChangelogCommand,
+    handler=AnnotateChangelogTypedHandler(),
+    arg_parser=lambda a: {"slug": a[0], "wave": "", "text": " ".join(a[1:])} if a else {},
+)
 def annotate(engagement_slug, text):
     """Append a human annotation to the latest changelog entry."""
     try:

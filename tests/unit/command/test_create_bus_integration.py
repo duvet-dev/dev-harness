@@ -31,6 +31,7 @@ class TestQueryCommands:
         result = bus.dispatch(QueryWhatsNextCommand(slug=""))
         assert isinstance(result, CommandResult)
 
+    @pytest.mark.skip(reason="NextCommand dead handler - removed in Wave 4")
     def test_next_dispatches(self, bus):
         from harness.command.commands.misc import NextCommand
         result = bus.dispatch(NextCommand(slug=""))

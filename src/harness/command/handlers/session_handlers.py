@@ -65,7 +65,7 @@ class ChatTypedHandler(TypedHandler[ChatCommand, ChatResult]):
 
     def handle(self, command: ChatCommand) -> ChatResult:
         try:
-            from harness.session.client import resolve_provider, SessionClient
+            from harness.session.client import resolve_provider, InteractiveClient
             from harness.paths import get_engagement_dir
 
             root = Path.cwd()
@@ -81,8 +81,20 @@ class ChatTypedHandler(TypedHandler[ChatCommand, ChatResult]):
                     message=f"Engagement '{command.slug}' not found",
                 )
 
+            if not prompt:
+                return ChatResult(
+                    success=False,
+                    error="Empty prompt",
+                    message="Please provide a prompt to start the chat.",
+                )
+
             provider = resolve_provider(root)
-            SessionClient(root, provider=provider, verbose=True)
+            InteractiveClient(
+                api_key=provider["api_key"],
+                base_url=provider.get("base_url", "https://api.deepseek.com"),
+                model=provider.get("model", "deepseek-v4-pro"),
+                provider_type=provider.get("type", "openai-compatible"),
+            )
 
             return ChatResult(
                 success=True,

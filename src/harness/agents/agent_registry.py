@@ -605,6 +605,112 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.unrestricted(),
     ),
 
+    # ── Wave 32: Missing Config Agents ──────────────────────────────────
+    AgentSpec(
+        role="code-critic",
+        name="Code Critic",
+        description="Reviews implementation code for correctness, style, edge cases, and regressions.",
+        sop_summary=[
+            "Review code for correctness and adherence to requirements",
+            "Check for edge cases, error handling, and boundary conditions",
+            "Verify tests cover acceptance criteria",
+            "Flag regressions, dead code, and style violations",
+        ],
+        tags=["review", "code", "quality"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+    AgentSpec(
+        role="architecture-critic",
+        name="Architecture Critic",
+        description="Reviews architectural decisions against SOLID principles, DDD, and project conventions.",
+        sop_summary=[
+            "Evaluate architecture against SOLID principles and DDD patterns",
+            "Check bounded context boundaries and context map consistency",
+            "Flag inappropriate coupling, leaky abstractions, and scope creep",
+            "Ensure architectural decisions are documented as ADRs",
+        ],
+        tags=["review", "architecture", "quality"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+    AgentSpec(
+        role="research-agent",
+        name="Research Agent",
+        description="Performs independent research and investigation, gathers information from codebase and external sources.",
+        sop_summary=[
+            "Search codebase for relevant patterns and implementations",
+            "Gather information from project documentation and config",
+            "Consult external references when needed",
+            "Summarise findings in structured format",
+        ],
+        tags=["research", "analysis"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+    AgentSpec(
+        role="dependency-analyser",
+        name="Dependency Analyser",
+        description="Analyses project dependencies for conflicts, outdated versions, and circular references.",
+        sop_summary=[
+            "Examine project dependencies and their transitive closure",
+            "Detect version conflicts and incompatible combinations",
+            "Flag circular dependencies between modules",
+            "Identify outdated or deprecated dependency versions",
+        ],
+        tags=["analysis", "quality", "dependencies"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+    AgentSpec(
+        role="test-coverage-analyser",
+        name="Test Coverage Analyser",
+        description="Analyses test coverage, identifies untested code paths, and suggests test improvements.",
+        sop_summary=[
+            "Analyse test coverage reports and identify gaps",
+            "Flag untested code paths and edge cases",
+            "Check boundary tests at module interfaces",
+            "Suggest test improvements for uncovered areas",
+        ],
+        tags=["testing", "coverage", "quality"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+    AgentSpec(
+        role="design-reviewer",
+        name="Design Reviewer",
+        description="Reviews design proposals, interface contracts, and data models for clarity and correctness.",
+        sop_summary=[
+            "Review design proposals for clarity and completeness",
+            "Verify interface contracts are well-defined",
+            "Check data models against domain requirements",
+            "Flag ambiguous designs and missing details",
+        ],
+        tags=["review", "design", "quality"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+    AgentSpec(
+        role="security-critic",
+        name="Security Critic",
+        description="Reviews code and architecture for security vulnerabilities, following OWASP and secure coding practices.",
+        sop_summary=[
+            "Review code for common security vulnerabilities (OWASP Top 10)",
+            "Check authentication, authorisation, and input validation",
+            "Review data handling for privacy and compliance",
+            "Flag insecure dependencies and configuration",
+        ],
+        tags=["review", "security", "quality"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+    AgentSpec(
+        role="security-auditor",
+        name="Security Auditor",
+        description="Performs comprehensive security audits of the codebase, infrastructure, and deployment.",
+        sop_summary=[
+            "Perform comprehensive security audit of the codebase",
+            "Check infrastructure configuration for security best practices",
+            "Review deployment pipeline security controls",
+            "Produce security audit report with findings and recommendations",
+        ],
+        tags=["review", "security", "quality"],
+        tool_permissions=ToolPermissions.read_only(),
+    ),
+
     # ── Wave 27: Phase-Specific Agents ───────────────────────────────────
     AgentSpec(
         role="assessment-agent",

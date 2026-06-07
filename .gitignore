@@ -49,6 +49,7 @@ coverage/
 .harness/backups/
 .harness/engagements/
 .harness/test_output/
+.harness-freshness.yaml
 
 # Profiling output
 test-profile.log

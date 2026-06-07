@@ -34,7 +34,12 @@ def _build_service(root: Path) -> HealthService:
         def save(self, rec, r: Path):
             return save_freshness(rec, r)
 
-    _git_checker = GitHealthChecker(_git, read_active_engagement, _FreshnessStore())
+    class _EngagementStore:
+        """Adapter: wraps read_active_engagement function as an object method."""
+        def read_active_engagement(self, root: Path):
+            return read_active_engagement(root)
+
+    _git_checker = GitHealthChecker(_git, _EngagementStore(), _FreshnessStore())
 
     class _YamlReader:
         def read(self, p: Path):

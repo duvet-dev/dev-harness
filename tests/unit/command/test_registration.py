@@ -26,9 +26,6 @@ import pytest
 # have a @register decorator. These are excluded from sync checks.
 PURE_CLICK_EXEMPTIONS: set[str] = {
     "shell",
-    "workflows",
-    "team add-agent",
-    "team remove-agent",
 }
 
 
@@ -54,7 +51,6 @@ def _walk_click_commands() -> list[str]:
     return names
 
 
-@pytest.mark.skip(reason="No @register decorators deployed yet — enabled in Waves 2-3")
 class TestCLIRegistrationSync:
     """Verify every CLI command has a corresponding REGISTRY entry."""
 
@@ -97,7 +93,6 @@ class TestNoOrphanedRegistrations:
 # Test 3 — REPL map entries are instantiable
 # ═══════════════════════════════════════════════════════════════════
 
-@pytest.mark.skip(reason="Click-only commands not yet registered - enabled in Wave 3")
 class TestReplMapInstantiable:
     """Every entry in build_repl_command_map() can be constructed."""
 
@@ -109,14 +104,29 @@ class TestReplMapInstantiable:
         - ``[]`` for commands with no required args
         """
         from harness.command._registration import build_repl_command_map
+        from harness.cli import main as _unused  # populate REGISTRY via @register
 
         command_map = build_repl_command_map()
 
-        # Default sample args — these produce valid constructor calls
-        # for most command types without triggering side effects.
-        sample_args: list[str] = ["test-slug"]
-
+        # Determine appropriate sample args for each command based on name
+        # Some commands need more than one positional arg.
         for name, (cls, parser) in command_map.items():
+            # Pick sample args appropriate to the command name
+            if name == "enter-phase":
+                sample_args = ["test-slug", "requirements"]
+            elif name == "engagement rename":
+                sample_args = ["test-slug", "new-slug"]
+            elif name == "engagement set-branch":
+                sample_args = ["test-slug", "main"]
+            elif name == "changelog annotate":
+                sample_args = ["test-slug", "annotation text"]
+            elif name == "team set-governance":
+                sample_args = ["standard"]
+            elif name == "work":
+                sample_args = ["test-task"]
+            else:
+                sample_args = ["test-slug"]
+
             kwargs = parser(sample_args) if parser else {}
             try:
                 instance = cls(**kwargs)

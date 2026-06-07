@@ -12,44 +12,15 @@ import os
 import readline
 import shlex
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Optional
 
 import click
-import click.shell_completion
 
+from harness.command._registration import build_repl_command_map, REGISTRY
 from harness.command.setup import get_shared_bus
 from harness.command.bus import CommandBus
 
 from harness.command.types import CommandResult, TypedCommand
-from harness.command.commands.analysis import AssessCommand, InspectCommand, SummaryCommand
-from harness.command.commands.batch import (
-    AnnotateChangelogCommand,
-    CreateWaveFromFindingCommand,
-    CreateWavesFromAssessmentCommand,
-    GenerateDocsCommand,
-    ListWavesCommand,
-    WaveStatusCommand,
-)
-from harness.command.commands.engagement import (
-    AbortEngagementCommand,
-    CreateEngagementCommand,
-)
-from harness.command.commands.mgmt import (
-    AgentListCommand,
-    ConsultCommand,
-    FixEngagementCommand,
-    RefreshAgentsCommand,
-    RenameEngagementCommand,
-    SetBranchCommand,
-    SetGovernanceCommand,
-    TeamListCommand,
-)
-from harness.command.commands.phase import EnterPhaseCommand, ManagePhaseCommand
-from harness.command.commands.project import InitProjectCommand
-from harness.command.commands.review import FinishEngagementCommand, ReviewEngagementCommand
-from harness.command.commands.misc import QueryStatusCommand, QueryWhatsNextCommand
-from harness.command.commands.session import ChatCommand, SessionCommand
-from harness.command.commands.wave import RunWaveCommand
 
 
 # ── History ──────────────────────────────────────────────────────────────────
@@ -78,189 +49,7 @@ def _dispatch_via_bus(command: TypedCommand) -> CommandResult:
     return get_shared_bus().dispatch(command)
 
 
-# ── Command name → factory map ────────────────────────────────────────────
-# Maps REPL command names to (factory_function, arg_parser) tuples.
-# arg_parser(args: list[str]) -> dict of kwargs for the factory.
 
-
-def _no_args(_args: list[str]) -> dict[str, Any]:
-    return {}
-
-
-def _single_arg(args: list[str]) -> dict[str, str]:
-    return {"slug": args[0]} if args else {}
-
-
-def _engagement_create_args(args: list[str]) -> dict[str, Any]:
-    """Parse args for /engagement create <name> [--slug ...] [...]."""
-    return {"slug": args[0], "workflow_name": "standard", "session_type": "greenfield", "mode": "auto"} if args else {}
-
-
-def _session_args(args: list[str]) -> dict[str, Any]:
-    """Parse args for /session [--get-well] [phase]."""
-    cleaned = [a for a in args if a != "--get-well"]
-    phase = cleaned[0] if cleaned else "requirements"
-    get_well = "--get-well" in args
-    if get_well and phase == "requirements":
-        phase = "assessment-triage"
-    return {"slug": "", "phase": phase, "get_well": get_well}
-
-
-def _chat_args(args: list[str]) -> dict[str, Any]:
-    return {"slug": "", "prompt": args[0] if args else None}
-
-
-def _phase_args(args: list[str]) -> dict[str, Any]:
-    """Parse /phase [engagement_id] [--list|--navigate|...]."""
-    # Extract engagement_id (first positional) and action from flags
-    engagement_id = ""
-    remaining = list(args)
-    if remaining and not remaining[0].startswith("--"):
-        engagement_id = remaining.pop(0)
-    return {"slug": engagement_id, "action": "list", "root": str(Path.cwd())}
-
-
-def _work_args(args: list[str]) -> dict[str, Any]:
-    """Parse /work <description> [--mode ...]."""
-    import re
-    description = " ".join(a for a in args if not a.startswith("--"))
-    slug = re.sub(r"[^a-z0-9-]", "-", description.lower().strip())
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    return {"slug": slug, "workflow_name": "standard", "session_type": "greenfield", "mode": "auto"}
-
-
-def _init_args(args: list[str]) -> dict[str, Any]:
-    """Parse /init [project_dir] [--template ...] [--no-git] [--force]."""
-    remaining = [a for a in args if not a.startswith("--")]
-    project_dir = remaining[0] if remaining else None
-    return {"project_dir": project_dir, "root": Path.cwd()}
-
-
-def _run_wave_args(args: list[str]) -> dict[str, Any]:
-    """Parse /wave run <wave_id> [--no-test] [--backend ...] [--engagement ...]."""
-    wave_id = ""
-    no_test = False
-    backend = None
-    i = 0
-    while i < len(args):
-        if args[i] == "--no-test":
-            no_test = True
-        elif args[i] == "--backend" and i + 1 < len(args):
-            backend = args[i + 1]
-            i += 1
-        elif args[i] == "--engagement" and i + 1 < len(args):
-            pass  # slug handled by caller
-            i += 1
-        elif not args[i].startswith("--"):
-            wave_id = args[i]
-        i += 1
-    return {"slug": "", "wave_id": wave_id, "no_test": no_test, "backend": backend}
-
-
-def _finish_args(args: list[str]) -> dict[str, Any]:
-    return {"slug": "", "root": str(Path.cwd()), "re_assess": "--re-assess" in args}
-
-
-def _review_args(args: list[str]) -> dict[str, Any]:
-    slug = ""
-    decision = "approved"
-    i = 0
-    while i < len(args):
-        if args[i] == "--approve":
-            decision = "approved"
-        elif args[i] == "--reject":
-            decision = "rejected"
-        elif args[i] == "--request-changes":
-            decision = "request_changes"
-        elif not args[i].startswith("--"):
-            slug = args[i]
-        i += 1
-    return {"slug": slug, "decision": decision, "root": str(Path.cwd())}
-
-
-def _summary_args(args: list[str]) -> dict[str, Any]:
-    return {
-        "deep": "--deep" in args,
-        "assess_flag": "--assess" in args,
-        "json_flag": "--json" in args,
-        "reconcile": "--reconcile" in args,
-        "engagement": None,
-    }
-
-
-def _inspect_args(args: list[str]) -> dict[str, Any]:
-    return {"root": args[0] if args else "."}
-
-
-def _assess_args(args: list[str]) -> dict[str, Any]:
-    return {"root": args[0] if args else ".", "deep_flag": True}
-
-
-def _create_wave_from_assessment_args(args: list[str]) -> dict[str, Any]:
-    focus = "high-risk"
-    limit = 0
-    i = 0
-    while i < len(args):
-        if args[i] == "--focus" and i + 1 < len(args):
-            focus = args[i + 1]
-            i += 1
-        elif args[i] == "--limit" and i + 1 < len(args):
-            limit = int(args[i + 1])
-            i += 1
-        elif args[i] == "--refactoring":
-            pass
-        i += 1
-    return {"focus": focus, "limit": limit, "slug": "", "refactoring": "--refactoring" in args}
-
-
-def _create_wave_from_finding_args(args: list[str]) -> dict[str, Any]:
-    finding_id = args[0] if args else ""
-    return {"finding_id": finding_id, "slug": ""}
-
-
-# Command name -> (command_class, arg_parser)
-# All commands are constructed directly from parsed kwargs and dispatched
-# via the shared CommandBus. No factory functions, no Click fallback.
-COMMAND_TYPES: dict[str, tuple[type, Callable[[list[str]], dict[str, Any]]]] = {
-    # Engagement lifecycle
-    "engagement create":             (CreateEngagementCommand, _engagement_create_args),
-    "engagement close":              (AbortEngagementCommand, _single_arg),
-    "engagement rename":             (RenameEngagementCommand, lambda a: {"slug": a[0], "new_slug": a[1]} if len(a) >= 2 else {}),
-    "engagement set-branch":         (SetBranchCommand, lambda a: {"slug": a[0], "branch": a[1]} if len(a) >= 2 else {"slug": a[0] if a else ""}),
-    "engagement fix":                (FixEngagementCommand, lambda a: {"slug": a[0] if a else ""}),
-    # Phase management
-    "enter-phase":                    (EnterPhaseCommand, lambda a: {"slug": a[0], "phase": a[1]} if len(a) >= 2 else {}),
-    "phase":                         (ManagePhaseCommand, _phase_args),
-    # Session / chat
-    "session":                       (SessionCommand, _session_args),
-    "chat":                          (ChatCommand, _chat_args),
-    "work":                          (CreateEngagementCommand, _work_args),
-    "init":                          (InitProjectCommand, lambda a: {k: v for k, v in _init_args(a).items() if k != "root"}),
-    "finish":                        (FinishEngagementCommand, _finish_args),
-    "review":                        (ReviewEngagementCommand, _review_args),
-    "summary":                       (SummaryCommand, lambda a: {"slug": a[0] if a else "", "deep": "--deep" in a, "assess_flag": "--assess" in a, "json_flag": "--json" in a, "reconcile": "--reconcile" in a}),
-    "inspect":                       (InspectCommand, lambda a: {"slug": "", "root": a[0] if a else "."}),
-    "assess":                        (AssessCommand, lambda a: {"slug": "", "root": a[0] if a else ".", "deep_flag": True}),
-    "status":                        (QueryStatusCommand, _single_arg),
-    "whatsnext":                     (QueryWhatsNextCommand, _single_arg),
-    "generate-docs":                 (GenerateDocsCommand, lambda a: {"slug": "", "root": a[0] if a else "."}),
-    # Wave management
-    "wave list":                     (ListWavesCommand, lambda a: {"slug": a[0] if a else ""}),
-    "wave run":                      (RunWaveCommand, _run_wave_args),
-    "wave status":                   (WaveStatusCommand, lambda a: {"slug": a[0] if a else ""}),
-    "wave create-from-assessment":   (CreateWavesFromAssessmentCommand, _create_wave_from_assessment_args),
-    "wave create-from-finding":      (CreateWaveFromFindingCommand, _create_wave_from_finding_args),
-    # Changelog
-    "changelog annotate":            (AnnotateChangelogCommand, lambda a: {"slug": a[0], "wave": "", "text": " ".join(a[1:])} if a else {}),
-    # Governance
-    "team set-governance":           (SetGovernanceCommand, lambda a: {"slug": "", "level": a[0]} if a else {"slug": "", "level": "standard"}),
-    # Agent / Team listing
-    "agent list":                    (AgentListCommand, lambda a: {"slug": ""}),
-    "team list":                     (TeamListCommand, lambda a: {"slug": ""}),
-    "consult":                        (ConsultCommand, lambda a: {"slug": "", "question": " ".join(a)} if a else {"slug": "", "question": ""}),
-    # Refresh agents
-    "refresh-agents":                (RefreshAgentsCommand, lambda a: {"slug": "", "project_dir": None, "force": "--force" in a}),
-}
 
 
 # ── REPL ─────────────────────────────────────────────────────────────────────
@@ -275,6 +64,9 @@ class HarnessREPL:
 
     def __init__(self, root: Optional[Path] = None):
         self.root = (root or Path.cwd()).resolve()
+        # Ensure REGISTRY is populated by importing CLI modules
+        from harness.cli import main as _unused
+        self._command_types = build_repl_command_map()
         self._build_command_index()
         self._setup_readline()
 
@@ -288,79 +80,90 @@ class HarnessREPL:
         Populates:
             self.commands    -- flat dict: "name" -> click.Command
             self.groups      -- dict: group name -> click.Group
-            self.help_tree   -- structured tree for help display
         """
         # Import here to avoid circular import at module level
         from harness.cli import main as cli_main
 
         self.commands: dict[str, click.Command] = {}
         self.groups: dict[str, click.Group] = {}
-        # Track group->subcommands for help display
-        self.group_children: dict[str, list[str]] = {}
 
         for name, cmd in cli_main.commands.items():
             if isinstance(cmd, click.Group):
                 self.groups[name] = cmd
-                self.group_children.setdefault("_root", []).append(name)
-                for sub_name, sub_cmd in cmd.commands.items():
+                for sub_name in cmd.commands:
                     full = f"{name} {sub_name}"
-                    self.commands[full] = sub_cmd
-                    self.group_children.setdefault(name, []).append(full)
+                    self.commands[full] = cmd.commands[sub_name]
             elif isinstance(cmd, click.Command):
                 self.commands[name] = cmd
-                self.group_children.setdefault("_root", []).append(name)
 
-        # Build help tree: sorted group -> sorted commands
-        self._help_lines: list[str] = []
-        self._help_lines.append("Available commands:")
-        self._help_lines.append("")
+        self._help_lines = self._build_help_text()
 
-        # Top-level items: commands only (groups handled separately below)
-        root_cmds = sorted(
-            n for n in self.group_children.get("_root", [])
-            if n in self.commands
-        )
+    def _get_short_help(self, name: str) -> str:
+        """Fetch the brief description of a Click command by name."""
+        cmd = self.commands.get(name)
+        if cmd:
+            helptext = cmd.help or cmd.short_help or ""
+            return helptext.split("\n")[0].strip()
+        return ""
+
+    def _build_help_text(self) -> list[str]:
+        """Build help text from REGISTRY, excluding click_only commands.
+
+        Returns a list of formatted lines for display with /help.
+        """
+        lines: list[str] = []
+        lines.append("Available commands:")
+        lines.append("")
+
+        # Group breakdown for display
+        group_children: dict[str, list[str]] = {}
+        for name, reg in REGISTRY.items():
+            if reg.click_only:
+                continue
+            parts = name.split(" ", 1)
+            if len(parts) == 1:
+                group_children.setdefault("_root", []).append(name)
+            else:
+                group_children.setdefault(parts[0], []).append(name)
+
+        # Top-level (General)
+        root_cmds = sorted(group_children.get("_root", []))
         if root_cmds:
-            self._help_lines.append("── General ──")
+            lines.append("── General ──")
             for name in root_cmds:
-                cmd = self.commands.get(name)
-                if cmd and hasattr(cmd, 'help'):
-                    brief = (cmd.help or cmd.short_help or "").split("\n")[0].strip()
-                else:
-                    brief = ""
-                self._help_lines.append(f"  /{name:<20s} {brief}")
-            self._help_lines.append("")
+                brief = self._get_short_help(name)
+                lines.append(f"  /{name:<20s} {brief}")
+            lines.append("")
 
         # Grouped sub-commands
-        for group_name in sorted(self.groups.keys()):
-            children = sorted(self.group_children.get(group_name, []))
+        for group_name in sorted(group_children.keys()):
+            if group_name == "_root":
+                continue
+            children = sorted(group_children[group_name])
             if not children:
                 continue
             label = GROUP_MAP.get(group_name, group_name.capitalize())
-            self._help_lines.append(f"── {label} ──")
+            lines.append(f"── {label} ──")
             for full in children:
-                cmd = self.commands.get(full)
-                if cmd and hasattr(cmd, 'help'):
-                    brief = (cmd.help or cmd.short_help or "").split("\n")[0].strip()
-                else:
-                    brief = ""
-                self._help_lines.append(f"  /{full:<20s} {brief}")
-            self._help_lines.append("")
+                brief = self._get_short_help(full)
+                lines.append(f"  /{full:<20s} {brief}")
+            lines.append("")
 
-        self._help_lines.append("── Special ──")
-        self._help_lines.append("  /help                Show this help")
-        self._help_lines.append("  /version             Show version info")
-        self._help_lines.append("  /assess              Enter assessment phase with assessment-agent")
-        self._help_lines.append("  /requirements        Enter requirements phase with requirements-agent")
-        self._help_lines.append("  /design              Enter design phase with design-agent")
-        self._help_lines.append("  /plan                Enter planning phase with planning-agent")
-        self._help_lines.append("  /build               Enter build phase with build-agent")
-        self._help_lines.append("  /get-well            Assessment-driven remediation session")
-        self._help_lines.append("  /session --get-well  Alternate: /session --get-well [phase]")
-        self._help_lines.append("  /exit                Exit the REPL")
-        self._help_lines.append("")
-        self._help_lines.append("Tab auto-complete: command names, flags, file paths.")
-        self._help_lines.append("Up/Down arrows: command history.")
+        lines.append("── Special ──")
+        lines.append("  /help                Show this help")
+        lines.append("  /version             Show version info")
+        lines.append("  /assess              Enter assessment phase with assessment-agent")
+        lines.append("  /requirements        Enter requirements phase with requirements-agent")
+        lines.append("  /design              Enter design phase with design-agent")
+        lines.append("  /plan                Enter planning phase with planning-agent")
+        lines.append("  /build               Enter build phase with build-agent")
+        lines.append("  /get-well            Assessment-driven remediation session")
+        lines.append("  /session --get-well  Alternate: /session --get-well [phase]")
+        lines.append("  /exit                Exit the REPL")
+        lines.append("")
+        lines.append("Tab auto-complete: command names, flags, file paths.")
+        lines.append("Up/Down arrows: command history.")
+        return lines
 
     # ------------------------------------------------------------------
     # Readline setup
@@ -617,16 +420,16 @@ class HarnessREPL:
             return True
 
         # ── CommandBus dispatch ──────────────────────────────────────────
-        # Look up the command in COMMAND_TYPES. Support both top-level names
-        # and group sub-commands ("engagement create").
+        # Look up the command in self._command_types. Support both top-level
+        # names and group sub-commands ("engagement create").
         candidates = [cmd_name]
         if len(parts) >= 2:
             candidates.insert(0, f"{parts[0]} {parts[1]}")
 
         dispatched = False
         for candidate in candidates:
-            if candidate in COMMAND_TYPES:
-                cmd_cls, arg_parser = COMMAND_TYPES[candidate]
+            if candidate in self._command_types:
+                cmd_cls, arg_parser = self._command_types[candidate]
                 try:
                     kwargs = arg_parser(list(cmd_args))
                     command = cmd_cls(**kwargs)
@@ -642,6 +445,18 @@ class HarnessREPL:
                     click.echo(f"Error executing /{candidate}: {exc}", err=True)
                     dispatched = True
                     break
+
+        # ── CLI-only fallback ────────────────────────────────────────────
+        if not dispatched:
+            for candidate in candidates:
+                if candidate in REGISTRY:
+                    reg = REGISTRY[candidate]
+                    if reg.click_only:
+                        click.echo(
+                            f"CLI only — use the CLI: harness {candidate}", err=True
+                        )
+                        dispatched = True
+                        break
 
         if not dispatched:
             click.echo(f"Unknown command: /{cmd_name}. Type /help for available commands.", err=True)

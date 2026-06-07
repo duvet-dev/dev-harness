@@ -98,7 +98,7 @@ from harness.command.handlers.session_handlers import (
     SessionTypedHandler,
 )
 from harness.command.handlers.wave_handlers import RunWaveTypedHandler
-from harness.shell.repl import (
+from harness.command._registration import (
     _assess_args,
     _chat_args,
     _create_wave_from_assessment_args,
@@ -211,6 +211,7 @@ def main():
 
 
 @main.command()
+@register(name="workflows", click_only=True)
 def workflows():
     """Show workflow guidance and when to use each workflow.
 
@@ -595,6 +596,7 @@ def list_agents():
 
 @agent.command()
 @click.argument("agent_role")
+@register(name="agent show", click_only=True)
 def show(agent_role):
     """Show details for a specific agent role.
 
@@ -717,6 +719,7 @@ def list_teams(consults):
 @team.command()
 @click.argument("team_name")
 @click.option("--json", "json_flag", is_flag=True, help="Output as JSON")
+@register(name="team show", click_only=True)
 def show(team_name, json_flag):
     """Show details for a specific team.
 
@@ -767,6 +770,7 @@ def show(team_name, json_flag):
 @team.command(name="add-agent")
 @click.argument("team_name")
 @click.argument("agent_role")
+@register(name="team add-agent", click_only=True)
 def add_agent_to_team(team_name, agent_role):
     """Add an agent role to a team.
 
@@ -803,6 +807,7 @@ def add_agent_to_team(team_name, agent_role):
 @team.command(name="remove-agent")
 @click.argument("team_name")
 @click.argument("agent_role")
+@register(name="team remove-agent", click_only=True)
 def remove_agent_from_team(team_name, agent_role):
     """Remove an agent role from a team.
 
@@ -837,6 +842,7 @@ def remove_agent_from_team(team_name, agent_role):
 @click.argument("team_name")
 @click.option("--no-truncate", is_flag=True,
               help="Show full match phrases without truncation")
+@register(name="team consult", click_only=True)
 def team_consult(team_name, no_truncate):
     """Show consultation capabilities for a team.
 
@@ -1674,6 +1680,7 @@ def shell():
 @main.command()
 @click.option("--verbose", "verbose", is_flag=True, help="Include INFO-level checks in output")
 @click.option("--fix", is_flag=True, help="Attempt to auto-fix engagement metadata issues")
+@register(name="health", click_only=True)
 def health(verbose, fix):
     """Run configuration and state validation checks.
 
@@ -2037,6 +2044,7 @@ def create(name, slug, refactoring, focus, allow_refactoring_suggestions):
 
 @engagement.command()
 @click.argument("slug")
+@register(name="engagement set-active", click_only=True)
 def set_active(slug):
     """Set an existing engagement as active on the current branch.
 
@@ -2068,6 +2076,7 @@ def set_active(slug):
 
 
 @engagement.command(name="list")
+@register(name="engagement list", click_only=True)
 def list_engagements():
     """List all engagements in the project.
 
@@ -2138,6 +2147,7 @@ def list_engagements():
 
 @engagement.command()
 @click.option("--engagement", "engagement_slug", help="Engagement slug (default: active)")
+@register(name="engagement engagement-status", click_only=True)
 def engagement_status(engagement_slug):
     """Show detailed status of an engagement.
 
@@ -2361,6 +2371,7 @@ def close(slug):
 
 @engagement.command()
 @click.option("--engagement", "slug", help="Engagement slug (default: active)")
+@register(name="engagement diff", click_only=True)
 def diff(slug):
     """Compare baseline assessment to current state.
 

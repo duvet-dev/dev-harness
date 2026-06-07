@@ -1,6 +1,6 @@
 # Task 3 — Add RippleEvent emission
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 25-wire-ripple-engine
 **Dependencies:** Task 2
 **Effort:** 0.5-1h
@@ -11,6 +11,8 @@ Emit `RippleEvent` objects when ripple effects are detected, containing: source 
 
 ## Acceptance Criteria
 
-- [ ] RippleEvent structure defined
-- [ ] Events emitted on phase completion with ripple effects
-- [ ] Events visible to session orchestrator
+- [x] `RippleEvent` dataclass defined in `engagement_events.py`
+- [x] Exported from `domain/events/__init__.py`
+- [x] Published via `EventBus` from `WorkflowOrchestrator._detect_and_emit_ripple()`
+- [x] Events visible to session orchestrator via EventBus subscription
+- [x] RippleEvent fields: slug, source_phase, affected_phases, description, severity, detected_at

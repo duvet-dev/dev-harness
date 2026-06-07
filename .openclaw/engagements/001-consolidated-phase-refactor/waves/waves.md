@@ -2,13 +2,13 @@
 
 > **Purpose:** Single view of all waves - completed and planned.
 > **Engagement:** consolidated-phase-refactor
-> **Updated:** 2026-06-07
+> **Updated:** 2026-06-07 (Wave 25 added)
 > **Principle:** Zero legacy/compatibility shims in target state.
 > **Source:** Crichton Design Convergence (2026-06-06)
 
 ---
 
-## Completed (19 waves)
+## Completed (20 waves)
 
 | Wave | Name | Notes |
 |------|------|-------|
@@ -21,7 +21,7 @@
 | **7** | Agent Runner & Backends | ✅ 4 backends (API 877, CLI 271, Editor 163, Formatters 524). AgentRunner dispatches correctly. |
 | **8** | Analysis Suite | ✅ All 8 modules (3,770 lines). 10 analysis agents. Deep/fast pipelines. Refactoring-analyser wired. |
 | **9** | Branch Management (SCM) | ✅ git.py (504 lines). Full branch ops, merge detection. Used by 15+ modules. **Genuinely complete.** |
-| **10** | Workflow Orchestration Model | ✅ Model (260), orchestrator (526), ripple_engine (633). Workflow registry and phase advancement. **Gap:** Ripple engine unwired (→ Wave 25). |
+| **10** | Workflow Orchestration Model | ✅ Model (260), orchestrator (526), ripple_engine (633). Workflow registry and phase advancement. |
 | **11** | Independent Assessment (R22) | ✅ P1-P5 agents, parallel dispatch, JSON extraction, 476 tests |
 | **12** | Interactive Shell (REPL) | ✅ Click introspection, `/command` dispatch, tab complete, 789 tests |
 | **13** | Agent Read/Write Tool (RepoTool) | ✅ Sandboxed filesystem ops, path escape, file locks, 857 tests |
@@ -36,6 +36,7 @@
 | **24** | Wire Refactoring-Analyser + Rename Constants | ✅ All P-constants renamed. Refactoring-analyser wired. 3,827 tests. `4e072e9` |
 | **28** | Command Bus & Presenter Consolidation | ✅ Single shared bus, all typed dispatch, presenters expanded, commands.py deleted, 3,827 tests. |
 | **30** | OpenClaw Sync Removal | ✅ Sync module deleted. Zero OpenClaw references in src/ or tests/. 3,757 tests. |
+| **25** | Wire Ripple Engine | ✅ RippleEvent created. WorkflowRippleEngine wired into WorkflowOrchestrator. Events emitted on phase completion. 3,747 tests. |
 
 ---
 

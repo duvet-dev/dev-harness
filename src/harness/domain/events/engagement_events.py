@@ -76,3 +76,25 @@ class WaveCommitted(Event):
     wave_id: str
     wave_name: str
     committed_at: datetime = datetime.now(timezone.utc)
+
+
+@dataclass
+class RippleEvent(Event):
+    """Published when a ripple effect is detected — a change in one phase
+    affects downstream phases, potentially requiring re-execution.
+
+    Attributes:
+        slug: Engagement slug.
+        source_phase: Phase where the change occurred.
+        affected_phases: Downstream phases that may need rework.
+        description: Human-readable description of the ripple effect.
+        severity: Severity level ("info", "warning", "critical").
+        detected_at: When the ripple effect was detected.
+    """
+
+    slug: str
+    source_phase: str
+    affected_phases: list[str]
+    description: str = ""
+    severity: str = "info"
+    detected_at: datetime = datetime.now(timezone.utc)

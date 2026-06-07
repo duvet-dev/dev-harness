@@ -12,6 +12,7 @@ from harness.domain.events.engagement_events import (
     EngagementStarted,
     EngagementStatusChanged,
     PhaseTransitioned,
+    RippleEvent,
     WaveCommitted,
 )
 
@@ -24,5 +25,6 @@ __all__ = [
     "EngagementStarted",
     "EngagementStatusChanged",
     "PhaseTransitioned",
+    "RippleEvent",
     "WaveCommitted",
 ]

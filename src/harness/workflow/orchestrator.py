@@ -16,9 +16,11 @@ See V7 §5.14 and §6.1 for the design.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from harness.domain.engagement.model import Engagement
+from harness.domain.events import EventBus, RippleEvent
 from harness.errors import UnknownWorkflowError, WorkflowNotActiveError
 from harness.phase.orchestrator import PhaseOrchestrator
 from harness.tracing import TraceLogger
@@ -27,6 +29,10 @@ from harness.workflow.model import (
     WorkflowResult,
     WorkflowState,
     WorkflowStatus,
+)
+from harness.workflow.ripple_engine import (
+    RippleEffect,
+    WorkflowRippleEngine,
 )
 
 logger = TraceLogger("harness.workflow.orchestrator")
@@ -128,16 +134,22 @@ class WorkflowOrchestrator:
     def __init__(
         self,
         phase_orchestrator: PhaseOrchestrator,
+        event_bus: EventBus | None = None,
     ) -> None:
         """Initialise the WorkflowOrchestrator.
 
         Args:
             phase_orchestrator: PhaseOrchestrator for executing
                 individual phases.
+            event_bus: Optional EventBus for emitting domain
+                events (e.g., RippleEvent).
         """
         self._phase_orchestrator = phase_orchestrator
         self._workflows: dict[str, Workflow] = {}
         self._states: dict[str, WorkflowState] = {}
+        self._event_bus = event_bus
+        self._ripple_engine = WorkflowRippleEngine()
+        self._artifact_map: dict[str, list[Any]] = {}
 
     # ── Workflow Registration ────────────────────────────────────────
 
@@ -313,8 +325,25 @@ class WorkflowOrchestrator:
         # Update workflow state based on phase result
         if phase_result.success:
             state.mark_phase_completed(first_phase)
+            self._detect_and_emit_ripple(slug, first_phase, state)
         else:
             state.mark_phase_failed(first_phase)
+
+        # Determine transition via ripple engine for advisory info
+        transition = self._ripple_engine.determine_transition(
+            state=state,
+            phase_result=phase_result.phase_result,
+            artifact_map=self._artifact_map,
+        )
+        if transition.re_enter_current:
+            logger.info(
+                "WorkflowOrchestrator — transition suggests re-entry (enter)",
+                extra={
+                    "slug": slug,
+                    "phase": first_phase,
+                    "reason": transition.reason,
+                },
+            )
 
         logger.info(
             "WorkflowOrchestrator — phase complete (enter)",
@@ -326,7 +355,7 @@ class WorkflowOrchestrator:
             },
         )
 
-        return self._build_result(state, phase_result)
+        return self._build_result(state, phase_result, transition)
 
     async def advance_workflow(
         self,
@@ -428,6 +457,7 @@ class WorkflowOrchestrator:
         # Update workflow state
         if phase_result.success:
             state.mark_phase_completed(next_phase)
+            self._detect_and_emit_ripple(slug, next_phase, state)
         else:
             state.mark_phase_failed(next_phase)
 
@@ -444,6 +474,22 @@ class WorkflowOrchestrator:
                     },
                 )
 
+        # Determine transition via ripple engine for advisory info
+        transition = self._ripple_engine.determine_transition(
+            state=state,
+            phase_result=phase_result.phase_result,
+            artifact_map=self._artifact_map,
+        )
+        if transition.re_enter_current:
+            logger.info(
+                "WorkflowOrchestrator — transition suggests re-entry (advance)",
+                extra={
+                    "slug": slug,
+                    "phase": next_phase,
+                    "reason": transition.reason,
+                },
+            )
+
         logger.info(
             "WorkflowOrchestrator — phase complete (advance)",
             extra={
@@ -456,7 +502,7 @@ class WorkflowOrchestrator:
             },
         )
 
-        return self._build_result(state, phase_result)
+        return self._build_result(state, phase_result, transition)
 
     async def get_workflow_status(
         self, slug: str
@@ -495,23 +541,86 @@ class WorkflowOrchestrator:
         state = self._states.get(slug)
         return state is not None and state.is_active
 
+    # ── Ripple Detection ────────────────────────────────────────────────
+
+    def _detect_and_emit_ripple(
+        self,
+        slug: str,
+        phase_name: str,
+        state: WorkflowState,
+    ) -> list[RippleEffect]:
+        """Detect ripple effects from a phase completion and emit events.
+
+        Called after a phase completes successfully to check whether
+        downstream phases may be affected. If effects are detected,
+        RippleEvent is published via the event bus (if configured).
+
+        Args:
+            slug: Workflow execution identifier.
+            phase_name: Name of the phase that just completed.
+            state: Current workflow state.
+
+        Returns:
+            List of detected RippleEffect objects.
+        """
+        effects = self._ripple_engine.determine_ripple_effects(
+            changed_phase=phase_name,
+            completed_phases=list(state.completed_phases),
+            pending_phases=list(state.pending_phases),
+            artifact_map=self._artifact_map,
+        )
+
+        if effects:
+            self._artifact_map[phase_name] = [
+                {"changed": True}
+            ]
+            for effect in effects:
+                logger.info(
+                    "WorkflowOrchestrator — ripple effect detected",
+                    extra={
+                        "slug": slug,
+                        "source_phase": effect.source_phase,
+                        "affected_phases": effect.affected_phases,
+                        "severity": effect.severity,
+                        "description": effect.description,
+                    },
+                )
+
+                # Emit RippleEvent via event bus if configured
+                if self._event_bus is not None:
+                    self._event_bus.publish(
+                        RippleEvent(
+                            slug=slug,
+                            source_phase=effect.source_phase,
+                            affected_phases=list(effect.affected_phases),
+                            description=effect.description,
+                            severity=effect.severity,
+                            detected_at=datetime.now(timezone.utc),
+                        )
+                    )
+
+        return effects
+
     # ── Internal Helpers ─────────────────────────────────────────────
 
     def _build_result(
         self,
         state: WorkflowState,
         phase_result: Any,
+        transition: Any | None = None,
     ) -> WorkflowResult:
         """Build a WorkflowResult from state and phase result.
 
         Args:
             state: The current workflow state.
             phase_result: The PhaseOrchestratorResult.
+            transition: Optional PhaseTransition from the ripple
+                engine, included in the result for callers.
 
         Returns:
             A populated WorkflowResult.
         """
-        return WorkflowResult(
+        result = WorkflowResult(
             success=phase_result.success if hasattr(phase_result, "success") else state.status != WorkflowStatus.FAILED,
             workflow_name=state.workflow_name,
             slug=state.slug,
@@ -524,3 +633,17 @@ class WorkflowOrchestrator:
             escalation=phase_result.escalation if hasattr(phase_result, "escalation") else None,
             mode=state.mode,
         )
+
+        # Attach transition info to result metadata
+        if transition is not None:
+            result.artifact_map.setdefault("_transition", {})
+            result.artifact_map["_transition"] = {
+                "type": transition.transition_type.value
+                if hasattr(transition.transition_type, "value")
+                else str(transition.transition_type),
+                "next_phase": transition.next_phase,
+                "reason": transition.reason,
+                "re_enter_current": transition.re_enter_current,
+            }
+
+        return result

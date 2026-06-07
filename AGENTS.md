@@ -43,7 +43,7 @@ The CLI (`src/harness/cli/main.py`) is a thin dispatch layer. Business logic liv
 
 Zero failures after implementation. Tests may fail before implementation (TDD red) but never after. Commit fixes same commit as code change. Suite regression = priority fix before any other work.
 
-### 3.4 Hard Rule: `make ci` Before Every Commit
+### 3.4 Hard Rule: `make ci` + Version Bump Before Every Commit
 
 **`make ci` is the non-negotiable gate.** Before every commit:
 1. Run `make ci` — this runs ruff lint, pytest, and coverage (`--cov-fail-under=70`)
@@ -51,6 +51,17 @@ Zero failures after implementation. Tests may fail before implementation (TDD re
 3. A `make test` pass is **NOT sufficient** — lint failures (F541, unused imports, formatting) break CI even if all tests pass
 
 Common lint failures are auto-fixable: `python3 -m ruff check --fix src/harness/`
+
+**Every wave/feature commit must also increment the build number.** After `make ci` passes, run:
+```bash
+make version-bump
+```
+This increments `BUILD_NUMBER` and regenerates `src/harness/_version.py`. Include both files in the commit so the build number is always monotonically increasing with each wave.
+
+The combined pre-commit sequence for wave completions:
+```bash
+make ci && make version-bump && git add BUILD_NUMBER src/harness/_version.py && git commit ...
+```
 
 ### 3.5 Test Order Independence
 

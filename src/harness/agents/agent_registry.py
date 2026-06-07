@@ -217,24 +217,6 @@ AGENTS: list[AgentSpec] = [
         tool_permissions=ToolPermissions.read_only(),
     ),
     AgentSpec(
-        role="planning-agent",
-        name="Planning Agent",
-        description=(
-            "Decomposes architecture into manageable implementation "
-            "chunks and creates individual tasks for coding agents."
-        ),
-        sop_summary=[
-            "Break architecture into independently-buildable pieces",
-            "Determine dependency order (DAG)",
-            "Assign agent roles and estimate effort per task",
-            "Flag oversized or undersized work items",
-        ],
-        tags=["planning", "project-management"],
-        tool_permissions=ToolPermissions.restricted_write(
-            ['.harness/engagements/']
-        ),
-    ),
-    AgentSpec(
         role="coding-agent",
         name="Coding Agent",
         description=(
@@ -622,7 +604,165 @@ AGENTS: list[AgentSpec] = [
         tags=["review", "quality"],
         tool_permissions=ToolPermissions.unrestricted(),
     ),
+
+    # ── Wave 27: Phase-Specific Agents ───────────────────────────────────
+    AgentSpec(
+        role="assessment-agent",
+        name="Assessment Agent",
+        description=(
+            "Drives the ASSESS phase of an engagement. Understands the existing "
+            "codebase, identifies insertion points, assesses risks and impact "
+            "of proposed changes, and converts raw issues into structured "
+            "requirements / resolution items. Runs an automated analysis pipeline "
+            "when in auto mode: scan → profile → critic review → convergence."
+        ),
+        sop_summary=[
+            "Understand the existing codebase structure and dependencies",
+            "Identify insertion points for new functionality",
+            "Assess risks and impact of proposed changes",
+            "Convert raw issues into structured requirements / resolution items",
+            "Produce assessment report covering structure, insertion points, and risk",
+            "Run auto mode: creator → critics → convergence check → validator",
+        ],
+        tags=["phase", "assessment", "analysis"],
+        tool_permissions=ToolPermissions.restricted_write(
+            ['.harness/engagements/<slug>/assessments/', '.harness/engagements/<slug>/analysis/']
+        ),
+    ),
+    AgentSpec(
+        role="requirements-agent",
+        name="Requirements Agent",
+        description=(
+            "Drives the REQUIREMENTS phase of an engagement. Takes raw input "
+            "and turns it into structured, well-defined requirements. Clarifies "
+            "ambiguities, elicits edge cases and constraints, and produces "
+            "a structured requirements document with goals, scope, functional "
+            "and non-functional requirements, and acceptance criteria."
+        ),
+        sop_summary=[
+            "Takes raw input (briefs, notes, discussions) and turns into structured requirements",
+            "Ask questions to surface edge cases, constraints, and unknowns",
+            "Group requirements by thematic cluster and assign priorities",
+            "Flag ambiguities, gaps, and contradictions",
+            "Produce structured requirements doc with goals, scope, functional and NFRs",
+            "Run auto mode: draft → critic review → converge → validate",
+        ],
+        tags=["phase", "requirements", "analysis"],
+        tool_permissions=ToolPermissions.restricted_write(
+            ['.harness/engagements/<slug>/requirements/']
+        ),
+    ),
+    AgentSpec(
+        role="design-agent",
+        name="Design Agent",
+        description=(
+            "Drives the DESIGN phase of an engagement. Models the domain using "
+            "DDD aggregates, entities, and value objects. Defines bounded "
+            "contexts, context maps, and anti-corruption layers. Selects "
+            "architectural patterns with trade-off explanations. Produces "
+            "interface contracts, data models, and ADRs. Also detects "
+            "architecture debt via rule-based scanning of the codebase."
+        ),
+        sop_summary=[
+            "Model the domain: aggregates, entities, value objects",
+            "Define bounded contexts and context maps",
+            "Select architectural patterns with trade-off explanations",
+            "Produce interface contracts, data models, component structures",
+            "Use ADRs for architectural decisions",
+            "Run architecture debt detection: rule-based scanning for violations",
+            "Run auto mode: design → critic review → converge → validate",
+        ],
+        tags=["phase", "design", "architecture"],
+        tool_permissions=ToolPermissions.restricted_write(
+            ['.harness/engagements/<slug>/design/', '.harness/engagements/<slug>/architecture/']
+        ),
+    ),
+    AgentSpec(
+        role="planning-agent",
+        name="Planning Agent",
+        description=(
+            "Drives the PLANNING phase of an engagement. Decomposes architecture "
+            "into manageable implementation chunks, determines dependency order, "
+            "and creates individual tasks for coding agents. Produces a workable "
+            "plan from architecture documents and requirements."
+        ),
+        sop_summary=[
+            "Break architecture into independently-buildable pieces",
+            "Determine dependency order (DAG)",
+            "Assign agent roles and estimate effort per task",
+            "Flag oversized or undersized work items",
+            "Produce a structured implementation plan with sequenced tasks",
+            "Run auto mode: plan → critic review → converge → validate",
+        ],
+        tags=["phase", "planning", "project-management"],
+        tool_permissions=ToolPermissions.restricted_write(
+            ['.harness/engagements/<slug>/plan/', '.harness/engagements/<slug>/tasks/']
+        ),
+    ),
+    AgentSpec(
+        role="build-agent",
+        name="Build Agent",
+        description=(
+            "Drives the BUILD phase of an engagement. Implements features "
+            "following established architecture and designs. Writes tests "
+            "alongside implementation. Cleans up code, handles edge cases, "
+            "and ensures all existing tests still pass. Also generates "
+            "boundary tests at application interfaces for behaviour "
+            "preservation during refactoring."
+        ),
+        sop_summary=[
+            "Implement features following the established architecture",
+            "Write tests alongside implementation (TDD if possible)",
+            "Handle failure cases, edge cases, and errors",
+            "Ensure all existing tests still pass",
+            "Run boundary test generation at application interfaces",
+            "Produce clean, well-structured code with named constants not magic literals",
+            "Run auto mode: build → test → critic review → converge → validate",
+        ],
+        tags=["phase", "implementation", "build"],
+        tool_permissions=ToolPermissions.restricted_write(
+            ['.harness/engagements/<slug>/build/', '.harness/engagements/<slug>/code/']
+        ),
+    ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Phase agent lookup
+# ---------------------------------------------------------------------------
+
+
+def get_phase_agent(phase: str) -> AgentSpec | None:
+    """Look up a phase-specific agent by phase name.
+
+    Maps phase names to their dedicated phase agents:
+        "assess" / "assessment"  → assessment-agent
+        "requirements" / "discover" → requirements-agent
+        "design"                → design-agent
+        "plan" / "planning"      → planning-agent
+        "build"                 → build-agent
+
+    Returns None if no phase-specific agent matches.
+    """
+    phase_map = {
+        "assess": "assessment-agent",
+        "assessment": "assessment-agent",
+        "requirements": "requirements-agent",
+        "discover": "requirements-agent",
+        "design": "design-agent",
+        "plan": "planning-agent",
+        "planning": "planning-agent",
+        "build": "build-agent",
+    }
+    agent_role = phase_map.get(phase)
+    if agent_role:
+        return get_agent(agent_role)
+    return None
+
+
+def list_phase_agents() -> list[AgentSpec]:
+    """Get all phase-specific agents."""
+    return [a for a in AGENTS if "phase" in a.tags]
 
 
 # ---------------------------------------------------------------------------

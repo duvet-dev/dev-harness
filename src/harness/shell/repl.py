@@ -350,6 +350,11 @@ class HarnessREPL:
         self._help_lines.append("── Special ──")
         self._help_lines.append("  /help                Show this help")
         self._help_lines.append("  /version             Show version info")
+        self._help_lines.append("  /assess              Enter assessment phase with assessment-agent")
+        self._help_lines.append("  /requirements        Enter requirements phase with requirements-agent")
+        self._help_lines.append("  /design              Enter design phase with design-agent")
+        self._help_lines.append("  /plan                Enter planning phase with planning-agent")
+        self._help_lines.append("  /build               Enter build phase with build-agent")
         self._help_lines.append("  /get-well            Assessment-driven remediation session")
         self._help_lines.append("  /session --get-well  Alternate: /session --get-well [phase]")
         self._help_lines.append("  /exit                Exit the REPL")
@@ -542,6 +547,31 @@ class HarnessREPL:
 
             return True
 
+        # ── Phase entry ──────────────────────────────────────────────────
+        if cmd_name in ("assess", "requirements", "design", "plan", "build"):
+            """Enter a phase-specific session with the dedicated phase agent."""
+            import asyncio
+            from harness.session.phase_sessions import PHASE_ENTRY_HANDLERS
+            from harness.domain.engagement.resolver import resolve_active_engagement
+
+            slug = resolve_active_engagement(self.root)
+            if not slug:
+                click.echo("No active engagement. Create one with:")
+                click.echo("  /work \"your task\"")
+                return True
+
+            handler = PHASE_ENTRY_HANDLERS.get(cmd_name)
+            if not handler:
+                click.echo(f"Unknown phase: {cmd_name}", err=True)
+                return True
+
+            try:
+                handler(self.root)
+            except Exception as exc:
+                click.echo(f"Phase session error: {exc}", err=True)
+
+            return True
+
         # ── Session ──────────────────────────────────────────────────────
         if cmd_name == "session":
             """Run a full multi-phase session via CommandBus."""
@@ -688,7 +718,7 @@ class _REPLCompleter:
         for name in self._group_names:
             self._first_tokens.add(name)
         # REPL-only commands (not in Click CLI)
-        self._first_tokens.update({"get-well", "session"})
+        self._first_tokens.update({"assess", "requirements", "design", "plan", "build", "get-well", "session"})
         self._matches: list[str] = []
 
     def complete(self, text: str, state: int) -> Optional[str]:

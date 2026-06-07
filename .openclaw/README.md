@@ -7,6 +7,8 @@ This folder holds project artifacts generated and maintained by OpenClaw agents.
 ```
 .openclaw/
   README.md                       # This file
+  CONVENTIONS.md                  # Engagement conventions — applies to all engagements
+  templates/                      # Reusable document templates
   engagements/
     <engagement-slug>/            # Per-engagement artifact folders
       assessments/
@@ -14,7 +16,9 @@ This folder holds project artifacts generated and maintained by OpenClaw agents.
       requirements/
         requirements.md           # Combined requirements (all Rs)
       design/
-        design.md                 # Evolving design document (single source of truth)
+        design.md                 # ALWAYS the current approved design
+        reviews/                   # Review outputs, dated for traceability
+        _archive/                  # Superseded design versions
       waves/
         waves.md                  # Combined wave plan (completed + planned)
 ```
@@ -25,9 +29,13 @@ Each sub-folder is named for the **purpose** of its contents, not the agent that
 
 | Folder | What goes here |
 |--------|---------------|
+| `CONVENTIONS.md` | Engagement conventions — applied to all engagements |
+| `templates/` | Reusable document templates (assessment, requirements, design, wave) |
 | `assessments/` | Analysis results, observer runs, review outputs, gap analyses |
 | `requirements/` | Captured requirements — from voice notes through detailed specs |
 | `design/` | Architecture and design — iterated through reviews |
+| `design/reviews/` | Review outputs from Crichton etc., dated for traceability |
+| `design/_archive/` | Superseded design versions (v1, v2, ...) |
 | `waves/` | Build plan — completed, in-progress, and planned waves |
 
 ## Pattern
@@ -37,11 +45,15 @@ When working on another project with OpenClaw agents, follow the same pattern:
 ```
 project-root/
   .openclaw/
+    CONVENTIONS.md
+    templates/
     engagements/
       <engagement-slug>/
         assessments/
         requirements/
         design/
+          reviews/
+          _archive/
         waves/
 ```
 

@@ -1,6 +1,6 @@
 # Engagement Conventions
 
-**File:** `.openclaw/engagements/<slug>/CONVENTIONS.md`
+**File:** `.openclaw/CONVENTIONS.md` — applies to all engagements under `.openclaw/engagements/`
 **Purpose:** Standard formats for all engagement artifacts. Used by both OpenClaw agents and harness agents.
 
 ## Directory Structure

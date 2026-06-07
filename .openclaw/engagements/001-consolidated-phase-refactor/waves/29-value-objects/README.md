@@ -14,10 +14,12 @@ Add missing value objects from the typed command design: `PhaseName`, `EngStatus
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Add PhaseName value object with validation | 📋 Pending | Reject invalid phase names at construction |
-| 2 | Add EngStatus enum | 📋 Pending | created, in_progress, completed, aborted |
-| 3 | Add WaveId value object | 📋 Pending | id: str, title: str |
-| 4 | Move value objects to command/values.py | 📋 Pending | Or keep in domain/enums.py — decide and be consistent |
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 1 | Add PhaseName value object with validation | ✅ Complete | Moved to command/values.py |
+| 2 | Add EngStatus enum | ✅ Complete | In command/values.py |
+| 3 | Add WaveId value object | ✅ Complete | In command/values.py |
+| 4 | Move value objects to command/values.py | ✅ Complete | PhaseName, SessionType, AutoMode, ReviewDecision, AbortMode, BranchStrategy moved from domain/enums.py |
 | 5 | Expand ReplPresenter formatting | 📋 Pending | Type-specific formatting for all result types |
 | 6 | Tests | 📋 Pending | |
 

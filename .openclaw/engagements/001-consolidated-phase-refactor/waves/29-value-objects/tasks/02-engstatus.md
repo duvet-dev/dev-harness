@@ -1,6 +1,6 @@
 # Task 2 — Add EngStatus enum
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 29-value-objects
 **Dependencies:** None
 **Effort:** 0.5h

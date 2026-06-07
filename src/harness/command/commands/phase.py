@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from harness.command.types import TypedCommand
-from harness.domain.enums import PhaseName
+from harness.command.values import PhaseName
 
 
 @dataclass(frozen=True)

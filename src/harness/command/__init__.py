@@ -15,7 +15,7 @@ from harness.command.types import (
     TypedHandler,
     TypedResult,
 )
-from harness.domain.enums import (
+from harness.command.values import (
     AbortMode,
     AutoMode,
     BranchStrategy,

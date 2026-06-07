@@ -7,17 +7,19 @@ from __future__ import annotations
 
 import pytest
 
-from harness.domain.enums import (
+from harness.command.values import (
     AbortMode,
     AutoMode,
-    BackendStatus,
     BranchStrategy,
-    FeedbackStatus,
-    HealthSeverity,
     PhaseName,
     ReviewDecision,
-    Severity,
     SessionType,
+)
+from harness.domain.enums import (
+    BackendStatus,
+    FeedbackStatus,
+    HealthSeverity,
+    Severity,
     SnapshotStatus,
     StepStatus,
     StepType,

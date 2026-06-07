@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from harness.domain.enums import SessionType
+from harness.command.values import SessionType
 from harness.domain.events.engagement_events import (
     EngagementAborted,
     EngagementCompleted,

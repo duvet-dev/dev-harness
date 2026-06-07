@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from harness.domain.enums import SessionType
+from harness.command.values import SessionType
 from harness.domain.identifiers import Slug
 
 

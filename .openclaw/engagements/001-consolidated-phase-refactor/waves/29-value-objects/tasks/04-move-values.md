@@ -1,6 +1,6 @@
 # Task 4 — Move value objects to command/values.py
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 29-value-objects
 **Dependencies:** Tasks 1-3
 **Effort:** 0.5h

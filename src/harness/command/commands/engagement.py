@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from harness.command.types import TypedCommand
-from harness.domain.enums import AutoMode, SessionType
+from harness.command.values import AutoMode, SessionType
 
 
 @dataclass(frozen=True)

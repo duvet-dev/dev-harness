@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 from harness.domain.engagement_aggregate import Engagement, HealthWarning, EngagementStatus
-from harness.domain.enums import SessionType
+from harness.command.values import SessionType
 from harness.domain.events.engagement_events import (
     EngagementStarted,
     EngagementCompleted,

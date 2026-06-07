@@ -4,17 +4,19 @@ Part of the DDD layering: domain layer contains business-logic types
 that are independent of infrastructure concerns.
 """
 
-from harness.domain.enums import (
+from harness.command.values import (
     AbortMode,
     AutoMode,
-    BackendStatus,
     BranchStrategy,
-    FeedbackStatus,
-    HealthSeverity,
     PhaseName,
     ReviewDecision,
-    Severity,
     SessionType,
+)
+from harness.domain.enums import (
+    BackendStatus,
+    FeedbackStatus,
+    HealthSeverity,
+    Severity,
     SnapshotStatus,
     StepStatus,
     StepType,

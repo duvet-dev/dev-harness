@@ -42,7 +42,7 @@ from harness.paths import (
 # ── Branch strategy ────────────────────────────────────────────────────────
 
 
-from harness.domain.enums import BranchStrategy
+from harness.command.values import BranchStrategy
 
 
 # ── Result ─────────────────────────────────────────────────────────────────

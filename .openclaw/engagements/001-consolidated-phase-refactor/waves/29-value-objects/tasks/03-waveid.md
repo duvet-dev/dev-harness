@@ -1,6 +1,6 @@
 # Task 3 — Add WaveId value object
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 29-value-objects
 **Dependencies:** None
 **Effort:** 0.5h

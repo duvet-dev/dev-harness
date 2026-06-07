@@ -1,6 +1,6 @@
 # Task 4 — Add `@register` to agent/team/consult/remaining commands
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 02-bus-dispatchable-commands
 **Dependencies:** Wave 01
 **Effort:** 0.5h
@@ -27,10 +27,10 @@ Commands to annotate:
 
 ## Acceptance Criteria
 
-- [ ] All 11 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
-- [ ] Each `handler` argument matches current setup.py instantiation pattern
-- [ ] Each `arg_parser` matches the existing parser from `COMMAND_TYPES` (note: some commands like `summary`, `inspect`, `assess` have both lambdas and named functions — use the named functions for clarity)
-- [ ] All imports added to `main.py`
+- [x] All 11 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
+- [x] Each `handler` argument matches current setup.py instantiation pattern
+- [x] Each `arg_parser` matches the existing parser from `COMMAND_TYPES` (note: some commands like `summary`, `inspect`, `assess` have both lambdas and named functions — use the named functions for clarity)
+- [x] All imports added to `main.py`
 
 ## Files Affected
 

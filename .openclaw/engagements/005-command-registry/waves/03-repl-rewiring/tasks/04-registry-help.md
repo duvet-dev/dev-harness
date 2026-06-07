@@ -1,6 +1,6 @@
 # Task 4 — Replace `/help` with REGISTRY-based generation
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 03-repl-rewiring
 **Dependencies:** Task 3
 **Effort:** 0.5h
@@ -48,15 +48,15 @@ def _build_help_from_registry(self) -> list[str]:
 
 ## Acceptance Criteria
 
-- [ ] `/help` generation reads from `REGISTRY` instead of walking `cli_main.commands`
-- [ ] `click_only=True` commands are excluded from REPL `/help`
-- [ ] Group structure is preserved (── General ──, ── Engagement ──, ── Wave ──, etc.)
-- [ ] Brief descriptions are fetched from Click Command objects via `cli_main`
-- [ ] `_get_short_help(name)` is defined and pulls from `cli_main` commands/groups
-- [ ] REPL built-ins (`/help`, `/exit`, `/version`, `/exec`, `/shell`, phase commands) appear under "── Special ──" and are hardcoded
-- [ ] No command listed in `/help` can fail with "Unknown command" in the REPL
-- [ ] The old Click-tree-based help generation code is deleted
-- [ ] REPL `/help` output looks the same as current output (minus broken commands)
+- [x] `/help` generation reads from `REGISTRY` instead of walking `cli_main.commands`
+- [x] `click_only=True` commands are excluded from REPL `/help`
+- [x] Group structure is preserved (── General ──, ── Engagement ──, ── Wave ──, etc.)
+- [x] Brief descriptions are fetched from Click Command objects via `cli_main`
+- [x] `_get_short_help(name)` is defined and pulls from `cli_main` commands/groups
+- [x] REPL built-ins (`/help`, `/exit`, `/version`, `/exec`, `/shell`, phase commands) appear under "── Special ──" and are hardcoded
+- [x] No command listed in `/help` can fail with "Unknown command" in the REPL
+- [x] The old Click-tree-based help generation code is deleted
+- [x] REPL `/help` output looks the same as current output (minus broken commands)
 
 ## Files Affected
 

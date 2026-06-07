@@ -1,6 +1,6 @@
 # Task 6 — Remove stale arg parsers + unused imports from repl.py
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 03-repl-rewiring
 **Dependencies:** Tasks 1-5
 **Effort:** 0.25h
@@ -19,12 +19,12 @@ After moving arg parsers to `_registration.py`, some parser functions referenced
 
 ## Acceptance Criteria
 
-- [ ] All 16 arg parser function definitions are gone from `repl.py` (moved to `_registration.py`)
-- [ ] Unused imports cleaned up — only imports used by remaining code stay
-- [ ] No import errors or NameError when REPL starts
-- [ ] REPL dispatch still works for all bus-dispatchable commands
-- [ ] Commands like `/help`, `/exit`, `/version`, `/exec`, phase command pre-handling all still work
-- [ ] Tab completion still works
+- [x] All 16 arg parser function definitions are gone from `repl.py` (moved to `_registration.py`)
+- [x] Unused imports cleaned up — only imports used by remaining code stay
+- [x] No import errors or NameError when REPL starts
+- [x] REPL dispatch still works for all bus-dispatchable commands
+- [x] Commands like `/help`, `/exit`, `/version`, `/exec`, phase command pre-handling all still work
+- [x] Tab completion still works
 
 ## Files Affected
 

@@ -1,6 +1,6 @@
 # Task 1 — Move arg parsers from repl.py to _registration.py
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 03-repl-rewiring
 **Dependencies:** Wave 02
 **Effort:** 0.25h
@@ -34,11 +34,11 @@ Functions to move:
 
 ## Acceptance Criteria
 
-- [ ] All 16 parser functions moved to `src/harness/command/_registration.py`
-- [ ] Functions maintain exact same signatures and behaviour — no refactoring
-- [ ] `repl.py` imports parsers from `_registration.py` instead of defining them
-- [ ] All imports in `main.py` are updated to import from `_registration.py`
-- [ ] No circular import: `_registration.py` imports `TypedCommand` from `harness.command.types` (already done), parsers don't need any other imports from repl.py
+- [x] All 16 parser functions moved to `src/harness/command/_registration.py`
+- [x] Functions maintain exact same signatures and behaviour — no refactoring
+- [x] `repl.py` imports parsers from `_registration.py` instead of defining them
+- [x] All imports in `main.py` are updated to import from `_registration.py`
+- [x] No circular import: `_registration.py` imports `TypedCommand` from `harness.command.types` (already done), parsers don't need any other imports from repl.py
 
 ## Files Affected
 

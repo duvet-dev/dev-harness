@@ -1,6 +1,6 @@
 # Task 3 — Replace `COMMAND_TYPES` with `build_repl_command_map()`
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 03-repl-rewiring
 **Dependencies:** Task 1
 **Effort:** 0.5h
@@ -19,13 +19,13 @@ Replace all `COMMAND_TYPES` references in `repl.py` with `self._command_types`. 
 
 ## Acceptance Criteria
 
-- [ ] Static `COMMAND_TYPES` dict deleted from `repl.py`
-- [ ] `HarnessREPL.__init__` calls `build_repl_command_map()` to populate `self._command_types`
-- [ ] All `COMMAND_TYPES` references replaced with `self._command_types`
-- [ ] No `from harness.shell.repl import COMMAND_TYPES` exists anywhere in the codebase
-- [ ] `build_repl_command_map()` excludes `click_only=True` entries (they're handled by the CLI-only fallback in Task 5)
-- [ ] The structure `dict[str, tuple[class, Callable]]` is identical — no dispatch logic changes needed
-- [ ] Existing tests pass (REPL tests need to handle the new instance-attribute pattern)
+- [x] Static `COMMAND_TYPES` dict deleted from `repl.py`
+- [x] `HarnessREPL.__init__` calls `build_repl_command_map()` to populate `self._command_types`
+- [x] All `COMMAND_TYPES` references replaced with `self._command_types`
+- [x] No `from harness.shell.repl import COMMAND_TYPES` exists anywhere in the codebase
+- [x] `build_repl_command_map()` excludes `click_only=True` entries (they're handled by the CLI-only fallback in Task 5)
+- [x] The structure `dict[str, tuple[class, Callable]]` is identical — no dispatch logic changes needed
+- [x] Existing tests pass (REPL tests need to handle the new instance-attribute pattern)
 
 ## Files Affected
 

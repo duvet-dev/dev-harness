@@ -1,6 +1,6 @@
 # Task 5 — Replace setup.py registrations with `register_bus_handlers(bus)`
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 02-bus-dispatchable-commands
 **Dependencies:** Tasks 1-4
 **Effort:** 0.5h
@@ -18,11 +18,11 @@ Also clean up imports in setup.py — remove handler/command imports that are on
 
 ## Acceptance Criteria
 
-- [ ] `_build_bus()` uses `register_bus_handlers(bus)` instead of individual `bus.register_type()` calls
-- [ ] All 27 valid handler registrations are still active (30 bus-dispatchable minus `work` which shares `CreateEngagementHandler`/`CreateEngagementCommand` — checked for duplication)
-- [ ] 3 dead handler registrations are removed/commented out with a clear `# DEAD: no @register — to be removed in Wave 04` comment
-- [ ] Import lines for dead handlers/commands are removed or commented out
-- [ ] Existing test suite passes
+- [x] `_build_bus()` uses `register_bus_handlers(bus)` instead of individual `bus.register_type()` calls
+- [x] All 27 valid handler registrations are still active (30 bus-dispatchable minus `work` which shares `CreateEngagementHandler`/`CreateEngagementCommand` — checked for duplication)
+- [x] 3 dead handler registrations are removed/commented out with a clear `# DEAD: no @register — to be removed in Wave 04` comment
+- [x] Import lines for dead handlers/commands are removed or commented out
+- [x] Existing test suite passes
 
 ## Files Affected
 

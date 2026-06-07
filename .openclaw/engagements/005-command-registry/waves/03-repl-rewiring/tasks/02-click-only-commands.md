@@ -1,6 +1,6 @@
 # Task 2 — Add `@register(click_only=True)` to all Click-only commands
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 03-repl-rewiring
 **Dependencies:** Wave 02
 **Effort:** 0.5h
@@ -29,14 +29,14 @@ Commands to annotate:
 
 ## Acceptance Criteria
 
-- [ ] All 11 Click-only commands have `@register(name="...", click_only=True)`
-- [ ] No `cmd_cls`, `handler`, or `arg_parser` provided — `click_only=True` is sufficient
-- [ ] Decorator applied to the correct Click function in `main.py`
-- [ ] `workflows` entry is NOT in PURE_CLICK_EXEMPTIONS anymore (now has @register so sync test passes)
-- [ ] `team add-agent` and `team remove-agent` also get @register (remove from PURE_CLICK_EXEMPTIONS)
-- [ ] `shell` remains in PURE_CLICK_EXEMPTIONS (still has no @register)
-- [ ] All 4 sync tests now pass: `test_all_cli_commands_registered` should have zero missing
-- [ ] Existing test suite still passes
+- [x] All 11 Click-only commands have `@register(name="...", click_only=True)`
+- [x] No `cmd_cls`, `handler`, or `arg_parser` provided — `click_only=True` is sufficient
+- [x] Decorator applied to the correct Click function in `main.py`
+- [x] `workflows` entry is NOT in PURE_CLICK_EXEMPTIONS anymore (now has @register so sync test passes)
+- [x] `team add-agent` and `team remove-agent` also get @register (remove from PURE_CLICK_EXEMPTIONS)
+- [x] `shell` remains in PURE_CLICK_EXEMPTIONS (still has no @register)
+- [x] All 4 sync tests now pass: `test_all_cli_commands_registered` should have zero missing
+- [x] Existing test suite still passes
 
 ## Files Affected
 

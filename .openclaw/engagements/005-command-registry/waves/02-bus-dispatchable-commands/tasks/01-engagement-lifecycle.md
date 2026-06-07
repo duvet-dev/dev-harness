@@ -1,6 +1,6 @@
 # Task 1 — Add `@register` to engagement lifecycle commands
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 02-bus-dispatchable-commands
 **Dependencies:** Wave 01
 **Effort:** 0.5h
@@ -21,12 +21,12 @@ Commands to annotate:
 
 ## Acceptance Criteria
 
-- [ ] All 5 engagement lifecycle commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
-- [ ] Each `handler` argument uses the same handler class/instance pattern as `setup.py` currently does
-- [ ] Each `arg_parser` matches the existing parser from `COMMAND_TYPES` / `repl.py`
-- [ ] Decorator placement: right after Click decorators, before the function `def` (Click decorators must be outermost)
-- [ ] Handlers imported from their module paths (e.g., `CreateEngagementHandler` from `harness.command.handlers.engagement_handlers`)
-- [ ] All imports added to `main.py`
+- [x] All 5 engagement lifecycle commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
+- [x] Each `handler` argument uses the same handler class/instance pattern as `setup.py` currently does
+- [x] Each `arg_parser` matches the existing parser from `COMMAND_TYPES` / `repl.py`
+- [x] Decorator placement: right after Click decorators, before the function `def` (Click decorators must be outermost)
+- [x] Handlers imported from their module paths (e.g., `CreateEngagementHandler` from `harness.command.handlers.engagement_handlers`)
+- [x] All imports added to `main.py`
 
 ## Files Affected
 

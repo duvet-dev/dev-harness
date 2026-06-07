@@ -1,6 +1,6 @@
 # Task 3 — Add `@register` to wave/changelog/governance commands
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 02-bus-dispatchable-commands
 **Dependencies:** Wave 01
 **Effort:** 0.5h
@@ -23,10 +23,10 @@ Commands to annotate:
 
 ## Acceptance Criteria
 
-- [ ] All 7 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
-- [ ] Each `handler` argument matches current setup.py instantiation pattern
-- [ ] Each `arg_parser` matches the existing parser from `COMMAND_TYPES`
-- [ ] All imports added to `main.py`
+- [x] All 7 commands have `@register(name="...", cmd_cls=..., handler=..., arg_parser=...)`
+- [x] Each `handler` argument matches current setup.py instantiation pattern
+- [x] Each `arg_parser` matches the existing parser from `COMMAND_TYPES`
+- [x] All imports added to `main.py`
 
 ## Files Affected
 

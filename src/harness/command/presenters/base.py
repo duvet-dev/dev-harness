@@ -533,6 +533,79 @@ class ReplPresenter:
             )
         return "\n".join(lines)
 
+    def _format_resume_engagement(self, result: ResumeEngagementResult) -> str:
+        lines = [f"\u2705 {result.message}"]
+        lines.append(f"  \x1b[36mSlug:\x1b[0m   {result.slug}")
+        lines.append(f"  \x1b[36mStatus:\x1b[0m {result.status}")
+        if result.current_phase:
+            lines.append(f"  \x1b[36mPhase:\x1b[0m  {result.current_phase}")
+        for w in result.warnings:
+            lines.append(f"  \u26a0\ufe0f {w.get('message', w)}")
+        return "\n".join(lines)
+
+    def _format_enter_phase(self, result: EnterPhaseResult) -> str:
+        lines = [f"\u2705 Entered phase: {result.phase}"]
+        lines.append(f"  \x1b[36mSlug:\x1b[0m    {result.slug}")
+        lines.append(f"  \x1b[36mStarted:\x1b[0m {'yes' if result.started else 'no'}")
+        return "\n".join(lines)
+
+    def _format_chat(self, result: ChatResult) -> str:
+        lines = ["\u2705 Chat opened"]
+        lines.append(f"  \x1b[36mSlug:\x1b[0m  {result.slug}")
+        lines.append(f"  \x1b[36mPhase:\x1b[0m {result.phase}")
+        return "\n".join(lines)
+
+    def _format_create_wave(self, result: CreateWaveResult) -> str:
+        lines = ["\u2705 Wave created"]
+        lines.append(f"  \x1b[36mTitle:\x1b[0m {result.wave_title}")
+        lines.append(f"  \x1b[36mID:\x1b[0m    {result.wave_id}")
+        return "\n".join(lines)
+
+    def _format_execute_step(self, result: ExecuteStepResult) -> str:
+        lines = ["\u2705 Step executed"]
+        if hasattr(result, 'slug') and result.slug:
+            lines.append(f"  \x1b[36mSlug:\x1b[0m {result.slug}")
+        if result.step:
+            lines.append(f"  \x1b[36mStep:\x1b[0m {result.step}")
+        return "\n".join(lines)
+
+    def _format_review(self, result: ReviewEngagementResult) -> str:
+        lines = [f"\u2705 {result.message}"]
+        lines.append(f"  \x1b[36mDecision:\x1b[0m {result.decision}")
+        if result.slug:
+            lines.append(f"  \x1b[36mSlug:\x1b[0m     {result.slug}")
+        return "\n".join(lines)
+
+    def _format_rename(self, result: RenameEngagementResult) -> str:
+        lines = [f"\u2705 {result.message}"]
+        if result.changes_made:
+            lines.append("  \x1b[32mChanges made\x1b[0m")
+        for w in result.warnings:
+            lines.append(f"  \u26a0\ufe0f {w}")
+        for e in result.errors:
+            lines.append(f"  \u274c {e}")
+        return "\n".join(lines)
+
+    def _format_set_branch(self, result: SetBranchResult) -> str:
+        return f"\u2705 Branch: {result.old_branch} \u2192 {result.new_branch}"
+
+    def _format_fix(self, result: FixEngagementResult) -> str:
+        lines = ["\u2705 Fixed engagement"]
+        for msg in result.messages:
+            lines.append(f"  \u25b8 {msg}")
+        return "\n".join(lines) if result.messages else "\u2705 Fixed engagement (no messages)"
+
+    def _format_set_governance(self, result: SetGovernanceResult) -> str:
+        return f"\u2705 Governance set to '{result.level}' on {result.scope}"
+
+    def _format_consult(self, result: ConsultResult) -> str:
+        lines = [f"\u2705 {result.message}"]
+        lines.append(f"  \x1b[36mTeam:\x1b[0m   {result.team_name}")
+        lines.append(f"  \x1b[36mMode:\x1b[0m   {result.mode}")
+        if result.response:
+            lines.append(f"  \x1b[36mResponse:\x1b[0m {result.response[:200]}")
+        return "\n".join(lines)
+
     def _format_refresh_agents(self, result: RefreshAgentsResult) -> str:
         parts = []
         if result.created:

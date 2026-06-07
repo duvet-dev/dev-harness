@@ -20,7 +20,7 @@ Add missing value objects from the typed command design: `PhaseName`, `EngStatus
 | 2 | Add EngStatus enum | ✅ Complete | In command/values.py |
 | 3 | Add WaveId value object | ✅ Complete | In command/values.py |
 | 4 | Move value objects to command/values.py | ✅ Complete | PhaseName, SessionType, AutoMode, ReviewDecision, AbortMode, BranchStrategy moved from domain/enums.py |
-| 5 | Expand ReplPresenter formatting | 📋 Pending | Type-specific formatting for all result types |
+| 5 | Expand ReplPresenter formatting | ✅ Complete | Type-specific formatting for all result types |
 | 6 | Tests | 📋 Pending | |
 
 ## Verification

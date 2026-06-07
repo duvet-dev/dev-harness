@@ -25,7 +25,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from pathlib import Path
+
 from harness.artifact.repository import Artifact
+from harness.artifact.writer import ArtifactWriter
 from harness.errors import LoopExecutionError, PhaseExecutionError
 from harness.loop.convergence import resolve_strategy
 from harness.phase.model import ConvergenceConfig, Step, StepResult as PhaseStepResult
@@ -99,6 +102,18 @@ class StepExecutor:
             phase_orchestrator or self._stub_phase_orchestrator
         )
         self._template_registry = template_registry
+        self._artifact_writer: ArtifactWriter | None = None
+
+    def set_artifact_writer(self, writer: ArtifactWriter) -> None:
+        """Set an ArtifactWriter for live artifact persistence.
+
+        When set, artifacts produced by agent/team steps are written
+        to disk immediately after each successful dispatch.
+
+        Args:
+            writer: An ArtifactWriter instance for the current engagement.
+        """
+        self._artifact_writer = writer
 
     async def execute(
         self,
@@ -221,11 +236,22 @@ class StepExecutor:
                 step, context
             )
 
+            success = getattr(dispatch_result, "success", False)
+            artifacts = getattr(dispatch_result, "artifacts", [])
+
+            # Write artifacts immediately if we have an ArtifactWriter
+            if success and artifacts and self._artifact_writer:
+                phase = self._get_context_attr(context, "phase", "")
+                for artifact in artifacts:
+                    self._write_artifact_live(
+                        artifact=artifact,
+                        phase=phase,
+                        step=step,
+                    )
+
             return StepResult(
-                success=getattr(dispatch_result, "success", False),
-                artifacts=getattr(
-                    dispatch_result, "artifacts", []
-                ),
+                success=success,
+                artifacts=artifacts,
                 error=getattr(dispatch_result, "error", None),
                 step_type=step.step_type,
                 escalation=getattr(
@@ -366,6 +392,42 @@ class StepExecutor:
         if isinstance(context, dict):
             return context.get(attr, default)
         return getattr(context, attr, default)
+
+    def _write_artifact_live(
+        self,
+        artifact: Artifact,
+        phase: str,
+        step: Step,
+    ) -> None:
+        """Write a step artifact immediately via the ArtifactWriter."""
+        if not self._artifact_writer:
+            return
+        try:
+            agent_role = (
+                (step.agents or [""])[0]
+                if step.agents
+                else step.team or ""
+            )
+            name = (
+                artifact.path
+                or artifact.type.value
+                or f"step_{agent_role}"
+            )
+            safe_name = Path(name).stem
+            self._artifact_writer.write_artifact(
+                phase=phase or "unknown",
+                name=safe_name,
+                content=artifact.content,
+                agent_role=agent_role,
+                metadata={
+                    "artifact_type": artifact.type.value,
+                },
+            )
+        except Exception as e:
+            logger.warning(
+                "StepExecutor — failed to write live artifact",
+                extra={"error": str(e)},
+            )
 
     async def _dispatch_phase_step(
         self,

@@ -11,7 +11,10 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from harness.artifact.writer import ArtifactWriter
 
 from harness.agents.consultation import ConsultationOrchestrator, ConsultationResult
 # Max phase jumps per phase (migrated from cycle.py, which is deleted)
@@ -344,24 +347,82 @@ def _report_apply_results(results: list[tuple[str, str]], root: Path) -> None:
 
 
 def _phase_output_dir(root: Path, slug: str, phase_name: str) -> Path:
-    """Get or create the output directory for a phase's artifacts."""
+    """Get or create the output directory for a phase's artifacts.
+
+    Legacy wrapper that now delegates to ArtifactWriter's artifact
+    directory. Retained for backward compatibility.
+    """
     from harness.paths import get_engagement_dir
     d = get_engagement_dir(root, slug) / phase_name
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
+def _get_artifact_writer(root: Path, slug: str) -> "ArtifactWriter":
+    """Get or create an ArtifactWriter for the given engagement.
+
+    Returns a singleton ArtifactWriter instance per engagement, cached
+    on the function to avoid repeated instantiation.
+    """
+    from harness.artifact.writer import ArtifactWriter
+    if not hasattr(_get_artifact_writer, "_cache"):
+        _get_artifact_writer._cache = {}
+    key = f"{root}:{slug}"
+    if key not in _get_artifact_writer._cache:
+        _get_artifact_writer._cache[key] = ArtifactWriter(root, slug)
+    return _get_artifact_writer._cache[key]
+
+
+def write_live_phase_artifact(
+    root: Path,
+    slug: str,
+    phase_name: str,
+    content: str,
+    agent_role: str = "",
+    iteration: int = 0,
+) -> Path:
+    """Write a phase artifact immediately using ArtifactWriter.
+
+    Unlike ``_write_phase_artifact`` (which defers writing until the
+    end of a phase), this function writes artifacts immediately as
+    they are produced. This enables real-time review and prevents
+    context compaction from losing intermediate work.
+
+    Args:
+        root: Project root directory.
+        slug: Engagement slug.
+        phase_name: Phase name (resolved to canonical artifact name).
+        content: Artifact content (Markdown text).
+        agent_role: Agent role that produced the artifact.
+        iteration: Iteration number (0 = first pass).
+
+    Returns:
+        The absolute path to the written artifact file.
+    """
+    from harness.session.phase_source import find_phase
+    writer = _get_artifact_writer(root, slug)
+    phase_def = find_phase(phase_name)
+    artifact_name = phase_def["artifact"] if phase_def else f"{phase_name}.md"
+    # Strip .md extension to use as the stem name
+    name_stem = artifact_name.replace(".md", "").replace(".yaml", "")
+    return writer.write_artifact(
+        phase=phase_name,
+        name=name_stem,
+        content=content,
+        agent_role=agent_role,
+        iteration=iteration,
+    )
+
+
 def _write_phase_artifact(
     root: Path, slug: str, phase_name: str, content: str
 ) -> Path:
-    """Write the last assistant response as the phase artifact."""
-    from harness.session.phase_source import find_phase
-    phase_def = find_phase(phase_name)
-    filename = phase_def["artifact"] if phase_def else f"{phase_name}.md"
-    out_dir = _phase_output_dir(root, slug, phase_name)
-    path = out_dir / filename
-    path.write_text(content)
-    return path
+    """Write the last assistant response as the phase artifact.
+
+    Legacy wrapper that delegates to ``write_live_phase_artifact``.
+    Retained for backward compatibility with existing callers.
+    """
+    return write_live_phase_artifact(root, slug, phase_name, content)
 
 
 # ── Header / Help display ─────────────────────────────────────────────────

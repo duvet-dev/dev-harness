@@ -1,6 +1,6 @@
 # Task 2 — Wire into session orchestrator
 
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Wave:** 26-live-artifact-writing
 **Dependencies:** Task 1, Wave 22
 **Effort:** 2-3h

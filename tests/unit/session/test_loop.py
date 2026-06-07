@@ -19,6 +19,7 @@ from harness.session.helpers import (
     _format_conversation_for_context,
     _format_jump_marker,
     _format_consult_result,
+    _get_artifact_writer,
     _init_phase_jump_counts,
     _load_assessment_findings,
     _load_engagement_context,
@@ -32,6 +33,7 @@ from harness.session.helpers import (
     format_providers_table,
     list_providers,
     switch_provider,
+    write_live_phase_artifact,
 )
 from harness.agents.consultation import ConsultationResult
 
@@ -488,11 +490,78 @@ class TestPhaseOutputDir:
         assert path.name == "design"
 
 
+class TestGetArtifactWriter:
+    """Tests for _get_artifact_writer()."""
+
+    def test_returns_writer(self, tmp_path):
+        writer = _get_artifact_writer(tmp_path, "test-eng")
+        from harness.artifact.writer import ArtifactWriter
+        assert isinstance(writer, ArtifactWriter)
+
+    def test_caches_instance(self, tmp_path):
+        w1 = _get_artifact_writer(tmp_path, "test-eng")
+        w2 = _get_artifact_writer(tmp_path, "test-eng")
+        assert w1 is w2
+
+    def test_different_slugs_different_writers(self, tmp_path):
+        w1 = _get_artifact_writer(tmp_path, "eng-a")
+        w2 = _get_artifact_writer(tmp_path, "eng-b")
+        assert w1 is not w2
+
+    def test_clear_cache_on_new_root(self, tmp_path):
+        root_a = tmp_path / "a"
+        root_b = tmp_path / "b"
+        root_a.mkdir()
+        root_b.mkdir()
+        w1 = _get_artifact_writer(root_a, "test-eng")
+        w2 = _get_artifact_writer(root_b, "test-eng")
+        assert w1 is not w2
+
+
 class TestWritePhaseArtifact:
     def test_writes_file(self, tmp_path):
         path = _write_phase_artifact(tmp_path, "test-eng", "design", "content")
         assert path.is_file()
-        assert path.read_text() == "content"
+        text = path.read_text()
+        # Should have YAML frontmatter (---) and the content body
+        assert text.startswith("---")
+        assert "phase: design" in text
+        assert "timestamp:" in text
+        assert "content" in text
+
+    def test_writes_under_engagement_dir(self, tmp_path):
+        path = _write_phase_artifact(tmp_path, "test-eng", "design", "content")
+        assert ".harness" in str(path)
+        assert "test-eng" in str(path)
+        assert "artifacts" in str(path)
+
+
+class TestWriteLivePhaseArtifact:
+    """Tests for write_live_phase_artifact()."""
+
+    def test_writes_with_agent_role(self, tmp_path):
+        path = write_live_phase_artifact(
+            tmp_path, "test-eng", "design", "# Design Doc",
+            agent_role="architect",
+        )
+        text = path.read_text()
+        assert "agent_role: architect" in text
+        assert "# Design Doc" in text
+
+    def test_writes_with_iteration(self, tmp_path):
+        path = write_live_phase_artifact(
+            tmp_path, "test-eng", "design", "v2 design",
+            iteration=2,
+        )
+        assert "v2" in path.name or "iteration: 2" in path.read_text()
+
+    def test_exists_immediately(self, tmp_path):
+        """Artifact should exist on disk before the function returns."""
+        path = write_live_phase_artifact(
+            tmp_path, "test-eng", "design", "Live content",
+        )
+        assert path.exists()
+        assert path.is_file()
 
 
 class TestParseWaves:

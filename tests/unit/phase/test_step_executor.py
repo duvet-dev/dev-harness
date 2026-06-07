@@ -12,11 +12,14 @@ Tests cover:
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from harness.artifact.repository import Artifact
+from harness.artifact.types import ArtifactType
 from harness.errors import LoopExecutionError, PhaseExecutionError
 from harness.phase.model import LoopConfig, Step
 from harness.phase.step_executor import StepExecutor, StepResult
@@ -369,6 +372,88 @@ class TestStepExecutorEdgeCases:
         result = await executor.execute(step, context)
         assert not result.success
         assert "Unknown step type" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_writes_artifact_after_successful_agent_dispatch(
+        self, tmp_path: Path,
+    ) -> None:
+        """ArtifactWriter should write artifact after successful agent dispatch."""
+        from harness.artifact.writer import ArtifactWriter
+
+        writer = ArtifactWriter(tmp_path, "test-eng")
+        executor = StepExecutor()
+        executor.set_artifact_writer(writer)
+
+        # Mock the step dispatcher to return a successful result with artifacts
+        artifact = Artifact(
+            type=ArtifactType.ARCHITECTURAL_OVERVIEW,
+            content="# Architecture\nDesign doc here.",
+            path="arch-overview.md",
+        )
+        executor._step_dispatcher = MagicMock()
+        executor._step_dispatcher.dispatch = AsyncMock(
+            return_value=SimpleNamespace(
+                success=True,
+                artifacts=[artifact],
+                error=None,
+                escalation=None,
+            )
+        )
+
+        step = Step(agents=["architect"], role="produce")
+        ctx = {"slug": "test-eng", "mode": "auto", "trace_id": "t1", "phase": "design"}
+        result = await executor.execute(step, ctx)
+
+        assert result.success is True
+        # Verify the artifact was written to disk
+        art_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "artifacts" / "design"
+        assert art_dir.exists()
+        written_files = list(art_dir.iterdir())
+        assert len(written_files) >= 1
+        text = written_files[0].read_text()
+        assert "# Architecture" in text
+        assert "phase: design" in text
+
+    @pytest.mark.asyncio
+    async def test_does_not_write_on_failed_dispatch(
+        self, tmp_path: Path,
+    ) -> None:
+        """No artifact should be written when the dispatch fails."""
+        from harness.artifact.writer import ArtifactWriter
+
+        writer = ArtifactWriter(tmp_path, "test-eng")
+        executor = StepExecutor()
+        executor.set_artifact_writer(writer)
+
+        executor._step_dispatcher = MagicMock()
+        executor._step_dispatcher.dispatch = AsyncMock(
+            return_value=SimpleNamespace(
+                success=False,
+                artifacts=[],
+                error="Dispatch failed",
+                escalation="loop",
+            )
+        )
+
+        step = Step(agents=["architect"], role="produce")
+        ctx = {"slug": "test-eng", "mode": "auto", "trace_id": "t1", "phase": "design"}
+        result = await executor.execute(step, ctx)
+        assert result.success is False
+
+        # Verify no artifacts were written
+        art_dir = tmp_path / ".harness" / "engagements" / "test-eng" / "artifacts"
+        if art_dir.exists():
+            assert len(list(art_dir.rglob("*"))) == 0
+
+    def test_set_artifact_writer_none(self, tmp_path: Path) -> None:
+        """set_artifact_writer stores the writer for later use."""
+        from harness.artifact.writer import ArtifactWriter
+
+        writer = ArtifactWriter(tmp_path, "test-eng")
+        executor = StepExecutor()
+        assert executor._artifact_writer is None
+        executor.set_artifact_writer(writer)
+        assert executor._artifact_writer is writer
 
     @pytest.mark.asyncio
     async def test_none_context(self, executor: StepExecutor) -> None:

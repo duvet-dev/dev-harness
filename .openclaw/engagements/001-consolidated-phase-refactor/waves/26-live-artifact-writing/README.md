@@ -2,7 +2,7 @@
 
 **Milestone:** 4 — Architecture Features
 **Effort:** 8-12h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** Wave 22
 **Blocks:** Nothing
 
@@ -14,10 +14,10 @@ Phase artifacts are currently written only at phase END (`_write_phase_artifact(
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Build ArtifactWriter class | 📋 Pending | Writes immediately, not deferred |
-| 2 | Wire into session orchestrator | 📋 Pending | Artifacts persist mid-session |
-| 3 | Wire into phase loop | 📋 Pending | After each creator step in a critic loop |
-| 4 | Tests | 📋 Pending | Artifact observable mid-phase, not just end-of-phase |
+| 1 | Build ArtifactWriter class | ✅ Complete | `src/harness/artifact/writer.py` — 100 lines, atomic writes, YAML frontmatter, iteration versioning |
+| 2 | Wire into session orchestrator | ✅ Complete | Replaced `_write_phase_artifact()` with `write_live_phase_artifact()` + `_get_artifact_writer()` in helpers. Added `_write_live_artifact()` to InteractiveSession. |
+| 3 | Wire into phase loop | ✅ Complete | Wired into StepExecutor via `set_artifact_writer()` — writes after each successful agent/team dispatch. |
+| 4 | Tests | ✅ Complete | 31 new tests across artifact writer, helpers, step executor. 3,787 total, 81.56% coverage. |
 
 ## Verification
 

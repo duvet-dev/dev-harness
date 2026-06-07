@@ -28,8 +28,10 @@ from harness.session.phase_source import get_phases
 from harness.session.helpers import (
     _apply_file_blocks,
     _format_consult_result,
+    _get_artifact_writer,
     _report_apply_results,
     _write_phase_artifact,
+    write_live_phase_artifact,
 )
 from harness.domain.engagement.checkpoint import (
     CHECKPOINT_EXPIRY_HOURS,
@@ -366,6 +368,33 @@ class InteractiveSession:
         if target.get("target_alias"):
             click.echo(f"  Alias: ~{target['target_alias']}")
 
+    # ── Live artifact writing ────────────────────────────────────────────
+
+    def _write_live_artifact(self, content: str) -> None:
+        """Write the LLM response as a live phase artifact.
+
+        Uses the ArtifactWriter to write immediately, enabling
+        real-time review and surviving context compaction.
+        """
+        if not content:
+            return
+        try:
+            writer = _get_artifact_writer(self.root, self.engagement_slug)
+            phase_name = self.phase_def.get("name", self.phase)
+            artifact_name = self.phase_def.get("artifact", f"{phase_name}.md")
+            name_stem = artifact_name.replace(".md", "").replace(".yaml", "")
+            writer.write_artifact(
+                phase=phase_name,
+                name=name_stem,
+                content=content,
+                agent_role=self.phase_def.get("agent", ""),
+            )
+        except Exception as exc:
+            logger.debug(
+                "InteractiveSession — failed to write live artifact: %s",
+                exc,
+            )
+
     # ── LLM interaction ─────────────────────────────────────────────────
 
     async def _send_to_llm(self, user_input: str) -> None:
@@ -401,6 +430,9 @@ class InteractiveSession:
         if apply_results:
             click.echo()
             _report_apply_results(apply_results, self.root)
+
+        # Write the response as a live phase artifact
+        self._write_live_artifact(last_response)
 
     # ── Main loop ───────────────────────────────────────────────────────
 

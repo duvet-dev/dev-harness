@@ -2,7 +2,7 @@
 
 > **Purpose:** Single view of all waves - completed and planned.
 > **Engagement:** consolidated-phase-refactor
-> **Updated:** 2026-06-07 (Wave 25 added)
+> **Updated:** 2026-06-07 (Wave 26 added)
 > **Principle:** Zero legacy/compatibility shims in target state.
 > **Source:** Crichton Design Convergence (2026-06-06)
 
@@ -37,6 +37,7 @@
 | **28** | Command Bus & Presenter Consolidation | ✅ Single shared bus, all typed dispatch, presenters expanded, commands.py deleted, 3,827 tests. |
 | **30** | OpenClaw Sync Removal | ✅ Sync module deleted. Zero OpenClaw references in src/ or tests/. 3,757 tests. |
 | **25** | Wire Ripple Engine | ✅ RippleEvent created. WorkflowRippleEngine wired into WorkflowOrchestrator. Events emitted on phase completion. 3,747 tests. |
+| **26** | Live Artifact Writing | ✅ ArtifactWriter class writes immediately to `.harness/engagements/<slug>/artifacts/`. Wired into session orchestrator (mid-phase), StepExecutor (post-agent-dispatch), and InteractiveSession (post-LLM). Atomic writes, YAML frontmatter, iteration versioning, 31 new tests, 3,787 passing. |
 
 ---
 

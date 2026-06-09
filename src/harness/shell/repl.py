@@ -152,6 +152,7 @@ class HarnessREPL:
         lines.append("── Special ──")
         lines.append("  /help                Show this help")
         lines.append("  /version             Show version info")
+        lines.append("  /findings            Manage Findings Registry (list|show|update-status|confirm-signoff|sync)")
         lines.append("  /assess              Enter assessment phase with assessment-agent")
         lines.append("  /requirements        Enter requirements phase with requirements-agent")
         lines.append("  /design              Enter design phase with design-agent")
@@ -347,6 +348,176 @@ class HarnessREPL:
                 pass
             except Exception as exc:
                 click.echo(f"Get-well session error: {exc}", err=True)
+
+            return True
+
+        # ── Findings ────────────────────────────────────────────────────
+        if cmd_name == "findings":
+            """Manage the Findings Registry for the active engagement."""
+            from harness.domain.engagement.resolver import resolve_active_engagement
+
+            slug = resolve_active_engagement(self.root)
+            if not slug:
+                click.echo("No active engagement.", err=True)
+                return True
+
+            sub = cmd_args[0] if cmd_args else "list"
+
+            try:
+                from harness.domain.engagement.findings import FindingsStore
+                store = FindingsStore(self.root, slug)
+
+                if sub == "list":
+                    status_filter = ""
+                    sev_filter = ""
+                    for a in cmd_args[1:]:
+                        if a.startswith("--status="):
+                            status_filter = a.split("=", 1)[1]
+                        elif a.startswith("--severity="):
+                            sev_filter = a.split("=", 1)[1]
+
+                    findings = store.all_findings
+                    if status_filter:
+                        findings = [f for f in findings if f.status == status_filter]
+                    if sev_filter:
+                        findings = [f for f in findings if f.severity == sev_filter]
+
+                    if not findings:
+                        click.echo("No findings in registry.")
+                        return True
+
+                    click.echo(f"\nFindings Registry — {slug} ({len(findings)} total):")
+                    click.echo("-" * 72)
+                    for f in findings:
+                        sev_icon = {
+                            "critical": "🔴",
+                            "high": "🟠",
+                            "medium": "🟡",
+                            "low": "🟢",
+                            "info": "🔵",
+                        }.get(f.severity, "⚪")
+                        pending = " ⏳" if f.is_pending_verification else ""
+                        click.echo(
+                            f"  {sev_icon} {f.id:<6s} {f.status:<13s}{pending} "
+                            f"{f.description[:60]}"
+                        )
+                    click.echo()
+
+                elif sub == "show":
+                    fid = cmd_args[1] if len(cmd_args) > 1 else ""
+                    if not fid:
+                        click.echo("Usage: /findings show F-001", err=True)
+                        return True
+                    finding = store.get(fid)
+                    if not finding:
+                        click.echo(f"Finding '{fid}' not found.", err=True)
+                        return True
+                    click.echo()
+                    click.echo(f"  {fid}")
+                    click.echo(f"  Status:    {finding.status}")
+                    click.echo(f"  Severity:  {finding.severity}")
+                    click.echo(f"  Source:    {finding.source}")
+                    click.echo(f"  Scope:     {finding.scope}")
+                    click.echo(f"  Raised:    {finding.raised_at}")
+                    if finding.resolved_at:
+                        click.echo(f"  Resolved:  {finding.resolved_at}")
+                    if finding.requires_human_signoff:
+                        click.echo(f"  Sign-off:  Required{' ⏳' if finding.is_pending_verification else ' ✅'}")
+                    if finding.references and finding.references.file:
+                        click.echo(f"  File:      {finding.references.file}")
+                        if finding.references.line:
+                            click.echo(f"  Line:      {finding.references.line}")
+                    if finding.resolution and finding.resolution.wave:
+                        click.echo(f"  Resolved by: {finding.resolution.wave}")
+                    click.echo()
+                    click.echo(f"  {finding.description}")
+                    click.echo()
+
+                elif sub == "update-status":
+                    fid = cmd_args[1] if len(cmd_args) > 1 else ""
+                    new_status = cmd_args[2] if len(cmd_args) > 2 else ""
+                    if not fid or not new_status:
+                        click.echo("Usage: /findings update-status F-001 resolved", err=True)
+                        return True
+                    from harness.domain.engagement.findings import InvalidTransitionError
+                    try:
+                        store.update_status(fid, new_status)
+                        store.save()
+                        click.echo(f"✅ Finding {fid} status updated.")
+                    except InvalidTransitionError as e:
+                        click.echo(f"❌ {e}", err=True)
+
+                elif sub == "confirm-signoff":
+                    fid = cmd_args[1] if len(cmd_args) > 1 else ""
+                    if not fid:
+                        click.echo("Usage: /findings confirm-signoff F-001", err=True)
+                        return True
+                    finding = store.confirm_human_signoff(fid)
+                    if finding:
+                        click.echo(f"✅ Human sign-off confirmed for {fid}.")
+                    else:
+                        click.echo(f"Finding '{fid}' not found or not pending.", err=True)
+
+                elif sub == "sync":
+                    """Run analysis and sync findings into registry."""
+                    from harness.analysis.observer import analyse
+                    from harness.domain.engagement.findings import (
+                        RegistryFinding, FindingReference, _now_iso, _map_severity
+                    )
+                    deep = "--deep" in cmd_args
+                    click.echo("Running analysis...")
+                    result = analyse(path=str(self.root), deep=deep)
+                    if result["status"] == "error":
+                        click.echo(f"Analysis failed: {result.get('message', '')}", err=True)
+                        return True
+
+                    # Build findings from scan summary data
+                    scanned: list[RegistryFinding] = []
+                    for scan_name, scan_data in result.get("scans", {}).items():
+                        summary = scan_data.get("summary", "")
+                        if summary:
+                            rf = RegistryFinding(
+                                source=f"scan-{scan_name}",
+                                scope="observer",
+                                description=summary[:500],
+                                severity="info",
+                                raised_at=_now_iso(),
+                            )
+                            scanned.append(rf)
+
+                    # Also sync assessment findings if available
+                    assessment = result.get("assessment")
+                    if assessment:
+                        ad = assessment.get("assessment", {})
+                        for item in ad.get("findings", []):
+                            sev = _map_severity(item.get("severity", "medium"))
+                            file_path = item.get("file", "") or ""
+                            rf = RegistryFinding(
+                                source=item.get("source", "assessment"),
+                                scope="observer",
+                                description=item.get("description", ""),
+                                severity=sev,
+                                references=FindingReference(file=file_path)
+                                          if file_path else None,
+                                raised_at=_now_iso(),
+                            )
+                            scanned.append(rf)
+
+                    if not scanned:
+                        click.echo("No findings detected.")
+                        return True
+
+                    delta = store.compute_delta(scanned)
+                    store.save()
+                    click.echo("Analysis synced to Findings Registry.")
+                    for line in delta.summary_lines():
+                        click.echo(f"  {line}")
+
+                else:
+                    click.echo("Unknown findings subcommand. Try: list, show, update-status, confirm-signoff, sync", err=True)
+
+            except Exception as exc:
+                click.echo(f"Findings error: {exc}", err=True)
 
             return True
 

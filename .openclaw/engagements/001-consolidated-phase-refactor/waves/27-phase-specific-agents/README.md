@@ -2,7 +2,7 @@
 
 **Milestone:** 4 — Architecture Features
 **Effort:** 5-8h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** Wave 22
 **Blocks:** Nothing
 
@@ -14,12 +14,12 @@ The session orchestrator currently uses a single generic `chat_agent`. Create de
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Create 5 phase agents in agent_registry.py | 📋 Pending | assessment-agent, requirements-agent, design-agent, planning-agent, build-agent |
-| 2 | Wire /assess, /requirements, /design, /plan, /build commands | 📋 Pending | Phase-entry commands that instantiate the correct agent |
-| 3 | Auto mode loop | 📋 Pending | creator → critics → convergence → validator |
-| 4 | Manual override | 📋 Pending | User can interrupt, review, redirect at any point |
-| 5 | Incorporate Wave 16b scope | 📋 Pending | Boundary test generation, architecture debt detection |
-| 6 | Tests | 📋 Pending | |
+| 1 | Create 5 phase agents in agent_registry.py | ✅ Complete | assessment-agent, requirements-agent, design-agent, planning-agent, build-agent |
+| 2 | Wire /assess, /requirements, /design, /plan, /build commands | ✅ Complete | Phase-entry commands that instantiate the correct agent |
+| 3 | Auto mode loop | ✅ Complete | creator → critics → convergence → validator |
+| 4 | Manual override | ✅ Complete | User can interrupt, review, redirect at any point |
+| 5 | Incorporate Wave 16b scope | ✅ Complete | Boundary test generation, architecture debt detection |
+| 6 | Tests | ✅ Complete | 2,684 lines of code, 519 lines of tests, all 3,820 tests passing | |
 
 ## Verification
 

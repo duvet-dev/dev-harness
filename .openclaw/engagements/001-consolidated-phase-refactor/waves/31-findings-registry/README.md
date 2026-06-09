@@ -2,7 +2,7 @@
 
 **Milestone:** 3 — Cleanup
 **Effort:** 3-5h
-**Status:** 📋 Pending
+**Status:** ✅ Complete
 **Depends on:** None (independent)
 **Blocks:** Nothing
 
@@ -16,12 +16,12 @@ Issues raised by any feedback loop — observer analysis, architecture critic lo
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Create FindingsStore class | 📋 Pending | Reads/writes findings.yaml at `.harness/engagements/<slug>/findings/` |
-| 2 | Wire synthesis agent to persist findings | 📋 Pending | Replace one-shot report with registry write |
-| 3 | Add delta detection | 📋 Pending | New, resolved, regressed, wont-fix-regression |
-| 4 | Add human sign-off flag | 📋 Pending | `resolved/pending_verification` until confirmed |
-| 5 | Wire wave-plan to declare resolved findings | 📋 Pending | Wave metadata: `resolves: ["F-001", "F-003"]` |
-| 6 | Tests | 📋 Pending | Persistence across runs, deltas, regression, sign-off |
+| 1 | Create FindingsStore class | ✅ Complete | FindingsStore with CRUD, lifecycle management, delta detection |
+| 2 | Wire synthesis agent to persist findings | ✅ Complete | REPL `/findings sync` command, sync_from_scan_results/sync_from_assessment |
+| 3 | Add delta detection | ✅ Complete | Built into FindingsStore.compute_delta() |
+| 4 | Add human sign-off flag | ✅ Complete | `/findings confirm-signoff` REPL command, is_pending_verification |
+| 5 | Wire wave-plan to declare resolved findings | ✅ Complete | Wave.resolves field, auto-resolve on commit |
+| 6 | Tests | ✅ Complete | 42 tests covering CRUD, persistence, delta, lifecycle, sign-off, wave resolution, serialization |
 
 ## Verification
 

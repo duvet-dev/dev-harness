@@ -162,16 +162,40 @@ class PlanManager:
     def commit_wave(self, wave_id: str) -> bool:
         """Mark a wave as committed.
 
+        If the wave declares ``resolves``, those findings are
+        auto-resolved in the Findings Registry.
+
         Returns True if the wave was found and updated, False otherwise.
         """
         plan = self.load()
         wave = plan.get_wave(wave_id)
         if wave is None:
             return False
+
+        # Resolve findings declared by this wave
+        if wave.resolves:
+            self._resolve_findings(wave)
+
         wave.commit()
         self.save(plan)
         self.sync_to_md()
         return True
+
+    def _resolve_findings(self, wave: Wave) -> None:
+        """Auto-resolve findings listed in wave.resolves."""
+        try:
+            from harness.domain.engagement.findings import FindingsStore
+            store = FindingsStore(self._root, self._slug)
+            resolved = store.resolve_findings_by_wave(
+                wave.resolves,
+                wave_name=wave.id,
+                notes=wave.title,
+                mark_pending=True,
+            )
+            if resolved:
+                store.save()
+        except Exception:
+            pass  # Non-fatal — registry is advisory during wave commit
 
     def get_status(self) -> list[dict]:
         """Return a summary list of all waves with their status.

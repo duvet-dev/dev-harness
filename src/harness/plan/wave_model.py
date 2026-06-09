@@ -118,6 +118,9 @@ class Wave:
     type: WaveType = WaveType.STANDARD
     state: WaveState = WaveState.PLANNED
     provenance: Optional[WaveProvenance] = None
+    resolves: list[str] = field(default_factory=list)
+    """Finding IDs (e.g. ``"F-001"``) that this wave resolves."""
+
     tasks: list[WaveTask] = field(default_factory=list)
     created_at: str = field(default_factory=_now_iso)
     committed_at: Optional[str] = None
@@ -151,6 +154,8 @@ class Wave:
             d["provenance"] = self.provenance.to_dict()
         if self.tasks:
             d["tasks"] = [t.to_dict() for t in self.tasks]
+        if self.resolves:
+            d["resolves"] = self.resolves
         if self.committed_at is not None:
             d["committed_at"] = self.committed_at
         return d
@@ -171,6 +176,7 @@ class Wave:
             type=WaveType(d.get("type", "standard")),
             state=WaveState(d.get("state", "planned")),
             provenance=provenance,
+            resolves=d.get("resolves", []),
             tasks=tasks,
             created_at=d.get("created_at", _now_iso()),
             committed_at=d.get("committed_at"),

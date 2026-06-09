@@ -8,7 +8,7 @@
 
 ---
 
-## Completed (20 waves)
+## Completed (21 waves)
 
 | Wave | Name | Notes |
 |------|------|-------|
@@ -57,7 +57,7 @@ When a build coordinator works on a wave, it must create and update task files a
 
 ## Wave Plan: Current Status
 
-**12 of 13 waves completed.** 1 wave remaining (~3-5h).
+**13 of 13 waves completed.** ✅ All waves complete.
 
 ### ✓ Completed (12 waves)
 
@@ -74,27 +74,16 @@ When a build coordinator works on a wave, it must create and update task files a
 | 29 | Value Objects & Type Cleanup | `bf510a0` | — |
 | 30 | OpenClaw Sync Removal | `7d6e86e` | — |
 | 32 | Health Check & Startup Fixes | `a99a672` | 69 |
+| 31 | Findings Registry | _current_ | 70 |
 
-### 📋 Remaining
+### ✅ All Waves Complete
+
+All 13 waves for engagement 001 (consolidated-phase-refactor) are now complete.
 
 #### Wave 31 - Findings Registry
-**Effort:** 3-5h | **Depends on:** None | **Independent**
+**Status:** ✅ Complete | **Commit:** _current_ | **Build:** _next_
 
-Issues raised by any feedback loop — observer analysis, architecture critic loop, develop-test-validate loop, human review — currently produce one-shot reports with no memory between runs. No issue IDs, no resolution tracking, no regression detection.
-
-**Design:** See `design/design.md §4.4` for full schema and lifecycle.
-
-**Schema:** `findings.yaml` per engagement with `id`, `source`, `severity`, `status`, `description`, `references`, `requires_human_signoff`, `resolution`.
-
-**Lifecycle:** `open → acknowledged → in_progress → resolved → regression`
-
-**Tasks:**
-1. Create `FindingsStore` class — reads/writes `findings.yaml` at `.harness/engagements/<slug>/findings/`
-2. Wire synthesis agent to persist findings to registry instead of one-shot report
-3. Add delta detection: new vs resolved vs regressed vs wont-fix-regression
-4. Add `requires_human_signoff` flag — findings stay in `resolved/pending_verification` until confirmed
-5. Wire wave-plan to declare resolved findings: wave metadata `resolves: ["F-001", "F-003"]`
-6. Tests: persistence across runs, delta detection, regression flags, human sign-off flow
+FindingsStore with CRUD, delta detection, lifecycle management, human sign-off, and wave-resolution linking. 42 tests passing.
 
 ---
 
